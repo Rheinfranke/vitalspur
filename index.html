@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.5</title>
+<title>Vitalspur 1.6</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -78,6 +78,10 @@
 #bv_slist button { display: block; width: 100%; text-align: left; margin: .2rem 0; font-size: .95rem; }
 #bv_slist button.on { background: #2d6a4f; color: #fff; }
 #bv_slist .stat { font-size: .85rem; }
+#bvfs { min-width: 0; } #bvbox .scroll { max-width: 100%; }
+#bv_det { cursor: grab; touch-action: pan-y; }
+#bv_det.drag { cursor: grabbing; }
+#bv_cfg label { display: block; margin: .3rem 0; }
 #bvon.on { background: #2d6a4f; color: #fff; }
 
 </style>
@@ -85,7 +89,7 @@
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.5</h1>
+<h1>Vitalspur 1.6</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
@@ -170,6 +174,7 @@
   <div class="hint">Lassen sich nicht alle auf einmal markieren, wähle sie einzeln nacheinander. Der Player sammelt sie.</div>
   <div id="filecheck"></div>
   <div id="musikord" class="hint">Liegen die Stücke im Speicherordner im Unterordner „Musik“, lädt Vitalspur sie von selbst, sobald der Ordner freigegeben ist. Einschlafmusik gehört in „Musik/Einschlafen“.</div>
+  <button id="revbtn" style="display:none">Nachbefragung öffnen</button>
 </fieldset>
 
 <fieldset>
@@ -210,10 +215,10 @@
 <fieldset>
   <legend>Atemhilfe</legend>
   <div class="hint">Zeiten in Sekunden, auf Zehntel genau. Eine Pause auf 0 entfällt samt ihrem Ton. Optik und Töne schalten sich getrennt ein und aus.</div>
-  <label>Einatmen: <input type="number" id="b0" min="0.5" max="60" step="0.1" value="4"></label>
-  <label>Pause: <input type="number" id="b1" min="0" max="60" step="0.1" value="0"></label>
-  <label>Ausatmen: <input type="number" id="b2" min="0.5" max="60" step="0.1" value="6"></label>
-  <label>Pause 2: <input type="number" id="b3" min="0" max="60" step="0.1" value="0"></label>
+  <label>Einatmen: <input type="number" id="b0" min="0.5" max="60" step="0.1" value="4" autocomplete="off"></label>
+  <label>Pause: <input type="number" id="b1" min="0" max="60" step="0.1" value="0" autocomplete="off"></label>
+  <label>Ausatmen: <input type="number" id="b2" min="0.5" max="60" step="0.1" value="5" autocomplete="off"></label>
+  <label>Pause 2: <input type="number" id="b3" min="0" max="60" step="0.1" value="0" autocomplete="off"></label>
   <label>Zeiten: <select id="bmode"><option value="fest">fest wie eingestellt</option><option value="angepasst">angepasst an die Atemdauer davor (aus dem Puls)</option></select></label>
   <button class="tog" id="bopt">Optik: aus</button><button class="tog" id="bton">Töne: aus</button>
   <label>Lautstärke Töne: <input type="range" id="bvol" min="0" max="100" value="60"></label>
@@ -309,8 +314,12 @@
 <div class="card" id="bv_detCard">
   <div class="row">
     <button id="bv_back">◀</button><button id="bv_fwd">▶</button>
-    <input type="time" id="bv_tpick" step="1"> <button id="bv_go">Gehe zu</button>
+    <input type="time" id="bv_tpick" step="1"> <button id="bv_go">Gehe zu</button> <button id="bv_cfgb" title="Einstellungen">⚙</button>
     <span class="stat" id="bv_dInfo"></span>
+  </div>
+  <div id="bv_cfg" style="display:none" class="hint">
+    <label><input type="checkbox" id="bv_zoom"> Zoomen in der Großaufnahme (Mausrad oder zwei Finger, 10 s bis 2 min)</label>
+    <label>Pulslinie im Überblick: <select id="bv_line"><option value="60">gleitender Schnitt 60 s</option><option value="10">gleitender Schnitt 10 s</option><option value="px">Mittel je Bildpunkt</option></select> (gestrichelt immer 300 s)</label>
   </div>
   <div class="legend" id="bv_legDet"></div>
   <canvas id="bv_det" height="520"></canvas>
@@ -1199,10 +1208,14 @@ function tapOwn() {
 
 /* ================= Nachbefragung und Taste ================= */
 function lastMusicSession() { for (let i = log.length - 1; i >= 0; i--) if (log[i].typ === "Stück") return log[i].session; return null; }
+var revOpen = false;
 function renderReview() {
   const sid = lastMusicSession();
   const pieces = log.filter(r => r.session === sid && r.typ === "Stück" && (r.rep || 1) === 1);
-  if (!sid || !pieces.length) { $("review").style.display = "none"; return; }
+  if (!sid || !pieces.length) { $("review").style.display = "none"; $("revbtn").style.display = "none"; return; }
+  /* 1.6: nur auf Knopf */
+  $("revbtn").style.display = ""; $("revbtn").textContent = revOpen ? "Nachbefragung schließen" : "Nachbefragung öffnen";
+  if (!revOpen) { $("review").style.display = "none"; return; }
   const chosen = {};
   log.filter(r => r.session === sid && r.typ === "Erleben").forEach(r => { chosen[r.ref] = r.feel; });
   $("reviewlist").innerHTML = pieces.map(p => {
@@ -1212,6 +1225,7 @@ function renderReview() {
   }).join("");
   $("review").style.display = "block";
 }
+$("revbtn").addEventListener("click", () => { revOpen = !revOpen; renderReview(); if (revOpen) $("review").scrollIntoView({ behavior: "smooth", block: "start" }); });
 $("reviewlist").addEventListener("click", e => {
   const ref = e.target.dataset.ref, f = e.target.dataset.f; if (!ref) return;
   const sid = lastMusicSession();
@@ -2919,7 +2933,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.5"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.6"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -2957,7 +2971,7 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.5", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 1.6", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
@@ -3298,7 +3312,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.5. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 1.6. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -4070,7 +4084,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.5"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.6"],
     ["Zuckungen gesamt", zu.length], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4138,7 +4152,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.5. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 1.6. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4265,7 +4279,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.5", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 1.6", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why,
@@ -5385,7 +5399,7 @@ const pad = n => String(n).padStart(2, "0");
 const ACTS = ["Yoga: Hot26", "Yoga: Raja", "Yoga: Vinyasa", "Yoga: Soulful Vinyasa", "Yoga: Warme Vinyasa 1", "Yoga: Aerial", "Yoga", "Biodanza", "Gehen", "Radfahren", "Autofahren", "Sitzen ruhig", "Schreibtisch", "Liegen", "Schlafen", "Sonstiges"];
 const ACOL = { Gehen: "#1baa7a", Autofahren: "#888", Radfahren: "#148ca0", Liegen: "#a0c4ee", Schlafen: "#648cc8", "Sitzen ruhig": "#c8c8c8", Schreibtisch: "#c8c8c8", Biodanza: "#d6488c", Sonstiges: "#bbb" };
 const acol = n => ACOL[n] || (/^Yoga/.test(n) ? "#8a4fd0" : "#bbb");
-let J = null, T0 = 0, fileId = "", mode = "yoga", S = null, sel = null, acts = [], nSel = null, LAY = null;
+let J = null, T0 = 0, fileId = "", mode = "yoga", S = null, sel = null, acts = [], nSel = null, LAY = null, SPAN = 20000;
 
 /* ---------- ZIP lesen ---------- */
 /* 1.5: ZIP stückweise aus der Datei lesen (Inhaltsverzeichnis am Ende, dann nur die nötigen Einträge) */
@@ -5460,6 +5474,11 @@ function prepare(edits) {
   const sc = J.schlaege, n = sc.t.length, bt = new Float64Array(n), rr = new Float32Array(n), bpm = new Float32Array(n), ok = new Uint8Array(n);
   for (let i = 0; i < n; i++) { bt[i] = sc.t[i]; rr[i] = sc.rr[i]; bpm[i] = 60000 / sc.rr[i]; }
   { const o = beatPlaus(sc.rr, sc.ok); for (let i = 0; i < n; i++) ok[i] = o[i]; }
+  /* 1.6: gleitender Schnitt über 60 s und 300 s */
+  const glide = half => { const out = new Float32Array(n).fill(NaN); let a = 0, b = 0, s = 0, c = 0;
+    for (let i = 0; i < n; i++) { while (b < n && bt[b] <= bt[i] + half) { if (ok[b]) { s += rr[b]; c++; } b++; } while (bt[a] < bt[i] - half) { if (ok[a]) { s -= rr[a]; c--; } a++; } if (c) out[i] = 60000 / (s / c); }
+    return out; };
+  for (let i = 0; i < n; i++) { bt[i] = sc.t[i]; rr[i] = sc.rr[i]; }
   const lo = new Float32Array(n).fill(NaN), hi = new Float32Array(n).fill(NaN), avg = new Float32Array(n).fill(NaN);
   let a = 0, b = 0;
   for (let i = 0; i < n; i++) { while (bt[a] < bt[i] - 5000) a++; while (b < n && bt[b] <= bt[i] + 5000) b++;
@@ -5468,7 +5487,7 @@ function prepare(edits) {
   const st = decodeStrom(J.strom);
   const steps = (J.schritte || []).filter(s => s.sicher).map(s => s.t);
   const tEnd = Math.max(bt[n - 1] || 0, st.b.t[st.b.t.length - 1] || 0);
-  S = { bt, rr, bpm, ok, lo, hi, avg, st, steps: Float64Array.from(steps), tEnd, klima: J.klima || [], rb: BX.rb && BX.rb.t.length ? BX.rb : null, ahc: BX.ah && BX.ah.length ? BX.ah : null };
+  S = { bt, rr, bpm, ok, lo, hi, avg, av60: glide(30000), av300: glide(150000), st, steps: Float64Array.from(steps), tEnd, klima: J.klima || [], rb: BX.rb && BX.rb.t.length ? BX.rb : null, ahc: BX.ah && BX.ah.length ? BX.ah : null };
   acts = (J.taetigkeiten_auto || []).map(x => ({ a: x.start_ms, b: x.ende_ms, name: x.name, src: "automatisch" }));
   if (edits && edits.taetigkeiten) acts = edits.taetigkeiten.map(x => ({ a: x.start_ms, b: x.ende_ms, name: x.name, src: x.herkunft || "von Hand" }));
   const d = new Date(T0);
@@ -5502,9 +5521,19 @@ function drawOverview() {
   /* Hüllkurve als Band je Bildpunkt */
   const cols = Math.ceil(W), mn = new Float32Array(cols).fill(Infinity), mx = new Float32Array(cols).fill(-Infinity), sum = new Float32Array(cols), cnt = new Uint16Array(cols);
   for (let i = 0; i < S.bpm.length; i++) { if (!S.ok[i]) continue; const k = Math.floor(X(S.bt[i]) - L); if (k < 0 || k >= cols) continue; if (S.lo[i] < mn[k]) mn[k] = S.lo[i]; if (S.hi[i] > mx[k]) mx[k] = S.hi[i]; sum[k] += S.bpm[i]; cnt[k]++; }
-  c.fillStyle = "rgba(42,120,214,.22)"; for (let k = 0; k < cols; k++) if (cnt[k]) c.fillRect(L + k, Y(mx[k]), 1, Y(mn[k]) - Y(mx[k]));
-  c.strokeStyle = "#2a78d6"; c.lineWidth = 1.2; c.beginPath(); let on = false;
-  for (let k = 0; k < cols; k++) { if (!cnt[k]) { on = false; continue; } const y = Y(sum[k] / cnt[k]); if (!on) { c.moveTo(L + k, y); on = true; } else c.lineTo(L + k, y); } c.stroke();
+  /* 1.6: je Bildpunkt erster und letzter Schlag; leere Bildpunkte werden überbrückt, nur Lücken über 5 s unterbrechen */
+  const fT = new Float64Array(cols).fill(NaN), lT = new Float64Array(cols).fill(NaN), s10 = new Float32Array(cols), s60 = new Float32Array(cols), s300 = new Float32Array(cols), c60 = new Uint16Array(cols), c300 = new Uint16Array(cols), c10 = new Uint16Array(cols);
+  for (let i = 0; i < S.bpm.length; i++) { if (!S.ok[i]) continue; const k = Math.floor(X(S.bt[i]) - L); if (k < 0 || k >= cols) continue; if (!(fT[k] <= S.bt[i])) fT[k] = S.bt[i]; lT[k] = S.bt[i];
+    if (Number.isFinite(S.avg[i])) { s10[k] += S.avg[i]; c10[k]++; } if (Number.isFinite(S.av60[i])) { s60[k] += S.av60[i]; c60[k]++; } if (Number.isFinite(S.av300[i])) { s300[k] += S.av300[i]; c300[k]++; } }
+  const filled = []; for (let k = 0; k < cols; k++) if (cnt[k]) filled.push(k);
+  const joined = (p, q) => fT[q] - lT[p] <= 5000;
+  c.fillStyle = "rgba(42,120,214,.22)";
+  filled.forEach((k, j) => { const k2 = filled[j + 1], wd = k2 !== undefined && joined(k, k2) ? k2 - k : 1; c.fillRect(L + k, Y(mx[k]), wd, Y(mn[k]) - Y(mx[k])); });
+  const lineOf = (num, den, col, lw, dash) => { c.strokeStyle = col; c.lineWidth = lw; c.setLineDash(dash); c.beginPath(); let prev = -1;
+    filled.forEach(k => { if (!den[k]) { prev = -1; return; } const y = Y(num[k] / den[k]); if (prev >= 0 && joined(prev, k)) c.lineTo(L + k, y); else c.moveTo(L + k, y); prev = k; }); c.stroke(); c.setLineDash([]); };
+  const LN = bvLine();
+  if (LN === "px") lineOf(sum, cnt, "#2a78d6", 1.2, []); else if (LN === "10") lineOf(s10, c10, "#1e3a8a", 1.2, []); else lineOf(s60, c60, "#1e3a8a", 1.8, []);
+  lineOf(s300, c300, "#111", 1.3, [5, 4]);
   /* Ereignisse der Nacht */
   if (mode === "nacht" && evList) evList.forEach(e => { if (e.art === "Vergleich") return; c.fillStyle = e.ok ? "#1baa7a" : "#bbb"; c.fillRect(X(e.t), y1 + 2, 1, 6); });
   /* Temperatur und WBGT */
@@ -5521,16 +5550,16 @@ function drawOverview() {
     axisY(c, L, ya, yb, lo, hi, hi - lo > 40 ? 20 : hi - lo > 20 ? 10 : 5, W);
     c.strokeStyle = "#1baa7a"; c.lineWidth = 1.4; c.beginPath(); HK.forEach((k, i) => { const x = X(k.t), y = YH(k.hoehe_m); if (!i) c.moveTo(x, y); else c.lineTo(x, y); }); c.stroke(); }
   /* Zeitachse und Auswahl */
-  c.fillStyle = "#666"; const span = t1 - t0, stp = span > 6 * 3600000 ? 3600000 : span > 2 * 3600000 ? 1800000 : 600000;
+  c.fillStyle = "#666"; const span = t1 - t0, stp = [60000, 120000, 300000, 600000, 1200000, 1800000, 3600000, 7200000, 10800000].find(x => W / span * x >= 44) || 10800000; /* 1.6: Abstand nach Breite */
   for (let t = Math.ceil((T0 + t0) / stp) * stp - T0; t <= t1; t += stp) { const x = X(t); c.fillRect(x, 286, 1, 4); c.fillText(hm(t), x - 14, 299); }
-  if (sel !== null) { const span2 = mode === "nacht" && nSel ? (+$("nSpan").value === 50 ? 50000 : 20000) : 20000, a = mode === "nacht" && nSel ? nSel.t - (span2 === 50000 ? 15000 : 5000) : sel;
+  if (sel !== null) { const span2 = mode === "nacht" && nSel ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = mode === "nacht" && nSel ? nSel.t - (span2 === 50000 ? 15000 : 5000) : sel;
     c.fillStyle = "rgba(235,104,52,.25)"; c.fillRect(X(a), 16, Math.max(2, X(a + span2) - X(a)), 270); }
-  legend("legTop", [["#2a78d6", "Puls je Minute (Linie) mit kleinstem und größtem Schlag in 10 s (Band)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
+  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
 }
 $("ov").addEventListener("click", ev => {
   if (!S || !ovMap) return; const r = $("ov").getBoundingClientRect(), x = ev.clientX - r.left, t = ovMap.t0 + (x - ovMap.L) / ovMap.W * (ovMap.t1 - ovMap.t0);
   if (mode === "nacht" && evList.length) { let best = null, bd = Infinity; filtered().forEach(e => { const d = Math.abs(e.t - t); if (d < bd) { bd = d; best = e; } }); if (best) selectEvent(best); return; }
-  sel = Math.max(0, Math.round(t - 10000)); drawAll();
+  sel = Math.max(0, Math.round(t - SPAN / 2)); drawAll();
 });
 
 /* Atemwelle aus dem 10-Hz-Strom: Bandpass 0,1 bis 0,7 Hz, Hauptachse, Einatmen nach oben */
@@ -5552,7 +5581,7 @@ function breathWave(a, b) {
 }
 function drawDetail() {
   const cv = $("det"); cv._h = S && S.rb ? 600 : 520; const { c, w, h } = ctxOf(cv); c.clearRect(0, 0, w, h); if (!S || w < 80) return;
-  const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : 20000;
+  const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN;
   const a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, R = 8, W = w - L - R, X = t => L + (t - a) / span * W;
   const showEkg = night && $("nEkg").checked;
   const hasRb = !!S.rb, P = hasRb ? { atem: [10, 110], gurt: [128, 198], puls: [220, 450], bew: [470, showEkg ? 520 : 570], ekg: [532, 582] } : { atem: [10, 106], puls: [140, 380], bew: [400, showEkg ? 450 : 500], ekg: [462, 512] };
@@ -5603,7 +5632,7 @@ function drawDetail() {
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
     else { c.fillStyle = "#999"; c.fillText("kein EKG-Fenster an dieser Stelle", L, P.ekg[0] + 20); } }
   /* Zeitachse, T0 */
-  c.fillStyle = "#666"; const st = span > 30000 ? 5000 : 2000;
+  c.fillStyle = "#666"; const st = [1000, 2000, 5000, 10000, 15000, 30000, 60000].find(x => W / span * x >= 64) || 60000; /* 1.6: Abstand der Beschriftung nach Breite */
   for (let t = Math.ceil(a / st) * st; t <= b; t += st) { const x = X(t); c.fillRect(x, h - 22, 1, 4); c.textAlign = "center"; c.fillText(night ? ((t - nSel.t) / 1000 > 0 ? "+" : "") + Math.round((t - nSel.t) / 1000) + " s" : hms(t), x, h - 8); c.textAlign = "left"; }
   if (night) { c.strokeStyle = "#1baa7a"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(nSel.t), P.atem[0]); c.lineTo(X(nSel.t), P.bew[1]); c.stroke(); c.fillStyle = "#1baa7a"; c.fillText("T0", X(nSel.t) + 3, P.atem[0] + 10); }
   $("dInfo").textContent = `${hms(a)} bis ${hms(b)} Uhr` + (night ? `, ${nSel.art} Nr. ${nSel.nr}` : "");
@@ -5612,8 +5641,8 @@ function drawDetail() {
 }
 function drawAll() { drawOverview(); drawDetail(); }
 window.addEventListener("resize", () => { if (S) drawAll(); });
-$("back").addEventListener("click", () => { if (!S) return; if (mode === "nacht" && nSel) { const L = filtered(), i = L.indexOf(nSel); if (i > 0) selectEvent(L[i - 1]); return; } sel = Math.max(0, sel - 20000); drawAll(); });
-$("fwd").addEventListener("click", () => { if (!S) return; if (mode === "nacht" && nSel) { const L = filtered(), i = L.indexOf(nSel); if (i < L.length - 1) selectEvent(L[i + 1]); return; } sel = Math.min(S.tEnd - 20000, sel + 20000); drawAll(); });
+$("back").addEventListener("click", () => { if (!S) return; if (mode === "nacht" && nSel) { const L = filtered(), i = L.indexOf(nSel); if (i > 0) selectEvent(L[i - 1]); return; } sel = Math.max(0, sel - SPAN); drawAll(); });
+$("fwd").addEventListener("click", () => { if (!S) return; if (mode === "nacht" && nSel) { const L = filtered(), i = L.indexOf(nSel); if (i < L.length - 1) selectEvent(L[i + 1]); return; } sel = Math.max(0, Math.min(S.tEnd - SPAN, sel + SPAN)); drawAll(); });
 $("go").addEventListener("click", () => { if (!S || !$("tpick").value) return; const [h, m, s] = $("tpick").value.split(":").map(Number), d = new Date(T0); d.setHours(h, m, s || 0, 0); let t = d.getTime() - T0; if (t < 0) t += 86400000; if (mode === "nacht") { nSel = null; } sel = t; drawAll(); });
 
 /* ---------- Nacht ---------- */
@@ -5718,7 +5747,7 @@ function aidPhases() {
 const AHCOL = { ein: "rgba(13,148,136,.55)", aus: "rgba(235,104,52,.45)", Pause: "rgba(0,0,0,.15)" };
 function overlayDetail() {
   if (!S || mode !== "yoga" && mode !== "nacht") return; const cv = $("det"), c = cv.getContext("2d"), r = window.devicePixelRatio || 1; c.setTransform(r, 0, 0, r, 0, 0);
-  const w = cv.clientWidth, night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : 20000, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, W = w - 48, X = t => L + (t - a) / span * W;
+  const w = cv.clientWidth, night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, W = w - 48, X = t => L + (t - a) / span * W;
   if (!S) return;
   const P = LAY ? LAY.P : { atem: [10, 120], puls: [140, 380], bew: [400, 500] }, yTop = P.atem[0], yBot = P.bew[1];
   /* Atemhilfe: Band zwischen Atem und dem nächsten Feld, dazu Linien bei jedem Wechsel zu „ein“ */
@@ -5950,6 +5979,33 @@ document.getElementById("bvon").addEventListener("click", async () => {
   }
 });
 bvShow();
+
+/* ---------- 1.6: Zahnrad (Zoom, Pulslinie), Ziehen und Zoomen der Großaufnahme ---------- */
+function bvLine() { return $("line").value; }
+try { const v = localStorage.getItem("bv_line"); if (v) $("line").value = v; $("zoom").checked = localStorage.getItem("bv_zoom") === "1"; } catch (e) {}
+$("cfgb").addEventListener("click", () => { const el = $("cfg"); el.style.display = el.style.display === "none" ? "" : "none"; $("cfgb").classList.toggle("on", el.style.display === ""); });
+$("line").addEventListener("change", () => { try { localStorage.setItem("bv_line", bvLine()); } catch (e) {} if (S) drawAll(); });
+$("zoom").addEventListener("change", () => { try { localStorage.setItem("bv_zoom", $("zoom").checked ? "1" : "0"); } catch (e) {} if (!$("zoom").checked && SPAN !== 20000) { const m = sel + SPAN / 2; SPAN = 20000; sel = Math.max(0, m - SPAN / 2); if (S) drawAll(); } });
+let bvRaf = 0; const bvRedraw = () => { if (bvRaf) return; bvRaf = requestAnimationFrame(() => { bvRaf = 0; drawAll(); }); };
+const bvWin = () => { const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN; return { a: night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, span }; };
+const bvFree = () => { const w = bvWin(); if (mode === "nacht" && nSel) { nSel = null; renderEvents(); } sel = w.a; SPAN = w.span; };
+const bvClamp = () => { sel = Math.max(-SPAN / 2, Math.min(S.tEnd - SPAN / 2, sel)); };
+const PT = new Map(); let bvDrag = null, bvPinch = null;
+const det = $("det");
+det.addEventListener("pointerdown", ev => { if (!S) return; PT.set(ev.pointerId, ev.clientX);
+  try { det.setPointerCapture(ev.pointerId); } catch (e) {}
+  if (PT.size === 1) { bvDrag = { x: ev.clientX, a: bvWin().a, moved: false }; }
+  else if (PT.size === 2 && $("zoom").checked) { bvFree(); const xs = [...PT.values()], r = det.getBoundingClientRect(), W = det.clientWidth - 48; bvPinch = { d: Math.abs(xs[0] - xs[1]) || 1, span: SPAN, tm: sel + ((xs[0] + xs[1]) / 2 - r.left - 40) / W * SPAN, fx: ((xs[0] + xs[1]) / 2 - r.left - 40) / W }; bvDrag = null; } });
+det.addEventListener("pointermove", ev => { if (!PT.has(ev.pointerId) || !S) return; PT.set(ev.pointerId, ev.clientX); const W = det.clientWidth - 48;
+  if (bvPinch && PT.size === 2) { const xs = [...PT.values()], d = Math.abs(xs[0] - xs[1]) || 1; SPAN = Math.max(10000, Math.min(120000, bvPinch.span * bvPinch.d / d)); sel = bvPinch.tm - bvPinch.fx * SPAN; bvClamp(); bvRedraw(); return; }
+  if (!bvDrag) return; const dx = ev.clientX - bvDrag.x; if (!bvDrag.moved && Math.abs(dx) < 4) return;
+  if (!bvDrag.moved) { bvDrag.moved = true; bvFree(); bvDrag.a = sel; det.classList.add("drag"); }
+  sel = bvDrag.a - dx / W * SPAN; bvClamp(); bvRedraw(); });
+const bvUp = ev => { PT.delete(ev.pointerId); if (PT.size < 2) bvPinch = null; if (!PT.size) { bvDrag = null; det.classList.remove("drag"); } };
+det.addEventListener("pointerup", bvUp); det.addEventListener("pointercancel", bvUp);
+det.addEventListener("wheel", ev => { if (!S || !$("zoom").checked) return; ev.preventDefault(); bvFree();
+  const r = det.getBoundingClientRect(), W = det.clientWidth - 48, fx = Math.max(0, Math.min(1, (ev.clientX - r.left - 40) / W)), tm = sel + fx * SPAN;
+  SPAN = Math.max(10000, Math.min(120000, SPAN * Math.pow(1.15, Math.sign(ev.deltaY)))); sel = tm - fx * SPAN; bvClamp(); bvRedraw(); }, { passive: false });
 
 })();
 </script>
