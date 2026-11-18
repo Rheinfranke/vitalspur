@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.9</title>
+<title>Vitalspur 1.9.1</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -103,7 +103,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.9</h1>
+<h1>Vitalspur 1.9.1</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
@@ -331,6 +331,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   </div>
   <div id="bv_cfg" style="display:none" class="hint">
     <label><input type="checkbox" id="bv_kip"> Kippen der Brust zeigen (Beschleunigung H10, kein Atem, ohne Richtung)</label>
+    <label><input type="checkbox" id="bv_roh" checked> Fuß und Brust in voller Auflösung, wo vorhanden (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg)</label>
     <label><input type="checkbox" id="bv_zoomov" checked> Zoomen und Verschieben im Überblick (Mausrad oder zwei Finger, ziehen, doppelt tippen zeigt alles)</label>
     <label><input type="checkbox" id="bv_zoom" checked> Zoomen in der Großaufnahme (Mausrad oder zwei Finger, 10 s bis 2 min)</label>
     <label>Pulslinie im Überblick: <select id="bv_line"><option value="60">gleitender Schnitt 60 s</option><option value="10">gleitender Schnitt 10 s</option><option value="px">Mittel je Bildpunkt</option></select> (gestrichelt immer 300 s)</label>
@@ -343,7 +344,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <div class="row"><b>Serie</b> <select id="bv_sSel"></select> <button id="bv_sBack">◀ 3 min</button><button id="bv_sFwd">3 min ▶</button></div>
   <canvas id="bv_ser" height="560"></canvas>
   <div class="stat" id="bv_sInfo"></div>
-  <div class="hint">Serie: mindestens 4 Zuckungen mit je 5 bis 90 s Abstand. Gezeigt werden 6 Minuten ab einer Minute vor der ersten Zuckung; vorgewählt ist die längste Serie.</div>
+  <div class="hint">Serie: ab 2 Zuckungen, Abstand höchstens 90 s. Gezeigt wird die Serie in der Großaufnahme, mit 10 s davor und danach; vorgewählt ist die längste Serie. Vor und Zurück verschieben um eine halbe Breite.</div>
 </div>
 
 <div class="card" id="bv_sammCard" style="display:none">
@@ -2815,20 +2816,49 @@ function nightExclude(NE, A, L, sync, steps) {
     if (isEnd && open === null) open = r.start; else if (isGo && open !== null) { ends.push([open, r.start]); open = null; } });
   if (open !== null) ends.push([open, Infinity]);
   const S0 = SIDE; try { SIDE = sideCheck(A, steps); } catch (e) {}
-  const cnt = { aufrecht: 0, Klopfen: 0, Ende: 0 };
+  const cnt = { aufrecht: 0, dazwischen: 0, Klopfen: 0, Ende: 0 };
   NE.ev.forEach(e => { if (e.art !== "Zuckung") return; let why = null;
     if (ends.some(([a, b]) => e.t >= a && e.t < b)) why = "Ende";
     else if (knock.some(([a, b]) => e.t >= a && e.t <= b)) why = "Klopfen";
-    else if (A) { const l = lageOf(meanIn(A, 0, e.t - 5000, e.t - 300), meanIn(A, 1, e.t - 5000, e.t - 300), meanIn(A, 2, e.t - 5000, e.t - 300)); if (l === "aufrecht") why = "aufrecht"; }
+    else if (A) { const l = lageOf(meanIn(A, 0, e.t - 5000, e.t - 300), meanIn(A, 1, e.t - 5000, e.t - 300), meanIn(A, 2, e.t - 5000, e.t - 300)); if (l === "aufrecht" || l === "dazwischen") why = l; }
     e.aus = why; if (why) cnt[why]++; });
   NE.aus = cnt; NE.lageDa = !!A; SIDE = S0;
+}
+function pulseRises(bt, bpm, ok, zt) {
+  /* 1.9.1: Pulsanstieg ohne Zuckung. Puls über 3 Schläge geglättet steigt um mindestens 15 Schläge pro Minute über die Ruhe
+     (Median der Schläge 20 bis 5 s davor); Beginn = erster der 8 Schläge davor, der 5 über der Ruhe liegt; keine Zuckung in ±10 s um den Beginn;
+     mindestens 20 s Abstand zum vorigen Anstieg. */
+  const n = bt.length, out = []; let last = -1e15;
+  const sm = k => { let s = 0, c = 0; for (let j = k - 1; j <= k + 1; j++) if (j >= 0 && j < n && ok[j]) { s += bpm[j]; c++; } return c >= 2 ? s / c : null; };
+  const lbz = x => { let lo = 0, hi = zt.length; while (lo < hi) { const m = (lo + hi) >> 1; if (zt[m] < x) lo = m + 1; else hi = m; } return lo; };
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) {
+    if (!ok[i]) continue; const t = bt[i];
+    while (a < n && bt[a] < t - 20000) a++; while (b < n && bt[b] < t - 5000) b++;
+    if (b - a < 8 || t - last < 20000) continue;
+    const h = sm(i); if (h === null) continue;
+    const v = []; for (let k = a; k < b; k++) if (ok[k]) v.push(bpm[k]); if (v.length < 6) continue; v.sort((x, y) => x - y); const base = v[v.length >> 1];
+    if (h - base < 15) continue;
+    let j0 = i; for (let k = Math.max(0, i - 8); k <= i; k++) { const q = sm(k); if (q !== null && q >= base + 5) { j0 = k; break; } }
+    const T = bt[j0], kz = lbz(T - 10000); if (kz < zt.length && zt[kz] <= T + 10000) { last = t; continue; }
+    let pk = h; for (let k = i; k < Math.min(n, i + 6); k++) { const q = sm(k); if (q !== null && q > pk) pk = q; }
+    out.push({ t: T, puls: Math.round(pk * 10) / 10, ruhe: Math.round(base * 10) / 10 }); last = t;
+  }
+  return out;
+}
+/* 1.9.1: volle Auflösung (Fuß, Drehrate, Brust) von 5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg, überlappende zusammengelegt */
+function rawWindows(ts, A, F, G, T0) {
+  const W = []; [...ts].sort((x, y) => x - y).forEach(t => { const a = t - 5000, b = t + 10000, L = W[W.length - 1]; if (L && a <= L.b) L.b = Math.max(L.b, b); else W.push({ a, b }); });
+  const col = (X, a, b, dec) => { if (!X) return null; const lo = lowerBound(X.t, a), hi = lowerBound(X.t, b), f = 10 ** dec, o = { t: [], x: [], y: [], z: [] };
+    for (let k = lo; k < hi; k++) { o.t.push(Math.round((X.t[k] - T0) * 10) / 10); o.x.push(Math.round(X.c[0][k] * f) / f); o.y.push(Math.round(X.c[1][k] * f) / f); o.z.push(Math.round(X.c[2][k] * f) / f); } return o.t.length ? o : null; };
+  return W.map(w => ({ start_ms: Math.round(w.a - T0), ende_ms: Math.round(w.b - T0), fuss: col(F, w.a, w.b, 0), drehrate: col(G, w.a, w.b, 1), brust: col(A, w.a, w.b, 0) }));
 }
 function nightEvents(F, A, G, B, R, steps, fhp, zthr, T0) {
   const ev = [], stepT = Float64Array.from(steps.filter(s => s.sicher), s => s.t);
   const nearStep = t => { const k = lowerBound(stepT, t - 3000); return k < stepT.length && stepT[k] < t + 3000; };
-  /* Fußzuckungen: Spitze über der Schwelle, mindestens 8 s Abstand, Beginn rückwärts gesucht */
+  /* Fußzuckungen: Spitze über der Schwelle, mindestens 1 s Abstand (1.9.1, vorher 8 s), Beginn rückwärts gesucht */
   if (F && fhp) {
-    const pk = peaksAbove(fhp, F.t, zthr, 8000);
+    const pk = peaksAbove(fhp, F.t, zthr, 1000);
     pk.forEach(i => {
       const tp = F.t[i]; if (nearStep(tp)) return;
       const lo = lowerBound(F.t, tp - 3000), hi = lowerBound(F.t, tp - 1000), q = [];
@@ -2980,20 +3010,23 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.1"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
     ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
     ["Drehrate Fuß", gyInfo], ["Trageort Sense", (L.filter(r => r.typ === "Trageort Sense").pop() || {}).name || null], ["PPG", (L.filter(r => r.typ === "Sense" && /^PPG (gestartet|tatsächliche)/.test(r.name || "")).map(r => r.name).join(" | ")) || null], ["PPG Stufen", L.filter(r => r.typ === "PPG Stufe").length || null], ["Schritte rechts sicher", nR], ["Schritte links sicher", nL],
     ["Atemzüge aus dem Atemgurt", breaths.length], ["Atem", "nur aus dem Atemgurt (ab 1.9); ohne Gurt keine Atemzüge"],
-    ["Schwelle Zuckung mg", Number.isFinite(zthr) ? Math.round(zthr) : null], ["Zuckungen (Ereignisse, mindestens 8 s Abstand)", nZ],
+    ["Schwelle Zuckung mg", Number.isFinite(zthr) ? Math.round(zthr) : null], ["Zuckungen (Ereignisse, mindestens 1 s Abstand)", nZ],
     ["Hinweis", "Leere Zelle heißt: nicht sicher erkannt. Zeiten der Herzschläge liegen auf der R-Zacke, wenn EKG bestätigt. Einatmen ist der steigende Teil."]];
   let NE = null;
   if (nacht) {
     say2("Rechne: Ereignisse der Nacht …"); await wait(20);
     NE = nightEvents(F, A, G, B, R, steps, fhp, zthr, T0);
     try { nightExclude(NE, A, L, sync, steps); } catch (e) { NE.aus = null; }
+    try { const okB = B.filter(b => b.rr > 300 && b.rr < 2000 && !b.drop), zt = Float64Array.from(NE.ev.filter(e => e.art === "Zuckung").map(e => e.t)).sort();
+      NE.pr = pulseRises(Float64Array.from(okB, b => b.tt), Float64Array.from(okB, b => 60000 / b.rr), new Uint8Array(okB.length).fill(1), zt);
+      NE.roh = rawWindows([...zt, ...NE.pr.map(p => p.t)], A, F, G, T0); } catch (e) { NE.pr = []; NE.roh = []; }
     const r1 = x => x === null || x === undefined ? null : Math.round(x * 10) / 10;
     var ER = [["Nr", "Art", "Uhrzeit_Beginn", "t_s", "Uhrzeit_Spitze", "Fuss_Spitze_mg", "Brust_Spitze_mg", "Drehrate_Spitze_dps", "Beginn_nach_letzter_R_ms", "Beginn_vor_naechster_R_ms", "Puls_vorher", "Puls_Spitze", "Spitze_bei_Schlag", "Ausschlag", "Puls_Tief", "Tief_bei_Schlag", "Unterschwingen", "Fenster_Nr", "Epoch_ms"]];
     NE.ev.forEach(e => ER.push([e.nr, e.art, tx(e.t), (e.t - T0) / 1000, tx(e.tPk), r1(e.fuss), r1(e.brust), r1(e.dreh), r1(e.vorR), r1(e.nachR), r1(e.base), r1(e.pv), e.pk ?? null, e.base ? r1(e.pv - e.base) : null, r1(e.tv), e.tk ?? null, e.base ? r1(e.tv - e.base) : null, e.fenster ?? null, Math.round(e.t)]));
@@ -3019,11 +3052,11 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.9", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 1.9.1", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
-    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom.", ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
+    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), puls: p.puls, ruhe: p.ruhe })), roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
   return { raw: { B, R, NE, A, F, G, steps, T0, TP: TPs, sync, al, breaths, minutes: X9.minutes, mf: X9.mf, actMin: X9.actMin }, xlsx, json, pdf: X9.pdf, blocks: X9.blocks, info: `${B.length} Herzschläge, ${nR + nL} Schritte, ${breaths.length} Atemzüge, ${sync.pairs.length} Abgleich` + (NE ? `, ${NE.ev.length} Ereignisse, ${NE.win.length} Fenster` : "") };
 }
@@ -3360,7 +3393,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.9. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 1.9.1. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3659,6 +3692,7 @@ async function buildZip(opts) {
   try {
     sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht, belt }, id);
     if (sp && sp.raw && belt) sp.raw.belt = belt;
+    if (sp && sp.raw) sp.raw.rbRaw = RB.length ? rbFlat(RB) : null; /* 1.9.1: Atem um die Zuckung aus dem Gurt */
     /* 1.7: gemeinsame Atemzuege.csv (Gurt, sonst Brust oder Puls, mit Quelle) und Kippen der Brust im 10-Hz-Raster */
     try { const T = vsDerived(sp); if (T.Atemzuege && T.Atemzuege.length) out.push({ name: P + "Atemzuege.csv", data: enc.encode("\ufeff" + [VS_HEAD.Atemzuege, ...T.Atemzuege].join("\n")) }); } catch (e) {}
     if (!opts.noRaw) try { const K = kippenRows(window.lastStrom); if (K.length) out.push({ name: P + "Kippen_Brust.csv", data: enc.encode("\ufeff" + [KIPPEN_HEAD, ...K].join("\n")) }); } catch (e) {}
@@ -3843,7 +3877,7 @@ function nightReport(raw, pid, startText) {
   const MR = [["Proband", "Schlag", "Herzschlagabstand_Aenderung_Prozent_Zuckung", "Kontrolle_Prozent", "Anzahl_Zuckungen", "Anzahl_Kontrolle"]];
   idx.forEach((j, i) => MR.push([pid, j, mc[i] === null ? null : Math.round(mc[i] * 1000) / 10, cc[i] === null ? null : Math.round(cc[i] * 1000) / 10, valid.length, ctrl.length]));
   const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))],
-    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
+    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig im EKG", why.ekg],
     ["T0", "Beginn der Zuckung am Fuß (erstes Anheben, rückwärts von der Spitze gesucht), auf die Uhr des Brustgurts abgeglichen"],
     ["R-k_ms / R+k_ms", "Abstand der k-ten R-Zacke vor beziehungsweise nach T0 in Millisekunden, negativ davor, positiv danach. R+1 ist die erste R-Zacke nach T0."],
@@ -3912,7 +3946,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
 /* ================= Vitalspur 1.4: Auswertung neu (überschreibt lageOf, nightReport, nightPdf aus bericht.js) =================
    Neu: Puls oben = schneller, Mittelung als Verhältnis der Mittel, Streuung (Bootstrap über Häufungen), Seitenlage links/rechts,
    Serien von Zuckungen, einzelne Zuckung gegen Serie, Atem um die Zuckung, Puls je Minute mit Spannweite, Beispielserie. */
-const SER = { min: 4, lo: 5000, hi: 90000, haeufung: 120000 };
+const SER = { min: 2, lo: 5000, hi: 90000, haeufung: 120000 }; /* 1.9.1: Serie ab 2 Zuckungen, Abstand höchstens 90 s; lo nur noch für die Vergleichszahl */
 let SIDE = { flip: false, quelle: "Grundregel" };
 function lageOf(x, y, z) {
   if (x === null) return null;
@@ -4020,6 +4054,22 @@ function bq(type, f0, fs) { const w = 2 * Math.PI * f0 / fs, q = Math.SQRT1_2, a
 function bqRun(x, c) { const y = new Float64Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
   for (let i = 0; i < x.length; i++) { const v = c.b[0] * x[i] + c.b[1] * x1 + c.b[2] * x2 - c.a[0] * y1 - c.a[1] * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; } return y; }
 function filtfilt(x, c) { const f = bqRun(x, c); f.reverse(); const g = bqRun(f, c); g.reverse(); return g; }
+/* 1.9.1: Atemwelle aus dem Atemgurt (Vernier): 10-Hz-Raster, Grundspannung als gleitendes Mittel über 20 s abgezogen, leicht geglättet (0,7 Hz),
+   je 10 Minuten auf den typischen Atemzug normiert (Median der Beträge ohne 4 s um Zuckungen). Oben = Einatmen (Zugkraft steigt). */
+function beltWave(R, zt) {
+  if (!R || !R.t || R.t.length < 3000) return null;
+  const o = R.t.map((x, i) => i).sort((p, q) => R.t[p] - R.t[q]), t = o.map(i => R.t[i]), f = o.map(i => R.f[i]);
+  const t0 = Math.ceil(t[0] / 100) * 100, n = Math.floor((t[t.length - 1] - t0) / 100); if (n < 3000) return null;
+  const X = new Float64Array(n); let j = 0;
+  for (let i = 0; i < n; i++) { const tt = t0 + i * 100; while (j + 1 < t.length && t[j + 1] <= tt) j++; X[i] = j + 1 < t.length && t[j + 1] - t[j] < 3000 ? f[j] + (f[j + 1] - f[j]) * Math.max(0, Math.min(1, (tt - t[j]) / ((t[j + 1] - t[j]) || 1))) : f[j]; }
+  const P = new Float64Array(n + 1); for (let i = 0; i < n; i++) P[i + 1] = P[i] + X[i];
+  const Y = new Float64Array(n); for (let i = 0; i < n; i++) { const a = Math.max(0, i - 100), b = Math.min(n, i + 101); Y[i] = X[i] - (P[b] - P[a]) / (b - a); }
+  const Z = filtfilt(Y, bq("lp", 0.7, 10)), W = new Float64Array(n), blk = 6000;
+  for (let s = 0; s < n; s += blk) { const e = Math.min(n, s + blk), qv = [];
+    for (let i = s; i < e; i += 2) { const tt = t0 + i * 100, k = lowerBound(zt, tt - 4000); if (k < zt.length && zt[k] < tt + 4000) continue; qv.push(Math.abs(Z[i])); }
+    qv.sort((a, b) => a - b); const sd = (qv.length ? qv[qv.length >> 1] * 1.4826 : 0) || 1; for (let i = s; i < e; i++) W[i] = Z[i] / sd; }
+  return { t0, W, n, quelle: "Gurt" };
+}
 function breathWave(A, Rc, zt) {
   if (!A || A.t.length < 3000) return null;
   const t0 = Math.ceil(A.t[0] / 100) * 100, n = Math.floor((A.t[A.t.length - 1] - t0) / 100), X = [new Float64Array(n), new Float64Array(n), new Float64Array(n)], ok = new Uint8Array(n);
@@ -4064,7 +4114,7 @@ function nightReport(raw, pid, startText) {
   /* Serien und Häufungen */
   const ser = new Array(zu.length).fill(null), pos = new Array(zu.length).fill(null), serien = [];
   { let cur = [0]; const close = () => { if (cur.length >= SER.min) { const nr = serien.length + 1; cur.forEach((i, q) => { ser[i] = nr; pos[i] = q === cur.length - 1 ? "letzte" : String(q + 1); }); serien.push(cur.slice()); } };
-    for (let i = 1; i < zu.length; i++) { const d = zu[i].t - zu[i - 1].t; if (d >= SER.lo && d <= SER.hi) cur.push(i); else { close(); cur = [i]; } }
+    for (let i = 1; i < zu.length; i++) { const d = zu[i].t - zu[i - 1].t; if (d <= SER.hi) cur.push(i); else { close(); cur = [i]; } }
     if (zu.length) close(); }
   const hfg = new Array(zu.length).fill(0); for (let i = 1; i < zu.length; i++) hfg[i] = hfg[i - 1] + (zu[i].t - zu[i - 1].t > SER.haeufung ? 1 : 0);
   const posGroup = i => { const p = pos[i]; if (p === null) return "nicht in Serie"; if (p === "letzte") return "letzte"; const n = +p; return n === 1 ? "1." : n === 2 ? "2." : n <= 5 ? "3. bis 5." : "6. und später"; };
@@ -4124,7 +4174,7 @@ function nightReport(raw, pid, startText) {
   /* Atem um die Zuckung */
   let atem = null;
   try {
-    const BW = breathWave(A, Rc, zt);
+    const BW = beltWave(raw.rbRaw, zt); /* 1.9.1: nur Atemgurt, ohne Gurt keine Atemwelle */
     if (BW) { const avgW = L => { const W = L.map(v => waveAt(BW, v)).filter(Boolean); if (W.length < 5) return null; const m = new Float64Array(351), sd = new Float64Array(351);
         W.forEach(w => { for (let i = 0; i < 351; i++) m[i] += w[i]; }); for (let i = 0; i < 351; i++) m[i] /= W.length;
         W.forEach(w => { for (let i = 0; i < 351; i++) sd[i] += (w[i] - m[i]) ** 2; }); for (let i = 0; i < 351; i++) sd[i] = Math.sqrt(sd[i] / Math.max(1, W.length - 1)) / Math.sqrt(W.length);
@@ -4144,6 +4194,9 @@ function nightReport(raw, pid, startText) {
     SR.push([pid, nacht, row.nr, stamp(new Date(row.a)), stamp(new Date(row.b)), Math.round((row.b - row.a) / 6000) / 10, row.n, Math.round(row.med * 10) / 10, row.vk === null ? null : Math.round(row.vk * 100) / 100, row.ruhe === null ? null : Math.round(row.ruhe), row.spitze === null ? null : Math.round(row.spitze * 10) / 10, row.tief === null ? null : Math.round(row.tief * 10) / 10, row.lage, row.temp]);
     return row; });
   const inSer = ser.filter(x => x !== null).length;
+  /* 1.9.1: Vergleichszahl nach der Regel für periodische Beinbewegungen (mindestens 4 Zuckungen, je 5 bis 90 s) */
+  let litSer = 0, litIn = 0; { let n = zu.length ? 1 : 0; const cl = () => { if (n >= 4) { litSer++; litIn += n; } };
+    for (let i = 1; i < zu.length; i++) { const d = zu[i].t - zu[i - 1].t; if (d >= 5000 && d <= 90000) n++; else { cl(); n = 1; } } cl(); }
   const imi = zu.slice(1).map((e, i) => (e.t - zu[i].t) / 1000);
   const med = a => { const v = a.filter(Number.isFinite).sort((x, y) => x - y); return v.length ? v[v.length >> 1] : null; };
   const dauerH = zu.length ? (zu[zu.length - 1].t - zu[0].t) / 3.6e6 : 0;
@@ -4151,8 +4204,8 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9"],
-    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.1"],
+    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
     ["Puls vor dem Fuß (Schläge −4 bis −1), Zuckung minus Zufall, Prozent", r1(K.vor)], ["  95-%-Konfidenzintervall", fci(K.vor_ci)],
@@ -4168,7 +4221,7 @@ function nightReport(raw, pid, startText) {
     ["R-k_ms / R+k_ms", "Abstand der k-ten R-Zacke vor beziehungsweise nach T0 in Millisekunden, negativ davor, positiv danach. R+1 ist die erste R-Zacke nach T0."],
     ["Puls in Prozent", "erst die Herzschlagabstände je Schlag über alle Zuckungen mitteln, dann Ruhe (Schläge −10 bis −7) durch Abstand minus 1. Oben = Herz schneller."],
     ["Streuung", "95-%-Konfidenzintervall, Bootstrap über ganze Häufungen (300 Wiederholungen)"],
-    ["Serie", "mindestens 4 Zuckungen, jeder Abstand 5 bis 90 s (Regel für periodische Beinbewegungen im Schlaf)"],
+    ["Serie", "ab 2 Zuckungen, jeder Abstand höchstens 90 s (ab 1.9.1)"], ["Vergleich Literatur", `${litSer} Serien mit ${litIn} Zuckungen nach der Regel für periodische Beinbewegungen im Schlaf (mindestens 4 Zuckungen, je 5 bis 90 s)`],
     ["Einzeln", "mindestens 60 s keine Zuckung davor und 20 s keine danach"],
     ["Gültig", "mindestens 15 s seit der vorigen Zuckung, keine Schrittfolge in 3 s Umgebung, keine Brustbewegung über 300 mg und kein Umdrehen in 5 s Umgebung, alle 51 R-Zacken im EKG, Abstände 300 bis 2000 ms und höchstens 60 % über oder 40 % unter dem Median"],
     ["Lage", "aus der Brust in den 5 s vor T0; rechte Seite heißt: man liegt auf der rechten Seite"],
@@ -4219,7 +4272,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.9. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 1.9.1. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4268,8 +4321,8 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
     legend(380, 405, [{ t: `Zuckung (n = ${A.z.n})`, col: orange }, { t: `Zufall (n = ${A.c.n})`, col: grey, dash: true }, { t: "Streuung (Standardfehler)", band: lite(orange) }]);
     d.col(40, 40, 40, true).text(75, 140, `Zu Beginn der Zuckung beim Einatmen: ${A.einZ === null ? "–" : Math.round(A.einZ * 100) + " %"} der Zuckungen, beim Zufall ${A.einC === null ? "–" : Math.round(A.einC * 100) + " %"}.`, 9);
     d.col(90, 90, 90, true).text(75, 124, "Der Ausschlag um T0 kann ein tiefer Atemzug oder die Bewegung der Zuckung selbst sein; mit dem Brustgurt nicht zu trennen.", 8);
-  } else d.col(120, 120, 120, true).text(75, 300, "Atemwelle nicht verfügbar (zu wenig Brustdaten oder Zuckungen).", 9);
-  foot("Atemwelle aus der Brustbeschleunigung, 0,1 bis 0,7 Hz, Hauptrichtung je 10 Minuten, Richtung so, dass der Puls beim Einatmen steigt.");
+  } else d.col(120, 120, 120, true).text(75, 300, "Atemwelle nicht verfügbar (kein Atemgurt in dieser Nacht oder zu wenig Zuckungen).", 9);
+  foot("Atemwelle aus dem Atemgurt (Vernier): Zugkraft ohne Grundspannung (gleitendes Mittel über 20 s abgezogen), je 10 Minuten auf den typischen Atemzug normiert; oben = Einatmen.");
 
   /* ---------- Seite 4: einzelne Zuckung gegen Serie ---------- */
   d.page().col(20, 20, 20, true).text(40, 800, "Einzelne Zuckung und Zuckung in einer Serie", 16, true)
@@ -4286,7 +4339,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
 
   /* ---------- Seite 5: Serien ---------- */
   d.page().col(20, 20, 20, true).text(40, 800, "Serien von Zuckungen", 16, true)
-    .text(40, 782, `${rep.serien.length} Serien, ${rep.inSer} von ${rep.zu.length} Zuckungen in Serien. Serie: mindestens 4 Zuckungen mit je 5 bis 90 s Abstand.`, 10);
+    .text(40, 782, `${rep.serien.length} Serien, ${rep.inSer} von ${rep.zu.length} Zuckungen in Serien. Serie: ab 2 Zuckungen, Abstand höchstens 90 s.`, 10);
   { const c = pdfChart(d, { x: L, y: 700, w: WD, h: 50 }, { title: "A  Wann die Zuckungen kommen: Strich je Zuckung, Fläche = Serie", xr: [T0, t1], yr: [0, 1], xt, xf: hr, yt: [] });
     rep.serStat.forEach(s => d.col(...lite(orange), true).rect(c.X(s.a), c.Y(0.1), Math.max(1.5, c.X(s.b) - c.X(s.a)), c.Y(0.9) - c.Y(0.1)));
     d.lw(0.5).col(...orange, false); rep.zu.forEach(e => d.line(c.X(e.t), c.Y(0.2), c.X(e.t), c.Y(0.8))); }
@@ -4346,7 +4399,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.9", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.1", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null,
@@ -5711,7 +5764,9 @@ function drawOverview() {
   if (LN === "px") lineOf(sum, cnt, "#2a78d6", 1.2, []); else if (LN === "10") lineOf(s10, c10, "#1e3a8a", 1.2, []); else lineOf(s60, c60, "#1e3a8a", 1.8, []);
   lineOf(s300, c300, "#111", 1.3, [5, 4]);
   /* Ereignisse der Nacht */
-  if (mode === "nacht" && evList) evList.forEach(e => { if (e.art === "Vergleich") return; c.fillStyle = e.ok ? "#1baa7a" : "#bbb"; c.fillRect(X(e.t), y1 + 2, 1, 6); });
+  /* 1.9.1: gelb = gültige Zuckung, grau = ungültig oder nicht gezählt, violett = Pulsanstieg ohne Zuckung */
+  if ((mode === "nacht" || mode === "serie") && evList) evList.forEach(e => { if (e.art === "Vergleich") return; c.fillStyle = e.ok ? "#e0b000" : "#bbb"; c.fillRect(X(e.t), y1 + 2, e.ok ? 1.5 : 1, 6); });
+  if (J && J.nacht) prList().forEach(p => { c.fillStyle = "#7c3aed"; c.fillRect(X(p.t), y1 + 9, 1.5, 5); });
   /* Temperatur und WBGT */
   const K = S.klima, HK = K.filter(k => Number.isFinite(k.hoehe_m)).sort((a, b) => a.t - b.t), hv = HK.map(k => k.hoehe_m);
   const hOn = HK.length > 3 && Math.max(...hv) - Math.min(...hv) >= 3, y2 = 215, y3 = hOn ? 246 : 280;
@@ -5731,7 +5786,7 @@ function drawOverview() {
   if (sel !== null) { const span2 = mode === "nacht" && nSel ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = mode === "nacht" && nSel ? nSel.t - (span2 === 50000 ? 15000 : 5000) : sel;
     c.fillStyle = "rgba(235,104,52,.25)"; c.fillRect(X(a), 16, Math.max(2, X(a + span2) - X(a)), 270); }
   c.restore();
-  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
+  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...(J && J.nacht ? [["#e0b000", "Strich gelb: gültige Zuckung"], ["#bbb", "Strich grau: Zuckung ungültig oder nicht gezählt, Umdrehen"], ["#7c3aed", "Strich violett: Pulsanstieg ohne Zuckung"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
 }
 $("ov").addEventListener("click", ev => {
   if (ovDragged) { ovDragged = false; return; }
@@ -5805,25 +5860,35 @@ function drawDetail() {
     else { c.fillStyle = "#999"; c.fillText("kein 10-Hz-Strom", L + 80, P.kip[0] + 40); } }
   /* Herzschläge */
   const j0 = lb(S.bt, a), j1 = lb(S.bt, b); const vs = []; for (let k = j0; k < j1; k++) if (S.ok[k]) vs.push(S.bpm[k], S.avg[k]);
-  if (vs.length) { const v0 = Math.floor((Math.min(...vs) - 4) / 5) * 5, v1 = Math.ceil((Math.max(...vs) + 8) / 5) * 5, Y = v => P.puls[1] - (v - v0) / (v1 - v0) * (P.puls[1] - P.puls[0]); LAY.Yp = Y;
+  /* 1.9.1: feste Achse 35 bis 185 Schläge pro Minute */
+  if (vs.length) { const v0 = 35, v1 = 185, Y = v => P.puls[1] - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0) * (P.puls[1] - P.puls[0]); LAY.Yp = Y;
     axisY(c, L, P.puls[0], P.puls[1], v0, v1, v1 - v0 > 60 ? 20 : v1 - v0 > 30 ? 10 : 5, W);
     c.strokeStyle = "#333"; c.setLineDash([6, 4]); c.lineWidth = 1.6; c.beginPath(); let s = false; for (let k = j0; k < j1; k++) { if (!Number.isFinite(S.avg[k])) continue; const x = X(S.bt[k]), y = Y(S.avg[k]); s ? c.lineTo(x, y) : c.moveTo(x, y); s = true; } c.stroke(); c.setLineDash([]);
     c.strokeStyle = "#bbb"; c.lineWidth = 1; c.beginPath(); s = false; for (let k = j0; k < j1; k++) { if (!S.ok[k]) { s = false; continue; } const x = X(S.bt[k]), y = Y(S.bpm[k]); s ? c.lineTo(x, y) : c.moveTo(x, y); s = true; } c.stroke();
     const crowded = (j1 - j0) > W / 42, tiny = (j1 - j0) > W / 22;
     let r0 = night ? lb(S.bt, nSel.t) : null;
     for (let k = j0; k < j1; k++) { const x = X(S.bt[k]), y = Y(S.bpm[k]);
-      c.fillStyle = S.ok[k] ? "#eb6834" : "#ccc"; c.beginPath(); c.arc(x, y, 4, 0, 7); c.fill();
+      c.fillStyle = S.ok[k] ? "#eb6834" : "#ccc"; c.beginPath(); c.arc(x, y, (j1 - j0) > W / 5 ? 2 : 4, 0, 7); c.fill(); /* 1.9.1: kleinere Punkte bei langen Ausschnitten */
       if (!tiny) { c.fillStyle = "#666"; c.font = (crowded ? "9px" : "10px") + " system-ui, sans-serif"; c.textAlign = "center"; const up = !crowded || k % 2 === 0;
         c.fillText(Math.round(S.rr[k]) + " ms", x, up ? y - 18 : y + 16); c.fillText("(" + Math.round(S.bpm[k]) + ")", x, up ? y - 7 : y + 27); c.textAlign = "left"; c.font = "11px system-ui, sans-serif"; }
       if (night && r0 !== null) { const rel = k - r0 + (k >= r0 ? 1 : 0); c.fillStyle = "#999"; c.font = "9px system-ui, sans-serif"; c.textAlign = "center"; if (Math.abs(rel) <= 25 && (!crowded || rel % 2 === 0 || Math.abs(rel) <= 3)) c.fillText((rel > 0 ? "+" : "") + rel, x, P.puls[1] + 11); c.textAlign = "left"; c.font = "11px system-ui, sans-serif"; } } }
   c.fillStyle = "#555"; c.fillText("Puls je Herzschlag (Schläge pro Minute)", L, P.puls[0] - 4);
   /* Bewegung */
-  const F = S.st.f, B = S.st.b; c.fillStyle = "#555"; c.fillText("Bewegung: Fuß (grün), Brust Stoß (grau)", L, P.bew[0] - 2);
-  { const f0 = lb(F.t, a), f1 = lb(F.t, b), g0 = lb(B.t, a), g1 = lb(B.t, b); let m = 40; for (let k = f0; k < f1; k++) m = Math.max(m, F.aus[k]); for (let k = g0; k < g1; k++) m = Math.max(m, B.md[k]);
-    const Y = v => P.bew[1] - Math.sqrt(Math.min(1, Math.max(0, v) / m)) * (P.bew[1] - P.bew[0] - 6), bwid = Math.max(1, W / span * 100 - 0.5);
+  const F = S.st.f, B = S.st.b; c.fillStyle = "#555"; c.fillText("Bewegung in mg, logarithmisch: Fuß (grün), Brust Stoß (grau)", L, P.bew[0] - 2);
+  { const f0 = lb(F.t, a), f1 = lb(F.t, b), g0 = lb(B.t, a), g1 = lb(B.t, b);
+    /* 1.9.1: feste logarithmische Achse 10 bis 10.000 mg */
+    const lg = v => (Math.log10(Math.max(10, Math.min(10000, v))) - 1) / 3, Y = v => P.bew[1] - lg(v) * (P.bew[1] - P.bew[0] - 6), bwid = Math.max(1, W / span * 100 - 0.5);
+    c.strokeStyle = "#ececec"; c.lineWidth = 1; c.fillStyle = "#999"; [10, 100, 1000, 10000].forEach(v => { const y = Y(v); c.beginPath(); c.moveTo(L, y); c.lineTo(L + W, y); c.stroke(); c.fillText(v === 10000 ? "10 000" : String(v), 2, y + 4); });
     for (let k = g0; k < g1; k++) { c.fillStyle = "#999"; c.fillRect(X(B.t[k]), Y(B.md[k]), bwid, P.bew[1] - Y(B.md[k])); }
     for (let k = f0; k < f1; k++) { c.fillStyle = "rgba(27,170,122,.85)"; c.fillRect(X(F.t[k]), Y(F.aus[k]), bwid, P.bew[1] - Y(F.aus[k])); }
-    c.fillStyle = "#999"; c.fillText(Math.round(m) + " mg", 2, P.bew[0] + 10); c.fillText("Wurzelskala", 2, P.bew[0] + 22);
+    /* Schwelle der Zuckung (aus der Auswertung, ab 1.9.1 in der Datei) */
+    const thr = J.nacht && J.nacht.schwelle_mg; if (thr) { const y = Y(thr); c.strokeStyle = "rgba(198,40,40,.7)"; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(L, y); c.lineTo(L + W, y); c.stroke(); c.setLineDash([]); c.fillStyle = "rgba(198,40,40,.8)"; c.fillText(`Schwelle ${thr} mg`, L + W - 80, y - 3); }
+    /* volle Auflösung: Fuß dunkelgrün, Brust dunkelgrau, als Linie über den 10-Hz-Säulen */
+    if ($("roh").checked && J.nacht && J.nacht.roh_fenster) J.nacht.roh_fenster.forEach(rw => { if (rw.ende_ms < a || rw.start_ms > b) return;
+      [[rohHP(rw.fuss), "#065f46"], [rohHP(rw.brust), "#333"]].forEach(([H, col]) => { if (!H) return; const k0 = lb(H.t, a), k1 = lb(H.t, b); c.strokeStyle = col; c.lineWidth = 0.8; c.beginPath(); let on = false;
+        for (let k = k0; k < k1; k++) { const x = X(H.t[k]), y = Y(H.v[k]); if (on && H.t[k] - H.t[k - 1] > 200) on = false; on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; } c.stroke(); });
+      c.fillStyle = "rgba(6,95,70,.12)"; c.fillRect(X(Math.max(a, rw.start_ms)), P.bew[0], X(Math.min(b, rw.ende_ms)) - X(Math.max(a, rw.start_ms)), 4); });
+
     for (let k = lb(S.steps, a); k < S.steps.length && S.steps[k] < b; k++) { c.fillStyle = "#1baa7a"; c.fillRect(X(S.steps[k]) - 1, P.bew[1] + 1, 2, 4); } }
   /* EKG */
   if (showEkg) { const fw = (J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t);
@@ -5832,14 +5897,15 @@ function drawDetail() {
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
     else { c.fillStyle = "#999"; c.fillText("kein EKG-Fenster an dieser Stelle", L, P.ekg[0] + 20); } }
   /* Zeitachse, T0 */
-  c.fillStyle = "#666"; const st = [1000, 2000, 5000, 10000, 15000, 30000, 60000].find(x => W / span * x >= 64) || 60000; /* 1.6: Abstand der Beschriftung nach Breite */
+  c.fillStyle = "#666"; const st = [1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000].find(x => W / span * x >= 64) || 600000; /* 1.6: Abstand der Beschriftung nach Breite */
   for (let t = Math.ceil(a / st) * st; t <= b; t += st) { const x = X(t); c.fillRect(x, h - 22, 1, 4); c.textAlign = "center"; c.fillText(night ? ((t - nSel.t) / 1000 > 0 ? "+" : "") + Math.round((t - nSel.t) / 1000) + " s" : hms(t), x, h - 8); c.textAlign = "left"; }
   /* 1.9: T0 jeder Zuckung im Ausschnitt gelb (gestrichelt: nicht gezählt), die gewählte grün */
-  if (mode === "nacht" && evList && evList.length) { c.strokeStyle = "#e0b000"; c.lineWidth = 1.5; evList.forEach(e => { if (e.art !== "Zuckung" || e === nSel || e.t < a || e.t > b) return; const x = X(e.t); c.setLineDash(e.aus ? [4, 3] : []); c.beginPath(); c.moveTo(x, P.atem[0]); c.lineTo(x, P.bew[1]); c.stroke(); }); c.setLineDash([]); }
+  if ((mode === "nacht" || mode === "serie") && evList && evList.length) { c.lineWidth = 1.5; evList.forEach(e => { if (e.art !== "Zuckung" || e === nSel || e.t < a || e.t > b) return; const x = X(e.t); c.strokeStyle = e.ok ? "#e0b000" : "#aaa"; c.setLineDash(e.aus ? [4, 3] : []); c.beginPath(); c.moveTo(x, P.atem[0]); c.lineTo(x, P.bew[1]); c.stroke(); }); c.setLineDash([]); }
+  if (J && J.nacht) { c.strokeStyle = "#7c3aed"; c.lineWidth = 1.5; c.setLineDash([2, 3]); prList().forEach(p => { if (p.t < a || p.t > b) return; const x = X(p.t); c.beginPath(); c.moveTo(x, P.atem[0]); c.lineTo(x, P.bew[1]); c.stroke(); c.fillStyle = "#7c3aed"; c.fillText("Puls", x + 3, P.puls[0] + 10); }); c.setLineDash([]); }
   if (night) { c.strokeStyle = "#1baa7a"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(nSel.t), P.atem[0]); c.lineTo(X(nSel.t), P.bew[1]); c.stroke(); c.fillStyle = "#1baa7a"; c.fillText("T0", X(nSel.t) + 3, P.atem[0] + 10); }
   $("dInfo").textContent = `${hms(a)} bis ${hms(b)} Uhr` + (night ? `, ${nSel.art} Nr. ${nSel.nr}` : "");
   $("tpick").value = hms(a);
-  legend("legDet", [...(S.az ? [["rgba(42,120,214,.35)", "hellblau hinterlegt: Einatmen laut Atemgurt"]] : []), ["#eb6834", "Herzschlag: Abstand in ms, in Klammern der Puls aus diesem Abstand"], ["#333", "gestrichelt: gleitender Durchschnitt über 10 s"], ["#ddd", "grau hinterlegt: Stoß an der Brust"], ["#ccc", "grauer Punkt: Herzschlag als unplausibel aussortiert (nicht im EKG bestätigt und einzelner Ausreißer, oder EKG lief und hat ihn nicht bestätigt)"], ...(mode === "nacht" ? [["#e0b000", "gelbe Linie: Beginn (T0) einer Zuckung, gestrichelt: nicht gezählt"]] : [])]);
+  legend("legDet", [...(S.az ? [["rgba(42,120,214,.35)", "hellblau hinterlegt: Einatmen laut Atemgurt"]] : []), ["#eb6834", "Herzschlag: Abstand in ms, in Klammern der Puls aus diesem Abstand"], ["#333", "gestrichelt: gleitender Durchschnitt über 10 s"], ["#ddd", "grau hinterlegt: Stoß an der Brust"], ["#ccc", "grauer Punkt: Herzschlag als unplausibel aussortiert (nicht im EKG bestätigt und einzelner Ausreißer, oder EKG lief und hat ihn nicht bestätigt)"], ...(J && J.nacht ? [["#e0b000", "gelbe Linie: Beginn (T0) einer gültigen Zuckung"], ["#aaa", "graue Linie: Zuckung ungültig, gestrichelt: nicht gezählt (aufrecht, dazwischen, Klopfen, Ende)"], ["#1baa7a", "grüne Linie: gewählte Zuckung"], ["#7c3aed", "violett gepunktet: Pulsanstieg ohne Zuckung"]] : []), ...(J && J.nacht && J.nacht.roh_fenster ? [["#065f46", "dunkle Linien: Fuß und Brust in voller Auflösung"]] : [])]);
 }
 function drawAll() { drawOverview(); drawDetail(); }
 window.addEventListener("resize", () => { if (S) drawAll(); });
@@ -5849,6 +5915,37 @@ $("go").addEventListener("click", () => { if (!S || !$("tpick").value) return; c
 
 /* ---------- Nacht ---------- */
 let evList = [];
+function pulseRisesBV(bt, bpm, ok, zt) {
+  /* 1.9.1: Pulsanstieg ohne Zuckung. Puls über 3 Schläge geglättet steigt um mindestens 15 Schläge pro Minute über die Ruhe
+     (Median der Schläge 20 bis 5 s davor); Beginn = erster der 8 Schläge davor, der 5 über der Ruhe liegt; keine Zuckung in ±10 s um den Beginn;
+     mindestens 20 s Abstand zum vorigen Anstieg. */
+  const n = bt.length, out = []; let last = -1e15;
+  const sm = k => { let s = 0, c = 0; for (let j = k - 1; j <= k + 1; j++) if (j >= 0 && j < n && ok[j]) { s += bpm[j]; c++; } return c >= 2 ? s / c : null; };
+  const lbz = x => { let lo = 0, hi = zt.length; while (lo < hi) { const m = (lo + hi) >> 1; if (zt[m] < x) lo = m + 1; else hi = m; } return lo; };
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) {
+    if (!ok[i]) continue; const t = bt[i];
+    while (a < n && bt[a] < t - 20000) a++; while (b < n && bt[b] < t - 5000) b++;
+    if (b - a < 8 || t - last < 20000) continue;
+    const h = sm(i); if (h === null) continue;
+    const v = []; for (let k = a; k < b; k++) if (ok[k]) v.push(bpm[k]); if (v.length < 6) continue; v.sort((x, y) => x - y); const base = v[v.length >> 1];
+    if (h - base < 15) continue;
+    let j0 = i; for (let k = Math.max(0, i - 8); k <= i; k++) { const q = sm(k); if (q !== null && q >= base + 5) { j0 = k; break; } }
+    const T = bt[j0], kz = lbz(T - 10000); if (kz < zt.length && zt[kz] <= T + 10000) { last = t; continue; }
+    let pk = h; for (let k = i; k < Math.min(n, i + 6); k++) { const q = sm(k); if (q !== null && q > pk) pk = q; }
+    out.push({ t: T, puls: Math.round(pk * 10) / 10, ruhe: Math.round(base * 10) / 10 }); last = t;
+  }
+  return out;
+}
+function prList() { if (!S) return []; if (S.pr) return S.pr;
+  if (J.nacht && J.nacht.pulsanstiege) return S.pr = J.nacht.pulsanstiege.map(p => ({ t: p.t_ms, puls: p.puls, ruhe: p.ruhe }));
+  if (!J.nacht) return S.pr = [];
+  const zt = Float64Array.from((J.nacht.ereignisse || []).filter(e => e.art === "Zuckung").map(e => e.t_ms)).sort();
+  return S.pr = pulseRisesBV(S.bt, S.bpm, S.ok, zt); }
+/* volle Auflösung: |Betrag minus gleitendes Mittel über 0,4 s| je Fenster, einmal gerechnet */
+function rohHP(X) { if (!X || !X.t || X.t.length < 20) return null; if (X._hp) return X._hp; const n = X.t.length, m = new Float64Array(n); for (let k = 0; k < n; k++) m[k] = Math.hypot(X.x[k], X.y[k], X.z[k]);
+  const P = new Float64Array(n + 1); for (let k = 0; k < n; k++) P[k + 1] = P[k] + m[k]; const hw = Math.max(2, Math.round(200 / Math.max(1, (X.t[n - 1] - X.t[0]) / n))), v = new Float32Array(n);
+  for (let k = 0; k < n; k++) { const a = Math.max(0, k - hw), b = Math.min(n, k + hw + 1); v[k] = Math.abs(m[k] - (P[b] - P[a]) / (b - a)); } return X._hp = { t: X.t, v }; }
 function buildEvents() {
   evList = [];
   const E = (J.nacht?.ereignisse || []).slice().sort((a, b) => a.t_ms - b.t_ms); let lastZ = -1e12;
@@ -5962,7 +6059,7 @@ function aidPhases() {
 }
 const AHCOL = { ein: "rgba(13,148,136,.55)", aus: "rgba(235,104,52,.45)", Pause: "rgba(0,0,0,.15)" };
 function overlayDetail() {
-  if (!S || mode !== "yoga" && mode !== "nacht") return; const cv = $("det"), c = cv.getContext("2d"), r = window.devicePixelRatio || 1; c.setTransform(r, 0, 0, r, 0, 0);
+  if (!S || mode !== "yoga" && mode !== "nacht" && mode !== "serie") return; const cv = $("det"), c = cv.getContext("2d"), r = window.devicePixelRatio || 1; c.setTransform(r, 0, 0, r, 0, 0);
   const w = cv.clientWidth, night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, W = w - 48, X = t => L + (t - a) / span * W;
   if (!S) return;
   const P = LAY ? LAY.P : { atem: [10, 120], puls: [140, 380], bew: [400, 500] }, yTop = P.atem[0], yBot = P.bew[1];
@@ -5998,36 +6095,19 @@ legend = function (id, items) { _legend(id, items.map(([c2, t]) => [c2, t.replac
 let serList = [], serSel = 0, serOff = 0;
 function buildSeries() {
   const Z = (J && J.nacht && J.nacht.ereignisse || []).filter(e => e.art === "Zuckung" && !e.ausgenommen).map(e => e.t_ms).sort((a, b) => a - b), out = []; let cur = [];
-  const close = () => { if (cur.length >= 4) out.push(cur.slice()); };
-  Z.forEach((t, i) => { if (!i) { cur = [t]; return; } const d = t - Z[i - 1]; if (d >= 5000 && d <= 90000) cur.push(t); else { close(); cur = [t]; } }); close();
+  const close = () => { if (cur.length >= 2) out.push(cur.slice()); }; /* 1.9.1: ab 2 Zuckungen, Abstand höchstens 90 s */
+  Z.forEach((t, i) => { if (!i) { cur = [t]; return; } const d = t - Z[i - 1]; if (d <= 90000) cur.push(t); else { close(); cur = [t]; } }); close();
   serList = out.map((s, i) => ({ nr: i + 1, a: s[0], b: s[s.length - 1], t: s }));
   $("sSel").innerHTML = serList.map((s, i) => `<option value="${i}">Serie ${s.nr}: ${hm(s.a)} bis ${hm(s.b)} Uhr, ${s.t.length} Zuckungen</option>`).join("") || "<option>keine Serie</option>";
   serSel = serList.length ? serList.reduce((bi, s, i) => (s.t.length > serList[bi].t.length ? i : bi), 0) : 0; $("sSel").value = serSel; serOff = 0;
 }
 function drawSeries() {
-  const cv = $("ser"); const { c, w, h } = ctxOf(cv); c.clearRect(0, 0, w, h); if (!S || !serList.length) { c.fillStyle = "#999"; c.fillText("Keine Serie in dieser Messung (mindestens 4 Zuckungen mit je 5 bis 90 s Abstand).", 20, 40); return; }
-  const s = serList[serSel], span = 360000, a = s.a - 60000 + serOff, b = a + span, L = 44, W = w - L - 8, X = t => L + (t - a) / span * W;
-  const P = { puls: [16, 230], atem: [262, 400], fuss: [430, 530] };
-  const vl = (y0, y1) => { c.strokeStyle = "rgba(194,65,12,.35)"; c.lineWidth = 1; s.t.forEach(t => { if (t >= a && t <= b) { c.beginPath(); c.moveTo(X(t), y0); c.lineTo(X(t), y1); c.stroke(); } }); };
-  /* Puls je Schlag */
-  { const v0 = 40, v1 = 95, Y = v => P.puls[1] - (v - v0) / (v1 - v0) * (P.puls[1] - P.puls[0]); axisY(c, L, P.puls[0], P.puls[1], v0, v1, 10, W); vl(P.puls[0], P.puls[1]);
-    const j0 = lb(S.bt, a), j1 = lb(S.bt, b); c.strokeStyle = "rgba(30,58,138,.45)"; c.lineWidth = 1; c.beginPath(); let on = false;
-    for (let k = j0; k < j1; k++) { if (!S.ok[k]) { on = false; continue; } const x = X(S.bt[k]), y = Y(S.bpm[k]); on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; } c.stroke();
-    c.fillStyle = "#1e3a8a"; for (let k = j0; k < j1; k++) if (S.ok[k]) { c.beginPath(); c.arc(X(S.bt[k]), Y(S.bpm[k]), 2.2, 0, 7); c.fill(); }
-    c.fillStyle = "#555"; c.fillText("Puls je Schlag (Schläge pro Minute)", L, P.puls[0] - 4); }
-  /* Atemwelle: normaler Atemzug zwischen -1 und +1 */
-  { const bw = breathWave(a, b); c.fillStyle = "#555"; c.fillText("Atemwelle (oben = Einatmen, normaler Atemzug zwischen −1 und +1, größere abgeschnitten)", L, P.atem[0] - 4); vl(P.atem[0], P.atem[1]);
-    if (bw) { const i0 = lb(bw.t, a), i1 = lb(bw.t, b), q = []; for (let k = i0; k < i1; k++) { if (!s.t.some(t => Math.abs(t - bw.t[k]) < 4000)) q.push(bw.w[k]); }
-      q.sort((x, y) => x - y); const md = q.length ? q[q.length >> 1] : 0, dv = q.map(x => Math.abs(x - md)).sort((x, y) => x - y), sc = dv.length ? dv[Math.floor(0.9 * dv.length)] || 1 : 1;
-      const Y = v => { const z = Math.max(-4, Math.min(4, (v - md) / sc)); return (P.atem[0] + P.atem[1]) / 2 - z / 4 * (P.atem[1] - P.atem[0]) / 2; };
-      c.strokeStyle = "#ececec"; [-1, 0, 1].forEach(z => { const y = (P.atem[0] + P.atem[1]) / 2 - z / 4 * (P.atem[1] - P.atem[0]) / 2; c.beginPath(); c.moveTo(L, y); c.lineTo(L + W, y); c.stroke(); });
-      c.strokeStyle = "#0d9488"; c.lineWidth = 1.2; c.beginPath(); for (let k = i0; k < i1; k++) { const x = X(bw.t[k]), y = Y(bw.w[k]); k === i0 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke(); } }
-  /* Fuß */
-  { const F = S.st.f, f0 = lb(F.t, a), f1 = lb(F.t, b), Y = v => P.fuss[1] - Math.min(1, Math.max(0, v) / 600) * (P.fuss[1] - P.fuss[0]); axisY(c, L, P.fuss[0], P.fuss[1], 0, 600, 300, W); vl(P.fuss[0], P.fuss[1]);
-    c.strokeStyle = "#c2410c"; c.lineWidth = 1; c.beginPath(); for (let k = f0; k < f1; k++) { const x = X(F.t[k]), y = Y(F.aus[k]); k === f0 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
-    c.fillStyle = "#555"; c.fillText("Fuß: größter Ausschlag je 0,1 s (mg, bis 600)", L, P.fuss[0] - 4); }
-  c.fillStyle = "#666"; for (let t = Math.ceil((T0 + a) / 60000) * 60000 - T0; t <= b; t += 60000) { const x = X(t); c.fillRect(x, h - 22, 1, 4); c.fillText(hm(t), x - 14, h - 8); }
-  $("sInfo").textContent = `${hms(a)} bis ${hms(b)} Uhr. Rote Linien: Beginn jeder Zuckung (T0). Der Atemfilter verschmiert große Ausschläge einige Sekunden nach vorn.`;
+  /* 1.9.1: Serie in der Großaufnahme zeigen, gleicher Aufbau wie Tag und Nacht */
+  if (!S) return; const cv = $("ser"); if (cv) cv.style.display = "none";
+  if (!evList.length) buildEvents();
+  if (!serList.length) { $("sInfo").textContent = "Keine Serie in dieser Messung (ab 2 Zuckungen mit höchstens 90 s Abstand)."; drawAll(); return; }
+  const s = serList[serSel]; nSel = null; SPAN = Math.min(900000, Math.max(30000, s.b - s.a + 20000)); sel = s.a - 10000 + serOff; drawAll();
+  $("sInfo").textContent = `Serie ${s.nr}: ${hms(s.a)} bis ${hms(s.b)} Uhr, ${s.t.length} Zuckungen, Abstand im Mittel ${s.t.length > 1 ? Math.round((s.b - s.a) / (s.t.length - 1) / 100) / 10 : 0} s. Darstellung wie in der Großaufnahme.`.replace(/(\d)\.(\d)/g, "$1,$2");
 }
 
 /* ---------- Modus Sammlung: Kerndateien mehrerer Nächte ---------- */
@@ -6124,7 +6204,7 @@ function kernCsv() {
 /* ---------- Umschalten der Modi ---------- */
 function setMode2(m) {
   ["mYoga", "mNacht", "mSerie", "mSamm"].forEach(id => $(id).classList.remove("on")); $({ serie: "mSerie", samm: "mSamm" }[m]).classList.add("on");
-  ["nachtCard", "detCard", "ovCard", "actCard"].forEach(id => { const el = $(id); if (el) el.style.display = m === "samm" || (m === "serie" && id !== "ovCard") ? "none" : ""; });
+  ["nachtCard", "detCard", "ovCard", "actCard"].forEach(id => { const el = $(id); if (el) el.style.display = m === "samm" || (m === "serie" && id !== "ovCard" && id !== "detCard") ? "none" : ""; });
   $("serCard").style.display = m === "serie" ? "" : "none"; $("sammCard").style.display = m === "samm" ? "" : "none";
 }
 const _setMode = setMode;
@@ -6132,7 +6212,7 @@ setMode = function (m) { $("serCard").style.display = "none"; $("sammCard").styl
 $("mSerie").addEventListener("click", () => { if (!S || !J.nacht) { $("info").textContent = "Für Serien bitte eine Nachtmessung öffnen."; return; } mode = "serie"; setMode2("serie"); buildSeries(); drawSeries(); });
 $("mSamm").addEventListener("click", () => { mode = "samm"; setMode2("samm"); kernDraw(); });
 $("sSel").addEventListener("change", () => { serSel = +$("sSel").value; serOff = 0; drawSeries(); });
-$("sBack").addEventListener("click", () => { serOff -= 180000; drawSeries(); }); $("sFwd").addEventListener("click", () => { serOff += 180000; drawSeries(); });
+$("sBack").addEventListener("click", () => { serOff -= SPAN / 2; drawSeries(); }); $("sFwd").addEventListener("click", () => { serOff += SPAN / 2; drawSeries(); });
 $("kFiles").addEventListener("change", ev => kernLoad([...ev.target.files]));
 $("kFolder").addEventListener("click", kernFolder); $("kFilter").addEventListener("change", kernDraw); $("kCsv").addEventListener("click", kernCsv);
 window.addEventListener("resize", () => { if (mode === "serie") drawSeries(); if (mode === "samm") kernDraw(); });
@@ -6284,6 +6364,7 @@ bvShow();
 function bvLine() { return $("line").value; }
 try { const v = localStorage.getItem("bv_line"); if (v) $("line").value = v; $("zoom").checked = localStorage.getItem("bv_zoomD") !== "0"; $("zoomov").checked = localStorage.getItem("bv_zoomO") !== "0"; $("kip").checked = localStorage.getItem("bv_kip") === "1"; } catch (e) {}
 $("cfgb").addEventListener("click", () => { const el = $("cfg"); el.style.display = el.style.display === "none" ? "" : "none"; $("cfgb").classList.toggle("on", el.style.display === ""); });
+$("roh").addEventListener("change", () => { if (S) drawAll(); });
 $("kip").addEventListener("change", () => { try { localStorage.setItem("bv_kip", $("kip").checked ? "1" : "0"); } catch (e) {} if (S) drawAll(); });
 $("line").addEventListener("change", () => { try { localStorage.setItem("bv_line", bvLine()); } catch (e) {} if (S) drawAll(); });
 $("zoom").addEventListener("change", () => { try { localStorage.setItem("bv_zoomD", $("zoom").checked ? "1" : "0"); } catch (e) {} if (!$("zoom").checked && SPAN !== 20000) { const m = sel + SPAN / 2; SPAN = 20000; sel = Math.max(0, m - SPAN / 2); if (S) drawAll(); } });
