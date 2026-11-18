@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.8</title>
+<title>Vitalspur 1.9</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -103,7 +103,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.8</h1>
+<h1>Vitalspur 1.9</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
@@ -298,7 +298,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <div id="bvbox" style="display:none">
 <div class="row">
   <button id="bv_list">Liste neu einlesen</button>
-  <label class="bvfile">oder ZIP/JSON von Hand: <input type="file" id="bv_file" accept=".zip,.json" multiple></label>
+  <label class="bvfile">oder Dateien von Hand (ZIP, JSON, CSV): <input type="file" id="bv_file" accept=".zip,.json,.csv" multiple></label>
+  <label class="bvfile">Tagesordner öffnen: <input type="file" id="bv_dir" webkitdirectory multiple></label>
 </div>
 <div id="bv_slist"></div>
 <div id="bv_recnote" class="warn" style="display:none"></div>
@@ -380,7 +381,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <button class="main" id="saveall">Aktuellen Abschnitt als ZIP (ohne Rohdaten)</button> <button id="ordnew">Speicherordner wählen</button>
   <button class="main" id="shareall">Teilen</button>
   <button class="main" id="sharenow" style="display:none">Jetzt teilen</button>
-  <div id="savestatus" class="hint">Der Speicherordner wird von selbst beschrieben. „Aktuellen Abschnitt als ZIP“ legt Tag oder Nacht bis jetzt als ZIP in die Downloads. „Teilen“ öffnet das Teilen-Menü, z. B. für E-Mail, WhatsApp oder die Claude-App. Die Datei unverändert an Claude schicken.</div>
+  <div id="savestatus" class="hint">Der Speicherordner wird von selbst beschrieben. „Aktuellen Abschnitt als ZIP“ legt Tag oder Nacht bis jetzt als ZIP in den Ordner Berichte des Tagesordners, ohne freigegebenen Speicherordner in die Downloads. „Alles beenden“ schreibt den Tages- oder Nachtbericht gleich mit. „Teilen“ öffnet das Teilen-Menü, z. B. für E-Mail, WhatsApp oder die Claude-App. Die Datei unverändert an Claude schicken.</div>
 </fieldset>
 
 <div id="logwrap"><table id="log"><thead><tr><th>Typ</th><th>Block</th><th>Bezeichnung</th><th>Start</th><th>Ende</th></tr></thead><tbody></tbody></table></div>
@@ -786,6 +787,8 @@ $("stop").addEventListener("click", () => { if (sleep) endSleep("Einschlafen abg
 const PMD_SVC = "fb005c80-02e7-f387-1cad-8acd2d8df0c8", PMD_CP = "fb005c81-02e7-f387-1cad-8acd2d8df0c8", PMD_DATA = "fb005c82-02e7-f387-1cad-8acd2d8df0c8";
 let hrDev = null, hrChar = null, hrWanted = false, hrLast = 0, hrRec = null, nBeats = 0, hrDevListened = null;
 let lastBeat = null, lastArr = 0, burst = null, nLate = 0, hrBpmNow = null;
+/* 1.9: Hautkontakt (Bit Sensor Contact), null = Gurt meldet es nicht */
+let hrContact = null, hrContactT = 0, hrContactLog = null, lvStopT = 0;
 function hrStatus(t) { $("hrstatus").textContent = t; }
 function pmdStatus(t) { $("pmdstatus").textContent = t; }
 function onHr(ev) {
@@ -804,6 +807,7 @@ function onHr(ev) {
     }
   }
   hrLast = now; hrBpmNow = bpm;
+  if (flags & 4) { const c = !!(flags & 2); if (c !== hrContact) hrContactT = now; hrContact = c; } else hrContact = null;
   hrStatus(`Verbunden · Puls ${bpm} · ${nBeats} Herzschläge in dieser Aufzeichnung` + (nLate ? ` · ${nLate} nachgeliefert` : ""));
 }
 function liveBeats(rrs, now) {
@@ -828,6 +832,10 @@ function finishBurst(endT) {
   addEntry({ typ: "Gurt", name: `${b.rr.length} Herzschläge nachgeliefert und zurückgerechnet`, start: b.from, end: Math.round(endT) });
 }
 setInterval(() => { if (burst && Date.now() - lastArr > 2000) finishBurst(lastArr); }, 1000);
+/* 1.9: Wechsel des Hautkontakts ins Protokoll, erst wenn er 3 s besteht */
+setInterval(() => { if (!hrWanted || hrContact === null || hrContact === hrContactLog || Date.now() - hrContactT < 3000) return;
+  if (hrContactLog !== null || hrContact === false) addEntry({ typ: "Gurt", name: hrContact ? "Hautkontakt wieder da" : "kein Hautkontakt", start: hrContactT });
+  hrContactLog = hrContact; }, 1000);
 setInterval(() => {
   if (hrWanted && hrLast && Date.now() - hrLast > 10000) hrStatus("Kein Signal seit " + Math.round((Date.now() - hrLast) / 1000) + " s. Gurt anfeuchten, Bildschirm anlassen.");
 }, 5000);
@@ -1947,7 +1955,7 @@ let masterArm = 0, micWas = false, endArm = 0;
 function masterShow() {
   const b = $("master"), active = anyActive();
   const both = hrWanted && vWanted, slow = both || calWanted();
-  if (endArm && (!active || Date.now() - endArm > (slow ? 600000 : 4000))) { if (syncGate.open && syncGate.why === "Ende") syncGate.open = false; endArm = 0; }
+  if (endArm && (!active || Date.now() - endArm > (slow ? 600000 : 4000))) { if (syncGate.open && syncGate.why === "Ende") syncGate.open = false; endArm = 0; if (active) addEntry({ typ: "Aufzeichnung", name: "Ende-Ablauf abgebrochen", start: Date.now() }); }
   if (active) { b.disabled = false; b.className = "main stop"; b.textContent = !endArm ? "Aufzeichnung läuft · Alles beenden" : both && syncGate.open ? "Bitte klopfen · danach nochmal tippen zum Beenden" : (cal.on || cal.pend) ? calText() + " · nochmal tippen beendet sofort" : slow ? "Abgleich fertig · Nochmal tippen zum Beenden" : "Wirklich alles beenden? Nochmal tippen"; }
   else if (knownDevices()) { b.disabled = false; b.className = "main"; b.textContent = "Aufzeichnung aus · Alles wieder starten"; }
   else { b.disabled = true; b.className = "main"; b.textContent = "Noch keine Aufzeichnung aktiv"; }
@@ -1967,7 +1975,7 @@ async function stopAll() {
   if (micOn) $("micstop").click();
   if (hrWanted) $("hrstop").click();
   if (vWanted) $("vstop").click();
-  rbOn = false; rbFlushBuf();
+  rbOn = false; rbFlushBuf(); lvStopT = Date.now(); hrContact = null; hrContactLog = null;
   addEntry({ typ: "Aufzeichnung", name: "Alles beendet (Hauptknopf)", start: Date.now() });
   await flush(); keepTone(); wlShow(); vsFlush("Beenden");
   if (!anyActive()) { recWasActive = false; recStopped(); }
@@ -2000,8 +2008,8 @@ async function startAll() {
 $("master").addEventListener("click", () => {
   vsGrantTap();
   if (anyActive()) {
-    if (!endArm) { endArm = Date.now(); if (hrWanted && vWanted) syncOpen("Ende", true); calPlan("Ende"); masterShow(); return; }
-    endArm = 0; masterArm = 0; stopAll().then(() => { masterShow(); });
+    if (!endArm) { endArm = Date.now(); addEntry({ typ: "Aufzeichnung", name: "Ende-Ablauf begonnen", start: endArm }); if (hrWanted && vWanted) syncOpen("Ende", true); calPlan("Ende"); masterShow(); return; }
+    endArm = 0; masterArm = 0; stopAll().then(() => { masterShow(); vsPhaseReport("Alles beenden"); });
   } else if (knownDevices()) { $("master").disabled = true; $("master").textContent = "Starte …"; startAll().then(masterShow); }
 });
 setInterval(masterShow, 1000);
@@ -2797,6 +2805,24 @@ async function makeZip8(files) {
 }
 
 /* ================= Nachtmodus: Ereignisse und Fenster ================= */
+/* 1.9: Zuckungen, die nicht gezählt werden: aufrecht (Brust in den 5 s vor T0), Klopfen (±3 s um erkannte Klopfgruppen), ab dem Ende-Ablauf bis zum nächsten Start */
+function nightExclude(NE, A, L, sync, steps) {
+  const knock = [...(sync.gc || []), ...(sync.gf || [])].filter(g => g && g.length).map(g => [g[0] - 3000, g[g.length - 1] + 3000]);
+  const ends = []; let open = null;
+  [...L].sort((a, b) => a.start - b.start).forEach(r => {
+    const isEnd = (r.typ === "Abgleich" && /^Abgleich offen: Ende/.test(r.name || "")) || (r.typ === "Aufzeichnung" && /^(Ende-Ablauf begonnen|Alles beendet)/.test(r.name || ""));
+    const isGo = r.typ === "Aufzeichnung" && /^(Alles gestartet|Ende-Ablauf abgebrochen)/.test(r.name || "");
+    if (isEnd && open === null) open = r.start; else if (isGo && open !== null) { ends.push([open, r.start]); open = null; } });
+  if (open !== null) ends.push([open, Infinity]);
+  const S0 = SIDE; try { SIDE = sideCheck(A, steps); } catch (e) {}
+  const cnt = { aufrecht: 0, Klopfen: 0, Ende: 0 };
+  NE.ev.forEach(e => { if (e.art !== "Zuckung") return; let why = null;
+    if (ends.some(([a, b]) => e.t >= a && e.t < b)) why = "Ende";
+    else if (knock.some(([a, b]) => e.t >= a && e.t <= b)) why = "Klopfen";
+    else if (A) { const l = lageOf(meanIn(A, 0, e.t - 5000, e.t - 300), meanIn(A, 1, e.t - 5000, e.t - 300), meanIn(A, 2, e.t - 5000, e.t - 300)); if (l === "aufrecht") why = "aufrecht"; }
+    e.aus = why; if (why) cnt[why]++; });
+  NE.aus = cnt; NE.lageDa = !!A; SIDE = S0;
+}
 function nightEvents(F, A, G, B, R, steps, fhp, zthr, T0) {
   const ev = [], stepT = Float64Array.from(steps.filter(s => s.sicher), s => s.t);
   const nearStep = t => { const k = lowerBound(stepT, t - 3000); return k < stepT.length && stepT[k] < t + 3000; };
@@ -2885,6 +2911,8 @@ async function buildSpar(D, stamp8) {
   B.forEach((b, i) => { b.tt = al.out[i].t; b.ok = al.out[i].ok; });
   { const eb = ekgBeats(B, R); if (eb) { let m = 0; eb.beats.forEach((x, i) => { if (x.ok || !B[i].ok) { B[i].tt = x.tt; B[i].ok = x.ok; } if (B[i].ok) m++; }); al.ekgSchlaege = m; } }
   for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; }
+  /* 1.9: lief zur Zeit des Schlags das EKG und ist er dort nicht bestätigt, zählt er nicht für Puls und Spannweite (z. B. Gurt ohne Hautkontakt) */
+  if (E && E.t && E.t.length) for (const b of B) { const k = lowerBound(E.t, b.tt - 1500); b.ekgDa = k < E.t.length && E.t[k] < b.tt + 1500; b.drop = b.ekgDa && !b.ok; }
   const T0 = Math.min(...[B[0]?.tt, A?.t[0], F?.t[0], L.length ? Math.min(...L.map(r => r.start)) : undefined].filter(Number.isFinite));
   say2("Rechne: Schritte …"); await wait(20);
   const steps = stepsDetect(F, G, A);
@@ -2896,7 +2924,8 @@ async function buildSpar(D, stamp8) {
   bc.list.forEach(c => { if (!c.sicher || !c.aufrecht) return; const near = bp.filter(p => Math.abs(p.t - c.t) < 60000 && p.tiefe >= 6).map(p => p.dauer).sort((a, b) => a - b);
     if (near.length >= 3) { const md = near[near.length >> 1]; if (Math.abs(c.dauer - md) > 0.4 * md) c.sicher = false; } });
   const sure = bc.list.filter(c => c.sicher);
-  const breaths = [...bc.list.filter(c => c.sicher), ...bp.filter(p => !sure.some(c => p.t < c.tEnd && p.tEnd > c.t))].sort((a, b) => a.t - b.t);
+  /* 1.9: Atemzüge nur noch aus dem Atemgurt; Brust und Puls des H10 sind kein Atem */
+  const breaths = (D.belt && D.belt.list ? D.belt.list : []).map(c => Object.assign({}, c, { tE: c.t + c.ein * 1000, tEnd: c.t + c.dauer * 1000 })).sort((a, b) => a.t - b.t);
   say2("Rechne: Zeilen je Herzschlag …"); await wait(20);
   const fhp = F ? magHP(F, W(F, 0.4)) : null, chp = A ? magHP(A, W(A, 0.5)) : null;
   const zthr = fhp ? Math.max(40, 8 * medianSub(fhp)) : Infinity;
@@ -2944,26 +2973,27 @@ async function buildSpar(D, stamp8) {
   const SR = [["Nr", "Uhrzeit", "t_s", "Seite", "Dauer_bis_naechster_s", "Doppelschritt_s", "Fuss_Spitze_mg", "Aufprall_x_mg", "Aufprall_y_mg", "Aufprall_z_mg", "Drehrate_Spitze_dps", "Schwungdauer_s", "Brust_Stoss_mg", "sicher", "Epoch_ms"]];
   steps.forEach((s, i) => SR.push([i + 1, tx(s.t), (s.t - T0) / 1000, s.sicher ? s.side : null, s.dauer, s.doppel, s.spitze, s.vec ? s.vec[0] : null, s.vec ? s.vec[1] : null, s.vec ? s.vec[2] : null, s.gyro, s.swing, s.brust, s.sicher ? "ja" : null, Math.round(s.t)]));
   const AR = [["Nr", "Uhrzeit_Beginn", "t_s", "Einatmen_s", "Ausatmen_s", "Dauer_s", "Atemzuege_pro_min", "Tiefe", "Einheit", "Quelle", "sicher", "Epoch_ms"]];
-  breaths.forEach((c, i) => AR.push([i + 1, tx(c.t), (c.t - T0) / 1000, c.ein, c.aus, c.dauer, Math.round(600 / c.dauer) / 10, c.tiefe, c.quelle === "Brust" ? "mg" : "Schläge/min", c.quelle, c.sicher ? "ja" : null, Math.round(c.t)]));
+  breaths.forEach((c, i) => AR.push([i + 1, tx(c.t), (c.t - T0) / 1000, c.ein, c.aus, c.dauer, Math.round(600 / c.dauer) / 10, c.tiefe, c.quelle === "Gurt" ? "N" : c.quelle === "Brust" ? "mg" : "Schläge/min", c.quelle, c.sicher ? "ja" : null, Math.round(c.t)]));
   const PR = [["Sitzung", "Typ", "Block", "Position", "Bezeichnung", "Uhrzeit_Start", "t_s", "Uhrzeit_Ende", "Dauer_s", "Epoch_ms"]];
   ev.forEach(r => PR.push([r.session || null, r.typ, r.block ?? null, r.pos ?? null, r.name, tx(r.start), (r.start - T0) / 1000, r.end ? tx(r.end) : null, r.end ? (r.end - r.start) / 1000 : null, Math.round(r.start)]));
   let nZ = 0, lastZ = -1e15; rows.slice(1).forEach(r => { if (r[19] === "ja") { if (r[34] - lastZ >= 8000) nZ++; lastZ = r[34]; } });
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.8"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
     ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
     ["Drehrate Fuß", gyInfo], ["Trageort Sense", (L.filter(r => r.typ === "Trageort Sense").pop() || {}).name || null], ["PPG", (L.filter(r => r.typ === "Sense" && /^PPG (gestartet|tatsächliche)/.test(r.name || "")).map(r => r.name).join(" | ")) || null], ["PPG Stufen", L.filter(r => r.typ === "PPG Stufe").length || null], ["Schritte rechts sicher", nR], ["Schritte links sicher", nL],
-    ["Atemzüge Brust sicher", sure.length], ["Atemzüge aus Puls (Schätzung)", breaths.length - sure.length],
+    ["Atemzüge aus dem Atemgurt", breaths.length], ["Atem", "nur aus dem Atemgurt (ab 1.9); ohne Gurt keine Atemzüge"],
     ["Schwelle Zuckung mg", Number.isFinite(zthr) ? Math.round(zthr) : null], ["Zuckungen (Ereignisse, mindestens 8 s Abstand)", nZ],
     ["Hinweis", "Leere Zelle heißt: nicht sicher erkannt. Zeiten der Herzschläge liegen auf der R-Zacke, wenn EKG bestätigt. Einatmen ist der steigende Teil."]];
   let NE = null;
   if (nacht) {
     say2("Rechne: Ereignisse der Nacht …"); await wait(20);
     NE = nightEvents(F, A, G, B, R, steps, fhp, zthr, T0);
+    try { nightExclude(NE, A, L, sync, steps); } catch (e) { NE.aus = null; }
     const r1 = x => x === null || x === undefined ? null : Math.round(x * 10) / 10;
     var ER = [["Nr", "Art", "Uhrzeit_Beginn", "t_s", "Uhrzeit_Spitze", "Fuss_Spitze_mg", "Brust_Spitze_mg", "Drehrate_Spitze_dps", "Beginn_nach_letzter_R_ms", "Beginn_vor_naechster_R_ms", "Puls_vorher", "Puls_Spitze", "Spitze_bei_Schlag", "Ausschlag", "Puls_Tief", "Tief_bei_Schlag", "Unterschwingen", "Fenster_Nr", "Epoch_ms"]];
     NE.ev.forEach(e => ER.push([e.nr, e.art, tx(e.t), (e.t - T0) / 1000, tx(e.tPk), r1(e.fuss), r1(e.brust), r1(e.dreh), r1(e.vorR), r1(e.nachR), r1(e.base), r1(e.pv), e.pk ?? null, e.base ? r1(e.pv - e.base) : null, r1(e.tv), e.tk ?? null, e.base ? r1(e.tv - e.base) : null, e.fenster ?? null, Math.round(e.t)]));
@@ -2989,11 +3019,11 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.8", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 1.9", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
-    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom.", ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
+    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom.", ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
   return { raw: { B, R, NE, A, F, G, steps, T0, TP: TPs, sync, al, breaths, minutes: X9.minutes, mf: X9.mf, actMin: X9.actMin }, xlsx, json, pdf: X9.pdf, blocks: X9.blocks, info: `${B.length} Herzschläge, ${nR + nL} Schritte, ${breaths.length} Atemzüge, ${sync.pairs.length} Abgleich` + (NE ? `, ${NE.ev.length} Ereignisse, ${NE.win.length} Fenster` : "") };
 }
@@ -3027,7 +3057,7 @@ function beatPlaus(rr, ekg) {
 /* Kleinster und größter Puls je Herzschlag in gleitenden 10 s (±5 s), nur plausible Schläge */
 function pulseEnvelope(B) {
   const t = [], p = [], q = [], e = [], n0 = B.length;
-  for (let i = 0; i < n0; i++) { const b = B[i]; if (b.rr > 300 && b.rr < 2000) { t.push(b.tt); p.push(60000 / b.rr); q.push(b.rr); e.push(b.ok ? 1 : 0); } }
+  for (let i = 0; i < n0; i++) { const b = B[i]; if (b.rr > 300 && b.rr < 2000 && !b.drop) { t.push(b.tt); p.push(60000 / b.rr); q.push(b.rr); e.push(b.ok ? 1 : 0); } }
   const n = t.length, ok = beatPlaus(q, e);
   const lo = new Float32Array(n).fill(NaN), hi = new Float32Array(n).fill(NaN);
   let a = 0, b = 0;
@@ -3330,7 +3360,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.8. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 1.9. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3530,7 +3560,7 @@ async function extras9(X) {
   const strom = stream10(A, F, G, fhp, gmag, T0); window.lastStrom = { strom, T0 }; /* 1.7: für Kippen_Brust.csv */
   const rel = t => Math.round(t - T0);
   const json9 = {
-    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0) },
+    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0) },
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
@@ -3627,7 +3657,7 @@ async function buildZip(opts) {
   let sp = null, kern = null; window.lastKern = null; window.lastStrom = null;
   const nacht = opts.nacht !== undefined ? !!opts.nacht : $("nacht").checked;
   try {
-    sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht }, id);
+    sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht, belt }, id);
     if (sp && sp.raw && belt) sp.raw.belt = belt;
     /* 1.7: gemeinsame Atemzuege.csv (Gurt, sonst Brust oder Puls, mit Quelle) und Kippen der Brust im 10-Hz-Raster */
     try { const T = vsDerived(sp); if (T.Atemzuege && T.Atemzuege.length) out.push({ name: P + "Atemzuege.csv", data: enc.encode("\ufeff" + [VS_HEAD.Atemzuege, ...T.Atemzuege].join("\n")) }); } catch (e) {}
@@ -3644,7 +3674,7 @@ async function buildZip(opts) {
         { const Lg = L; const last = typ => { const r = Lg.filter(x => x.typ === typ); return r.length ? r[r.length - 1].name : null; };
           rep.KR.splice(5, 0, ["Sense getragen am", last("Trageort") || "Fuß rechts"], ["Gewicht", last("Gewicht")], ["Gefühl beim Hinlegen", (Lg.filter(x => x.typ === "Gefühl")[0] || {}).name || null], ["Gefühl am Morgen", Lg.filter(x => x.typ === "Gefühl").length > 1 ? Lg.filter(x => x.typ === "Gefühl").pop().name : null]); }
         const pulseMin = [], lageMin = [], byMin = new Map();
-        raw.B.forEach(b => { if (b.rr > 300 && b.rr < 2000) { const k = Math.floor(b.tt / 60000); if (!byMin.has(k)) byMin.set(k, []); byMin.get(k).push(60000 / b.rr); } });
+        raw.B.forEach(b => { if (b.rr > 300 && b.rr < 2000 && !b.drop) { const k = Math.floor(b.tt / 60000); if (!byMin.has(k)) byMin.set(k, []); byMin.get(k).push(60000 / b.rr); } });
         [...byMin.keys()].sort((a, b) => a - b).forEach(k => { const v = byMin.get(k).sort((a, b) => a - b); pulseMin.push([k * 60000 + 30000, v[v.length >> 1]]); });
         if (raw.A) { const t0 = Math.floor(raw.A.t[0] / 60000), t1 = Math.floor(raw.A.t[raw.A.t.length - 1] / 60000);
           for (let k = t0; k <= t1; k++) { const a = k * 60000, b = a + 60000; const l = lageOf(meanIn(raw.A, 0, a, b), meanIn(raw.A, 1, a, b), meanIn(raw.A, 2, a, b)); if (l) lageMin.push([a, l]); } }
@@ -3680,8 +3710,15 @@ async function ordReady(neu) {
 }
 async function ordWrite(h, sub, name, data) { const d = await h.getDirectoryHandle(sub, { create: true }); const f = await d.getFileHandle(name, { create: true }); const w = await f.createWritable(); await w.write(data); await w.close(); }
 $("saveall").addEventListener("click", async () => {
-  const z = await buildZip(Object.assign(vsCurWin(), { noBig: true })); vsDownload(z.blob, z.name);
-  $("savestatus").textContent = `Gespeichert: ${z.name} (${(z.blob.size / 1e6).toFixed(1)} MB) in den Downloads. Rohdaten liegen im Speicherordner.`;
+  const z = await buildZip(Object.assign(vsCurWin(), { noBig: true })), mb = (z.blob.size / 1e6).toFixed(1).replace(".", ",");
+  /* 1.9: in den Ordner Berichte des Tagesordners, Downloads nur ohne freigegebenen Speicherordner */
+  let h = null; try { h = VS ? await vsRoot(true) : null; } catch (e) {}
+  if (h) { try { const parts = vsDayParts(), ber = await vsSub(await vsSub(h, parts), ["Berichte"]); await vsPut(ber, z.name, z.blob);
+      addEntry({ typ: "Daten", name: `ZIP in den Speicherordner: ${parts.join("/")}/Berichte/${z.name}`, start: Date.now() });
+      $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in ${parts.join("/")}/Berichte.`; return; }
+    catch (e) { addEntry({ typ: "Fehler", name: "ZIP nicht in den Speicherordner geschrieben: " + (e.message || e), start: Date.now() }); } }
+  vsDownload(z.blob, z.name);
+  $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in den Downloads (Speicherordner nicht freigegeben).`;
 });
 $("ordnew").addEventListener("click", async () => { const h = await ordReady(true); if (h) { vsDir = h; vsDirName = h.name; vsShow(); } $("savestatus").textContent = h ? `Speicherordner: ${h.name}` : ("showDirectoryPicker" in window ? "Kein Ordner gewählt, es wird in Downloads gespeichert." : "Ordnerzugriff nicht verfügbar: Chrome aktualisieren für einen eigenen Ordner."); });
 let shareFile = null;
@@ -3765,7 +3802,7 @@ function nbBase(rr) { const i0 = NB.vor - 10, b = rr.slice(i0, i0 + 4); return b
 function nightReport(raw, pid, startText) {
   const { B, NE, A, F, G, steps, T0, TP } = raw;
   const Rc = Float64Array.from(B.filter(b => b.ok).map(b => b.tt));
-  const zu = NE.ev.filter(e => e.art === "Zuckung"), br = NE.ev.filter(e => e.art === "Brust");
+  const zu = NE.ev.filter(e => e.art === "Zuckung" && !e.aus), br = NE.ev.filter(e => e.art === "Brust");
   const sure = Float64Array.from(steps.filter(s => s.sicher).map(s => s.t));
   const near = (arr, t, d) => { const k = lowerBound(arr, t - d); return k < arr.length && arr[k] < t + d; };
   const tps = [...TP].sort((a, b) => a.t - b.t);
@@ -3806,7 +3843,7 @@ function nightReport(raw, pid, startText) {
   const MR = [["Proband", "Schlag", "Herzschlagabstand_Aenderung_Prozent_Zuckung", "Kontrolle_Prozent", "Anzahl_Zuckungen", "Anzahl_Kontrolle"]];
   idx.forEach((j, i) => MR.push([pid, j, mc[i] === null ? null : Math.round(mc[i] * 1000) / 10, cc[i] === null ? null : Math.round(cc[i] * 1000) / 10, valid.length, ctrl.length]));
   const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))],
-    ["Zuckungen gesamt", zu.length], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
+    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig im EKG", why.ekg],
     ["T0", "Beginn der Zuckung am Fuß (erstes Anheben, rückwärts von der Spitze gesucht), auf die Uhr des Brustgurts abgeglichen"],
     ["R-k_ms / R+k_ms", "Abstand der k-ten R-Zacke vor beziehungsweise nach T0 in Millisekunden, negativ davor, positiv danach. R+1 ist die erste R-Zacke nach T0."],
@@ -4019,7 +4056,7 @@ function nightReport(raw, pid, startText) {
   const { B, A, steps, T0, TP } = raw, NE = raw.NE || { ev: [] };
   SIDE = sideCheck(A, steps);
   const Rc = Float64Array.from(B.filter(b => b.ok).map(b => b.tt));
-  const zu = NE.ev.filter(e => e.art === "Zuckung"), br = NE.ev.filter(e => e.art === "Brust");
+  const zu = NE.ev.filter(e => e.art === "Zuckung" && !e.aus), br = NE.ev.filter(e => e.art === "Brust");
   const sure = Float64Array.from(steps.filter(s => s.sicher).map(s => s.t));
   const near = (arr, t, d) => { const k = lowerBound(arr, t - d); return k < arr.length && arr[k] < t + d; };
   const tps = [...TP].sort((a, b) => a.t - b.t);
@@ -4114,8 +4151,8 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.8"],
-    ["Zuckungen gesamt", zu.length], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9"],
+    ["Zuckungen gesamt", zu.length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
     ["Puls vor dem Fuß (Schläge −4 bis −1), Zuckung minus Zufall, Prozent", r1(K.vor)], ["  95-%-Konfidenzintervall", fci(K.vor_ci)],
@@ -4182,7 +4219,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.8. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 1.9. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4309,10 +4346,10 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.8", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 1.9", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
-      zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why,
+      zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null,
       vor: r1(rep.K.vor), spitze: r1(rep.K.spitze), tief: r1(rep.K.tief) },
     hinweis: "Zeiten in ms seit t0_epoch_ms. rr: Herzschlagabstände aus dem EKG, die mit R-25..R-1 und R+1..R+25 enden (50 Werte); Ruhe = Mittel der Werte 16 bis 19 (Schläge -10 bis -7). Ab Version 2 zusätzlich rr40: Abstände der Schläge -40..-1 und +1..+40 (80 Werte, null = fehlt oder unplausibel), rampe: Rampenbeginn und Rückkehr des Schwingens nach Monographie Teil 7 (Schlagnummern relativ zum Zuck, Puls in Schlägen pro Minute gegenüber dem Mittel der Schläge -25 bis -18).",
     zuckungen: rep.zu.map((e, i) => ({ t: Math.round(e.t - raw.T0), fuss: e.fuss === null ? null : Math.round(e.fuss), dreh: e.dreh === null ? null : Math.round(e.dreh), brust: e.brust === null ? null : Math.round(e.brust), serie: rep.ser[i], stellung: rep.pos[i] })),
@@ -4489,43 +4526,87 @@ function vsDerived(sp) {
   const R = sp.raw || {}, T = {}, r1 = v => Number.isFinite(v) ? num(v) : "", r2 = v => Number.isFinite(v) ? num(v, 2) : "";
   T.Herzschlaege = (R.B || []).map(b => [...tcols(b.tt), b.rr, num(60000 / b.rr), b.ok ? "ja" : "nein"].join(";"));
   T.Schritte = (R.steps || []).map(s => [...tcols(s.t), s.side, s.sicher ? "ja" : "", r2(s.dauer), r2(s.doppel)].join(";"));
-  { const belt = R.belt || { list: [], cover: [] }, inC = t => belt.cover.some(([a, b]) => t >= a && t <= b);
-    const all = [...(R.breaths || []).filter(c => !inC(c.t)), ...belt.list].sort((a, b) => a.t - b.t);
+  { const belt = R.belt || { list: [], cover: [] };
+    const all = [...belt.list].sort((a, b) => a.t - b.t); /* 1.9: nur Gurt */
     T.Atemzuege = all.map(c => [...tcols(c.t), r2(c.ein), r2(c.aus), r2(c.dauer), num(60 / c.dauer), c.quelle, c.sicher ? "ja" : "", c.quelle === "Gurt" && Number.isFinite(c.tiefe) ? num(c.tiefe, 2) : "", c.quelle === "Gurt" && Number.isFinite(c.prozent) ? num(c.prozent) : ""].join(";")); }
   const M = R.minutes || [], F = R.mf || [];
   T.Minutenwerte = M.map((m, i) => { const f = F[i] || {}; return [...tcols(m.t), r1(m.puls), r1(m.lo), r1(m.hi), r1(m.atem), r1(f.cMAD), r1(f.fMAD), r1(f.ang), r2(f.up), r2(f.lie), r1(f.vib), r1(f.fvib), r1(f.gyro), f.steps ?? "", (R.actMin || [])[i] || ""].join(";"); });
-  T.Zuckungen = R.NE ? R.NE.ev.map(e => [...tcols(e.t), e.art, r1(e.fuss), r1(e.brust), r1(e.dreh), r1(e.base), r1(e.pv), r1(e.tv), e.fenster ?? ""].join(";")) : [];
+  T.Zuckungen = R.NE ? R.NE.ev.map(e => [...tcols(e.t), e.aus ? `${e.art} (nicht gezählt: ${e.aus})` : e.art, r1(e.fuss), r1(e.brust), r1(e.dreh), r1(e.base), r1(e.pv), r1(e.tv), e.fenster ?? ""].join(";")) : [];
   return T;
 }
-async function vsWriteDerived(h, dayDir, sp, pid, dayPre) {
-  const T = vsDerived(sp), lz = await vsSub(h, ["Langzeit"]);
-  for (const name of Object.keys(T)) { await vsAppend(dayDir, dayPre + name + ".csv", VS_HEAD[name], T[name]); await vsAppend(lz, `${pid}_${name}.csv`, VS_HEAD[name], T[name]); }
+async function vsWriteDerived(h, dayDir, sp, pid, dayPre, from) {
+  /* 1.9: nur Zeilen ab dem letzten Bericht derselben Phase anhängen (Spalte 3 ist Epoch_ms) */
+  const T = vsDerived(sp), lz = await vsSub(h, ["Langzeit"]), keep = r => !(from > -Infinity) || +String(r).split(";")[2] >= from;
+  for (const name of Object.keys(T)) { const rows = T[name].filter(keep); await vsAppend(dayDir, dayPre + name + ".csv", VS_HEAD[name], rows); await vsAppend(lz, `${pid}_${name}.csv`, VS_HEAD[name], rows); }
   /* 1.7: Kippen der Brust nur in den Tagesordner, nicht in Langzeit */
-  try { const K = kippenRows(window.lastStrom); if (K.length) await vsAppend(dayDir, dayPre + "Kippen_Brust.csv", KIPPEN_HEAD, K); } catch (e) {}
+  try { const K = kippenRows(window.lastStrom).filter(keep); if (K.length) await vsAppend(dayDir, dayPre + "Kippen_Brust.csv", KIPPEN_HEAD, K); } catch (e) {}
 }
 async function vsVersuche(h) {
   if (!window.lastVersuche || !window.lastVersuche.length) return;
   try {
     const head = "Datum;Beginn;Ort;Reihenfolge;Durchgang;Stueck;Minuten;Puls;RMSSD_ms;Schritte_pro_min;Hoehe_hinauf_m;Hoehe_hinunter_m;Anteil_Atemband_Prozent;staerkste_Schwingung_pro_min";
-    await vsAppend(await vsSub(h, ["Versuche"]), "Versuche.csv", head, window.lastVersuche);
-    addEntry({ typ: "Daten", name: `Sammeltabelle Versuche um ${window.lastVersuche.length} Zeilen ergänzt`, start: Date.now() });
+    /* 1.9: Zeilen, die schon in der Tabelle stehen, nicht noch einmal anhängen */
+    const vd = await vsSub(h, ["Versuche"]); let have = new Set(); try { have = new Set((await (await vd.getFileHandle("Versuche.csv")).getFile().then(f => f.text())).split(/\r?\n/)); } catch (e) {}
+    const neu = window.lastVersuche.filter(r => !have.has(r)); if (!neu.length) return;
+    await vsAppend(vd, "Versuche.csv", head, neu);
+    addEntry({ typ: "Daten", name: `Sammeltabelle Versuche um ${neu.length} Zeilen ergänzt`, start: Date.now() });
   } catch (e) { addEntry({ typ: "Fehler", name: "Sammeltabelle nicht geschrieben: " + (e.message || e), start: Date.now() }); }
 }
 
 /* ---------- Bericht beim Umlegen des Schalters ---------- */
 async function vsReport(a, b, night, dayParts, dayStart) {
   const pid = pidVal() || "ohneID", P = `${pid}_${st12(a)}_`, kind = night ? "Nacht" : "Tag";
-  if (b - a < 60000) return;
+  if (b - a < 60000) return false;
   const z = await buildZip({ a, b, nacht: night, kind, prefix: P, noRaw: true });
   const h = await vsRoot(false);
-  if (!h) { vsDownload(z.blob, z.name); addEntry({ typ: "Fehler", name: `${kind}esbericht nicht in den Ordner geschrieben (nicht freigegeben), ZIP in den Downloads`, start: Date.now() }); return; }
+  if (!h) { vsDownload(z.blob, z.name); addEntry({ typ: "Fehler", name: `${kind}esbericht nicht in den Ordner geschrieben (nicht freigegeben), ZIP in den Downloads`, start: Date.now() }); return false; }
+  /* 1.9: Berichtsdateien gelten für die ganze Phase und werden neu geschrieben; Tabellen nur ab dem letzten Bericht derselben Phase */
+  const from = VS && VS.rep && VS.rep.a === a && Number.isFinite(VS.rep.to) ? VS.rep.to : -Infinity;
   const dd = await vsSub(h, dayParts), ber = await vsSub(dd, ["Berichte"]);
   for (const f of z.out) if (!/\.csv$/.test(f.name)) await vsPut(ber, f.name, f.data);
   if (z.kern) await vsPut(await vsSub(h, ["Kern"]), z.kern.name, z.kern.data);
-  if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`);
+  if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`, from);
   await vsVersuche(h);
-  addEntry({ typ: "Daten", name: `${night ? "Nachtbericht" : "Tagesbericht"} geschrieben: ${dayParts.join("/")}/Berichte`, start: Date.now() });
+  if (VS) { VS.rep = { a, to: b }; vsSave(); }
+  addEntry({ typ: "Daten", name: `${night ? "Nachtbericht" : "Tagesbericht"} geschrieben: ${dayParts.join("/")}/Berichte` + (from > -Infinity ? `, Tabellen ab ${hhmm(from)} Uhr ergänzt` : ""), start: Date.now() });
   $("savestatus").textContent = `${night ? "Nachtbericht" : "Tagesbericht"} gespeichert in ${dayParts.join("/")}/Berichte.`;
+  return true;
+}
+/* 1.9: Bericht der laufenden Phase beim Beenden der Aufnahme (nachts Nachtbericht, am Tag Tagesbericht) */
+var vsRepBusy = false, vsCatchWait = false;
+async function vsPhaseReport(why) {
+  if (!VS || !VS.phaseStart || vsSw || vsRepBusy || anyActive()) return;
+  vsRepBusy = true;
+  try { const a = VS.phaseStart, b = Date.now(), night = vsNight();
+    $("savestatus").textContent = `Schreibe den ${night ? "Nachtbericht" : "Tagesbericht"} …`;
+    await vsFlush(why); await vsReport(a, b, night, vsDayParts(), VS.dayStart); }
+  catch (e) { addEntry({ typ: "Fehler", name: "Bericht beim Beenden: " + (e.message || e), start: Date.now() }); $("savestatus").textContent = "Fehler beim Bericht: " + (e.message || e); }
+  finally { vsRepBusy = false; }
+}
+/* 1.9: jüngster Messwert im Gerätespeicher (Herzschlag, Atemgurt, Fuß, Brust) */
+async function vsLastData() {
+  if (!db) return 0; let m = 0;
+  for (const k of ["beat", "rb", "foot", "acc"]) m = Math.max(m, await new Promise(res => { try { const r = db.transaction("rec").objectStore("rec").index("k").openCursor(IDBKeyRange.only(k), "prev");
+    r.onsuccess = () => { const c = r.result; res(c ? (recTime(k, c.value.d) || 0) : 0); }; r.onerror = () => res(0); } catch (e) { res(0); } }));
+  return m;
+}
+/* 1.9: beim Start Berichte nachholen, solange die Daten noch im Gerätespeicher liegen */
+async function vsCatchUp() {
+  if (!VS || !db || vsSw || vsRepBusy) return;
+  const h = await vsRoot(false); if (!h) { vsCatchWait = true; return; } vsCatchWait = false;
+  vsRepBusy = true;
+  try {
+    if (VS.pend) { const p = VS.pend;
+      if (Date.now() - p.b < 36 * 3600000) { addEntry({ typ: "Daten", name: `Bericht nachgeholt: ${p.night ? "Nacht" : "Tag"} ab ${hhmm(p.a)} Uhr (beim Schalter nicht fertig geworden)`, start: Date.now() });
+        if (await vsReport(p.a, p.b, p.night, p.dayParts, p.dayStart)) { delete VS.pend; vsSave(); } }
+      else { delete VS.pend; vsSave(); } }
+    if (!anyActive()) {
+      const last = await vsLastData(), to = VS.rep && VS.rep.a === VS.phaseStart ? VS.rep.to : VS.phaseStart;
+      if (last > to + 60000 && last > VS.phaseStart + 60000 && Date.now() - last < 36 * 3600000) {
+        addEntry({ typ: "Daten", name: `Bericht nachgeholt: ${VS.phase} bis ${hhmm(last)} Uhr (Aufnahme ohne Bericht beendet)`, start: Date.now() });
+        await vsFlush("Nachholen"); await vsReport(VS.phaseStart, last + 1000, vsNight(), vsDayParts(), VS.dayStart); } }
+  } catch (e) { addEntry({ typ: "Fehler", name: "Bericht nachholen: " + (e.message || e), start: Date.now() }); }
+  finally { vsRepBusy = false; }
 }
 
 /* ---------- Schalter Tag/Nacht ---------- */
@@ -4552,14 +4633,14 @@ async function vsSwitch() {
     const now = Date.now();
     await vsFlush("Schalter");
     if (wasNight) { VS.day = ymd(new Date(now)); VS.dayStart = now; VS.phase = "Tag"; } else VS.phase = "Nacht";
-    VS.phaseStart = now; vsSave(); vsApplyPhase(!wasNight);
+    VS.phaseStart = now; VS.pend = { a: from, b: now, night: wasNight, dayParts, dayStart }; vsSave(); vsApplyPhase(!wasNight);
     addEntry({ typ: "Schalter", name: wasNight ? "Tag (aufgestanden)" : "Nacht (hingelegt)", start: now + 1 }); flush();
     vsShow();
     await vsSenseRestart();
     if (hrWanted || vWanted) syncOpen(wasNight ? "Schalter auf Tag" : "Schalter auf Nacht", true);
     if (calWanted()) { $("savestatus").textContent = "Erst Abgleich und fünf tiefe Atemzüge, dann der Bericht …"; await new Promise(res => calPlan(wasNight ? "Schalter auf Tag" : "Schalter auf Nacht", res)); }
     $("savestatus").textContent = `Werte ${wasNight ? "die Nacht" : "den Tag"} aus …`;
-    await vsReport(from, now, wasNight, dayParts, dayStart);
+    if (await vsReport(from, now, wasNight, dayParts, dayStart)) { delete VS.pend; vsSave(); }
   } catch (e) { addEntry({ typ: "Fehler", name: "Schalter: " + (e.message || e), start: Date.now() }); $("savestatus").textContent = "Fehler beim Schalter: " + (e.message || e); }
   vsSw = false; vsShow();
 }
@@ -4613,7 +4694,7 @@ function vsStart() {
     if (!vsArm || Date.now() - vsArm > 5000) { vsArm = Date.now(); $("vsphase").textContent = vsNight() ? "Wirklich auf Tag? Nochmal tippen" : "Wirklich auf Nacht? Nochmal tippen"; setTimeout(vsShow, 5100); return; }
     vsArm = 0; await vsSwitch();
   });
-  $("vsord").addEventListener("click", async () => { let h = await vsRoot(true); if (!h) { h = await ordReady(true); if (h) { vsDir = h; vsDirName = h.name; } } vsShow(); vsDirCheck(); if (h) { vsFlush("Ordner"); vsMusikDone = false; vsMusikLaden(); } });
+  $("vsord").addEventListener("click", async () => { let h = await vsRoot(true); if (!h) { h = await ordReady(true); if (h) { vsDir = h; vsDirName = h.name; } } vsShow(); vsDirCheck(); if (h) { vsFlush("Ordner"); vsMusikDone = false; vsMusikLaden(); if (vsCatchWait) setTimeout(vsCatchUp, 2000); } });
   /* Nacht */
   try { const o = localStorage.getItem("nacht_ort"); if (o) $("nort").value = o; } catch (e) {}
   $("nort").addEventListener("change", () => { try { localStorage.setItem("nacht_ort", $("nort").value); } catch (e) {} addEntry({ typ: "Trageort", name: $("nort").value, start: Date.now() }); flush(); });
@@ -4626,6 +4707,7 @@ function vsStart() {
   if (VS) { $("nacht").checked = vsNight(); if (vsNight()) { $("vrate").value = "208"; $("tpint").value = "10"; } }
   $("nacht").disabled = true;
   v12Start(); v13Start(); v131Start(); vsShowSes(); vsShow(); vsRoot(false).then(h => { vsShow(); if (h) vsMusikLaden(); });
+  setTimeout(vsCatchUp, 5000); /* 1.9 */
 }
 
 
@@ -4915,7 +4997,7 @@ function v12Start() {
   $("ownact").addEventListener("keydown", e => { if (e.key === "Enter") actsAdd(); });
   $("owndel").addEventListener("click", actsDel);
   $("sesendyes").addEventListener("click", () => { sesEndHide(); if (!anyActive()) return; calCancel("Ende mit der Session"); endArm = 0; masterArm = 0; syncGate.open = false;
-    addEntry({ typ: "Hinweis", name: "Aufzeichnung mit der Session beendet (Klopfen und Kalibrieren schon beim Ende der Session)", start: Date.now() }); flush(); stopAll().then(() => { masterShow(); vsShowSes(); }); });
+    addEntry({ typ: "Hinweis", name: "Aufzeichnung mit der Session beendet (Klopfen und Kalibrieren schon beim Ende der Session)", start: Date.now() }); flush(); stopAll().then(() => { masterShow(); vsShowSes(); vsPhaseReport("Ende mit der Session"); }); });
   $("sesendno").addEventListener("click", () => { sesEndHide(); addEntry({ typ: "Hinweis", name: "Nach der Session weiter aufgezeichnet", start: Date.now() }); flush(); });
   $("acts").addEventListener("click", () => setTimeout(() => { vsShowSes(); }, 0));
   $("recbar").addEventListener("click", () => { if (vsDirOk === false) window.scrollTo({ top: 0, behavior: "smooth" }); else $("master").scrollIntoView({ behavior: "smooth", block: "center" }); });
@@ -4986,7 +5068,7 @@ function lvBeats(now) {
   /* EKG läuft: R-Zacken; sonst die Schläge des Pulsdienstes */
   if (now - lvE.last < 5000 && lvE.t.length > 1300) {
     const r = rPeaks({ t: Float64Array.from(lvE.t), c: [Float32Array.from(lvE.v)] });
-    if (r.length > 3) return { quelle: "EKG", t: r };
+    return { quelle: "EKG", t: r.length > 3 ? r : [] }; /* 1.9: kein Ausweichen auf unbestätigte Schläge */
   }
   const b = memBeats.filter(x => x[0] > now - 75000).map(x => x[0]);
   return { quelle: "Pulsgurt", t: b };
@@ -5298,6 +5380,9 @@ function lvDraw(force) {
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   $("lvbox").style.background = C.bg; $("lvnum").style.color = $("lvctl").style.color = $("lvcalbox").style.color = night ? "#c9d1d9" : "#222";
   g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  /* 1.9: nach dem Beenden keine stehen gebliebenen Werte */
+  if (!anyActive() && !lv.frozen) { g.fillStyle = C.fg; g.textAlign = "center"; g.font = "bold 15px system-ui, sans-serif"; g.fillText(lvStopT ? `Aufzeichnung beendet um ${hhmm(lvStopT)} Uhr` : "Keine Aufzeichnung aktiv", W / 2, H / 2); g.font = "11px system-ui, sans-serif"; g.textAlign = "left";
+    $("lvnum").innerHTML = `<span><b>–</b> Puls</span><span><b>–</b> Spannweite</span><span><b>–</b> ms RMSSD (1 min)</span><span><b>–</b> Atemzüge/min</span>`; return; }
   const L = 40, R = 40, T = 4, B = 18, pw = W - L - R;
   if (!lv.spanSet) { lv.span = lvAutoSpan(pw); lv.spanSet = true; document.querySelectorAll("#lvspan button").forEach(b => b.classList.toggle("on", +b.dataset.s === lv.span)); }
   const S = lv.span * 1000, t1 = now, t0 = now - S;
@@ -5314,7 +5399,7 @@ function lvDraw(force) {
   const axTxt = (txt, yy, col, right) => { g.fillStyle = col; g.textAlign = right ? "left" : "right"; g.fillText(txt, right ? L + pw + 4 : L - 4, yy + 4); };
 
   /* Atem */
-  const belt = lvBelt(now), chest = lvChest(now), rv = lvVergleich(now, chest, belt);
+  const belt = lvBelt(now), chest = null, rv = null; /* 1.9: Atem nur aus dem Gurt, keine Brustwelle des H10 */
   const chestOk = chest && chest.bt.length && !chest.unsicher;
   const ins = belt ? belt.list.map(b => [b.t, b.t + b.ein * 1000]) : chestOk ? chest.list.map(c => [c.t, c.tE]) : [];
   g.fillStyle = C.ein; ins.forEach(([a, b]) => { if (b < t0 || a > t1) return; const xa = Math.max(L, X(a)), xb = Math.min(L + pw, X(b)); [PA, PH].forEach(p => g.fillRect(xa, p.y, xb - xa, p.h)); });
@@ -5345,8 +5430,11 @@ function lvDraw(force) {
   /* Herzschläge */
   const BT = lvBeats(now), bt = BT.t, beats = [];
   for (let i = 1; i < bt.length; i++) { const rr = bt[i] - bt[i - 1]; if (rr > 300 && rr < 2000) beats.push({ t: bt[i], rr, p: 60000 / rr }); }
-  const vis = beats.filter(b => b.t >= t0 - 1500 && b.t <= t1 + 100);
-  const last10 = beats.slice(-10), m10 = last10.length ? { lo: Math.min(...last10.map(b => b.p)), hi: Math.max(...last10.map(b => b.p)) } : null;
+  /* 1.9: Puls nur aus bestätigten Schlägen. Kein Kontakt: Gurt meldet keinen Hautkontakt, oder das EKG läuft und liefert in 6 s keine drei regelmäßigen Schläge */
+  const l6 = beats.filter(b => b.t > now - 6000), cv6 = (() => { if (l6.length < 3) return 1; const m = l6.reduce((s, b) => s + b.rr, 0) / l6.length; return Math.sqrt(l6.reduce((s, b) => s + (b.rr - m) ** 2, 0) / l6.length) / m; })();
+  const noKontakt = hrWanted && (hrContact === false || (BT.quelle === "EKG" && (l6.length < 3 || cv6 > 0.4)));
+  const vis = noKontakt ? [] : beats.filter(b => b.t >= t0 - 1500 && b.t <= t1 + 100);
+  const last10 = noKontakt ? [] : beats.slice(-10), m10 = last10.length ? { lo: Math.min(...last10.map(b => b.p)), hi: Math.max(...last10.map(b => b.p)) } : null;
   let pmn = Infinity, pmx = -Infinity; vis.forEach(b => { if (b.p < pmn) pmn = b.p; if (b.p > pmx) pmx = b.p; });
   const room = pw / Math.max(1, vis.length), want = room >= 30 ? 2 : room >= 20 ? 1 : 0;
   if (lv.lab === undefined) lv.lab = 2; if (vis.length >= 3 && want < lv.lab) lv.lab = want;
@@ -5368,7 +5456,7 @@ function lvDraw(force) {
   /* Achse: Maximum und Minimum der letzten 10 Schläge, dazwischen das gleitende Mittel am linken Rand */
   if (m10) { const yh = YH(m10.hi), yl = YH(m10.lo); axTxt(Math.round(m10.hi), Math.max(PH.y + 6, yh), C.fg, false); axTxt(Math.round(m10.lo), Math.min(PH.y + PH.h - 6, yl), C.fg, false);
     if (avgFirst) { const ya = YH(avgFirst.m); if (Math.abs(ya - yh) >= 11 && Math.abs(ya - yl) >= 11) { g.font = "bold 11px system-ui, sans-serif"; axTxt(Math.round(avgFirst.m), ya, C.avg, false); g.font = "11px system-ui, sans-serif"; } } }
-  lvLabel(g, `Herz (${BT.quelle})` + (lab === 2 ? ": ms (Puls)" : lab === 1 ? ": Puls" : ""), L + 4, PH.y + 13, C.fg, C.bg);
+  lvLabel(g, noKontakt ? "Herz: kein Kontakt (Brustgurt anfeuchten oder anlegen)" : `Herz (${BT.quelle})` + (lab === 2 ? ": ms (Puls)" : lab === 1 ? ": Puls" : ""), L + 4, PH.y + 13, noKontakt ? C.zuck : C.fg, C.bg);
 
   /* Brust: Bewegung */
   { const a = lvLo(memAcc.t, t0 - 1000), b = memAcc.t.length, ts = [], vs = []; let m = null, mn = Infinity, mx = -Infinity;
@@ -5407,15 +5495,13 @@ function lvDraw(force) {
   if (lv.frozen) { g.fillStyle = C.mark; g.textAlign = "right"; g.font = "bold 12px system-ui, sans-serif"; g.fillText("angehalten, antippen zum Weiterlaufen", L + pw - 4, PH.y + PH.h - 6); g.font = "11px system-ui, sans-serif"; }
 
   /* große Zahlen */
-  const lastB = beats.filter(b => b.t > now - 6000), puls = lastB.length ? Math.round(lastB.reduce((s, b) => s + b.p, 0) / lastB.length) : null;
-  const m60 = beats.filter(b => b.t > now - 60000); let rm = null;
+  const lastB = noKontakt ? [] : beats.filter(b => b.t > now - 6000), puls = lastB.length ? Math.round(lastB.reduce((s, b) => s + b.p, 0) / lastB.length) : null;
+  const m60 = noKontakt ? [] : beats.filter(b => b.t > now - 60000); let rm = null;
   if (m60.length > 10) { const d = []; for (let i = 1; i < m60.length; i++) { const x = m60[i].rr - m60[i - 1].rr; if (Math.abs(x) < 400) d.push(x * x); } if (d.length) rm = Math.round(Math.sqrt(d.reduce((s, v) => s + v, 0) / d.length)); }
   let brl = [], bq = "";
   if (belt) { brl = belt.list.filter(b => b.te > now - 60000).map(b => b.dauer); bq = "Gurt"; }
-  else if (chestOk) { brl = chest.list.filter(c => c.tEnd > now - 60000 && c.sicher).map(c => c.dauer); bq = "Brust"; }
-  else if (m60.length > 60) { const bp = breathsPulse(Float64Array.from(beats.filter(b => b.t > now - 75000), b => b.t), Float32Array.from(beats.filter(b => b.t > now - 75000), b => b.p)); brl = bp.filter(c => c.tEnd > now - 60000).map(c => c.dauer); bq = "Puls"; }
   const md = brl.length >= 2 ? brl.slice().sort((x, y) => x - y)[brl.length >> 1] : null;
-  $("lvnum").innerHTML = `<span><b>${puls ?? "–"}</b> Puls</span><span><b>${m10 ? Math.round(m10.hi - m10.lo) : "–"}</b> Spannweite</span><span><b>${rm ?? "–"}</b> ms RMSSD (1 min)</span><span><b>${md ? (60 / md).toFixed(1).replace(".", ",") : "–"}</b> Atemzüge/min${bq ? " (" + bq + ")" : ""}</span>`;
+  $("lvnum").innerHTML = `<span><b>${noKontakt ? "kein Kontakt" : puls ?? "–"}</b> Puls</span><span><b>${m10 ? Math.round(m10.hi - m10.lo) : "–"}</b> Spannweite</span><span><b>${rm ?? "–"}</b> ms RMSSD (1 min)</span><span><b>${md ? (60 / md).toFixed(1).replace(".", ",") : "–"}</b> Atemzüge/min${bq ? " (" + bq + ")" : ""}</span>`;
 }
 
 function v131Start() {
@@ -5522,8 +5608,13 @@ async function loadFiles(fs, srcName, dir) {
         if (an) ahTxt = new TextDecoder().decode(await z.get(an));
         const zn = z.names.find(n => /(^|_)Atemzuege\.csv$/.test(n)) || z.names.find(n => /(^|_)Atemzuege_Gurt\.csv$/.test(n));
         if (zn) azTxt.push([new TextDecoder().decode(await z.get(zn)), /_Gurt\.csv$/.test(zn)]);
+        /* 1.9: Nachtkern auch aus der ZIP (Rampe und Schwingen) */
+        const kn = z.names.find(n => /(^|_)Nachtkern\.json$/.test(n));
+        if (kn) { try { const o = JSON.parse(new TextDecoder().decode(await z.get(kn))); if (o.format === "Nachtkern") kern = o; } catch (e) {} }
       } else if (/Atemgurt\.csv$/i.test(f.name)) rbTxt.push(await f.text());
       else if (/Atemzuege(_Gurt)?\.csv$/i.test(f.name)) azTxt.push([await f.text(), /_Gurt\.csv$/i.test(f.name)]);
+      else if (/Atemhilfe\.csv$/i.test(f.name)) ahTxt = await f.text();
+      else if (/\.(csv|pdf|xlsx|txt)$/i.test(f.name)) continue;
       else {
         const o = JSON.parse(await f.text());
         if (o.format === "Nachtkern") kern = o; else if (o.taetigkeiten && !o.schlaege) edits = o; else { J = o; fileId = f.name.replace(/^(.*_)?Fenster\d*_|\.json$/g, "").replace(/_Fenster$/, ""); }
@@ -5533,6 +5624,10 @@ async function loadFiles(fs, srcName, dir) {
     if (!J.schlaege) { $("info").textContent = "Diese Datei stammt aus einer älteren Version (" + (J.version || "?") + "). Der Betrachter braucht Messungen ab Messplayer 9."; J = null; return; }
     let rb = null; if (rbTxt.length) { const P = rbTxt.map(x => parseRb(x, J.t0_epoch_ms)).filter(Boolean), t = [], f = []; P.forEach(p => { for (let i = 0; i < p.t.length; i++) { t.push(p.t[i]); f.push(p.f[i]); } }); if (t.length) rb = dedupT({ t, f }); }
     let az = []; azTxt.forEach(([x, g]) => { az = az.concat(parseAz(x, J.t0_epoch_ms, g)); }); { const seen = new Set(); az = az.filter(x => !seen.has(x.a) && seen.add(x.a)).sort((p, q) => p.a - q.a); }
+    /* 1.9: Atemgurt und Atemzüge laufen im Tagesordner über Tag und Nacht durch: auf die Zeit dieser Aufnahme zuschneiden */
+    { const st = J.strom || {}, se = [...(st.brust || []), ...(st.fuss || [])].reduce((m, q) => Math.max(m, q.start_ms + 100 * q.n), 0), tl = J.schlaege.t.length ? J.schlaege.t[J.schlaege.t.length - 1] : 0, lo = -120000, hi = Math.max(se, tl) + 120000;
+      if (rb) { const i0 = rb.t.findIndex(x => x >= lo); let i1 = rb.t.length; while (i1 > 0 && rb.t[i1 - 1] > hi) i1--; rb = i0 < 0 || i1 <= i0 ? null : { t: rb.t.slice(i0, i1), f: rb.f.slice(i0, i1) }; }
+      az = az.filter(x => x.a >= lo && x.a <= hi); }
     BX = { rb, ah: ahTxt ? parseAh(ahTxt, J.t0_epoch_ms) : null, az: az.length ? az : null, kern, src: srcName || fs.map(f => f.name).join(", "), dir: dir || null };
     prepare(edits);
   } catch (e) { $("info").textContent = "Fehler beim Laden: " + (e.message || e); }
@@ -5551,7 +5646,7 @@ function prepare(edits) {
   T0 = J.t0_epoch_ms;
   const sc = J.schlaege, n = sc.t.length, bt = new Float64Array(n), rr = new Float32Array(n), bpm = new Float32Array(n), ok = new Uint8Array(n);
   for (let i = 0; i < n; i++) { bt[i] = sc.t[i]; rr[i] = sc.rr[i]; bpm[i] = 60000 / sc.rr[i]; }
-  { const o = beatPlaus(sc.rr, sc.ok); for (let i = 0; i < n; i++) ok[i] = o[i]; }
+  { const o = beatPlaus(sc.rr, sc.ok); for (let i = 0; i < n; i++) ok[i] = o[i] && !(sc.ekg_da && sc.ekg_da[i] && !sc.ok[i]) ? 1 : 0; }
   /* 1.6: gleitender Schnitt über 60 s und 300 s */
   const glide = half => { const out = new Float32Array(n).fill(NaN); let a = 0, b = 0, s = 0, c = 0;
     for (let i = 0; i < n; i++) { while (b < n && bt[b] <= bt[i] + half) { if (ok[b]) { s += rr[b]; c++; } b++; } while (bt[a] < bt[i] - half) { if (ok[a]) { s -= rr[a]; c--; } a++; } if (c) out[i] = 60000 / (s / c); }
@@ -5641,7 +5736,8 @@ function drawOverview() {
 $("ov").addEventListener("click", ev => {
   if (ovDragged) { ovDragged = false; return; }
   if (!S || !ovMap) return; const r = $("ov").getBoundingClientRect(), x = ev.clientX - r.left, t = ovMap.t0 + (x - ovMap.L) / ovMap.W * (ovMap.t1 - ovMap.t0);
-  if (mode === "nacht" && evList.length) { let best = null, bd = Infinity; filtered().forEach(e => { const d = Math.abs(e.t - t); if (d < bd) { bd = d; best = e; } }); if (best) selectEvent(best); return; }
+  /* 1.9: nur nahe an einem Strich (6 px) wird die Zuckung gewählt, sonst die Stelle frei wie am Tag */
+  if (mode === "nacht" && evList.length) { const px = 6 / ovMap.W * (ovMap.t1 - ovMap.t0); let best = null, bd = Infinity; filtered().forEach(e => { const d = Math.abs(e.t - t); if (d < bd) { bd = d; best = e; } }); if (best && bd <= px) { selectEvent(best); return; } if (nSel) { nSel = null; renderEvents(); } }
   sel = Math.max(0, Math.round(t - SPAN / 2)); drawAll();
 });
 
@@ -5738,10 +5834,12 @@ function drawDetail() {
   /* Zeitachse, T0 */
   c.fillStyle = "#666"; const st = [1000, 2000, 5000, 10000, 15000, 30000, 60000].find(x => W / span * x >= 64) || 60000; /* 1.6: Abstand der Beschriftung nach Breite */
   for (let t = Math.ceil(a / st) * st; t <= b; t += st) { const x = X(t); c.fillRect(x, h - 22, 1, 4); c.textAlign = "center"; c.fillText(night ? ((t - nSel.t) / 1000 > 0 ? "+" : "") + Math.round((t - nSel.t) / 1000) + " s" : hms(t), x, h - 8); c.textAlign = "left"; }
+  /* 1.9: T0 jeder Zuckung im Ausschnitt gelb (gestrichelt: nicht gezählt), die gewählte grün */
+  if (mode === "nacht" && evList && evList.length) { c.strokeStyle = "#e0b000"; c.lineWidth = 1.5; evList.forEach(e => { if (e.art !== "Zuckung" || e === nSel || e.t < a || e.t > b) return; const x = X(e.t); c.setLineDash(e.aus ? [4, 3] : []); c.beginPath(); c.moveTo(x, P.atem[0]); c.lineTo(x, P.bew[1]); c.stroke(); }); c.setLineDash([]); }
   if (night) { c.strokeStyle = "#1baa7a"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(nSel.t), P.atem[0]); c.lineTo(X(nSel.t), P.bew[1]); c.stroke(); c.fillStyle = "#1baa7a"; c.fillText("T0", X(nSel.t) + 3, P.atem[0] + 10); }
   $("dInfo").textContent = `${hms(a)} bis ${hms(b)} Uhr` + (night ? `, ${nSel.art} Nr. ${nSel.nr}` : "");
   $("tpick").value = hms(a);
-  legend("legDet", [...(S.az ? [["rgba(42,120,214,.35)", "hellblau hinterlegt: Einatmen laut Atemgurt"]] : []), ["#eb6834", "Herzschlag: Abstand in ms, in Klammern der Puls aus diesem Abstand"], ["#333", "gestrichelt: gleitender Durchschnitt über 10 s"], ["#ddd", "grau hinterlegt: Stoß an der Brust"], ["#ccc", "grauer Punkt: Herzschlag als unplausibel aussortiert (nicht im EKG bestätigt und einzelner Ausreißer)"]]);
+  legend("legDet", [...(S.az ? [["rgba(42,120,214,.35)", "hellblau hinterlegt: Einatmen laut Atemgurt"]] : []), ["#eb6834", "Herzschlag: Abstand in ms, in Klammern der Puls aus diesem Abstand"], ["#333", "gestrichelt: gleitender Durchschnitt über 10 s"], ["#ddd", "grau hinterlegt: Stoß an der Brust"], ["#ccc", "grauer Punkt: Herzschlag als unplausibel aussortiert (nicht im EKG bestätigt und einzelner Ausreißer, oder EKG lief und hat ihn nicht bestätigt)"], ...(mode === "nacht" ? [["#e0b000", "gelbe Linie: Beginn (T0) einer Zuckung, gestrichelt: nicht gezählt"]] : [])]);
 }
 function drawAll() { drawOverview(); drawDetail(); }
 window.addEventListener("resize", () => { if (S) drawAll(); });
@@ -5754,11 +5852,11 @@ let evList = [];
 function buildEvents() {
   evList = [];
   const E = (J.nacht?.ereignisse || []).slice().sort((a, b) => a.t_ms - b.t_ms); let lastZ = -1e12;
-  E.forEach(e => { const it = { nr: e.nr, art: e.art, t: e.t_ms, base: e.puls_vorher, pk: e.puls_spitze, fuss: e.fuss_mg, brust: e.brust_mg, fenster: e.fenster };
+  E.forEach(e => { const it = { nr: e.nr, art: e.art, t: e.t_ms, base: e.puls_vorher, pk: e.puls_spitze, fuss: e.fuss_mg, brust: e.brust_mg, fenster: e.fenster, aus: e.ausgenommen || null };
     it.abst = e.art === "Zuckung" && lastZ > -1e11 ? (e.t_ms - lastZ) / 1000 : null;
     const k = lb(S.steps, e.t_ms - 3000), stepNear = k < S.steps.length && S.steps[k] < e.t_ms + 3000;
-    it.ok = e.art === "Zuckung" && (it.abst === null || it.abst >= 15) && !stepNear && !(e.brust_mg >= 300);
-    if (e.art === "Zuckung") lastZ = e.t_ms; evList.push(it); });
+    it.ok = e.art === "Zuckung" && !it.aus && (it.abst === null || it.abst >= 15) && !stepNear && !(e.brust_mg >= 300);
+    if (e.art === "Zuckung" && !it.aus) lastZ = e.t_ms; evList.push(it); });
   (J.nacht?.fenster || []).filter(f => (f.arten || []).includes("Vergleich")).forEach(f => evList.push({ nr: "V" + f.nr, art: "Vergleich", t: f.start_ms + 15000, fenster: f.nr, ok: false }));
   evList.sort((a, b) => a.t - b.t); renderEvents();
 }
@@ -5774,7 +5872,7 @@ function attachRamp() {
 function renderEvents() {
   const L = filtered(), f1 = v => v === null || v === undefined ? "" : (Math.round(v * 10) / 10).toString().replace(".", ",");
   $("nCount").textContent = `${L.length} von ${evList.length}`;
-  $("nList").innerHTML = L.map((e, i) => `<tr data-i="${i}" class="${e === nSel ? "sel" : ""}"><td>${e.nr}</td><td>${hms(e.t)}</td><td>${e.art}</td><td>${f1(e.base)}</td><td>${f1(e.pk)}</td><td>${e.base && e.pk ? (e.pk >= e.base ? "+" : "") + f1(e.pk - e.base) : ""}</td><td>${e.abst === null || e.abst === undefined ? "" : f1(e.abst) + " s"}</td><td>${f1(e.fuss)}</td><td>${f1(e.brust)}</td><td>${e.art === "Zuckung" ? (e.ok ? "gültig" : "nein") : ""}</td><td>${rpSec(e, "beginn")}</td><td>${rpSec(e, "schwingen_zurueck")}</td></tr>`).join("");
+  $("nList").innerHTML = L.map((e, i) => `<tr data-i="${i}" class="${e === nSel ? "sel" : ""}"><td>${e.nr}</td><td>${hms(e.t)}</td><td>${e.art}${e.aus ? " (" + e.aus + ")" : ""}</td><td>${f1(e.base)}</td><td>${f1(e.pk)}</td><td>${e.base && e.pk ? (e.pk >= e.base ? "+" : "") + f1(e.pk - e.base) : ""}</td><td>${e.abst === null || e.abst === undefined ? "" : f1(e.abst) + " s"}</td><td>${f1(e.fuss)}</td><td>${f1(e.brust)}</td><td>${e.art === "Zuckung" ? (e.aus ? "nicht gezählt" : e.ok ? "gültig" : "nein") : ""}</td><td>${rpSec(e, "beginn")}</td><td>${rpSec(e, "schwingen_zurueck")}</td></tr>`).join("");
   [...$("nList").querySelectorAll("tr")].forEach(tr => tr.addEventListener("click", () => selectEvent(L[+tr.dataset.i])));
 }
 function selectEvent(e) { nSel = e; sel = e.t; renderEvents(); drawAll(); const r = $("nList").querySelector("tr.sel"); if (r) r.scrollIntoView({ block: "nearest" }); }
@@ -5899,7 +5997,7 @@ legend = function (id, items) { _legend(id, items.map(([c2, t]) => [c2, t.replac
 /* ---------- Modus Serie ---------- */
 let serList = [], serSel = 0, serOff = 0;
 function buildSeries() {
-  const Z = (J && J.nacht && J.nacht.ereignisse || []).filter(e => e.art === "Zuckung").map(e => e.t_ms).sort((a, b) => a - b), out = []; let cur = [];
+  const Z = (J && J.nacht && J.nacht.ereignisse || []).filter(e => e.art === "Zuckung" && !e.ausgenommen).map(e => e.t_ms).sort((a, b) => a - b), out = []; let cur = [];
   const close = () => { if (cur.length >= 4) out.push(cur.slice()); };
   Z.forEach((t, i) => { if (!i) { cur = [t]; return; } const d = t - Z[i - 1]; if (d >= 5000 && d <= 90000) cur.push(t); else { close(); cur = [t]; } }); close();
   serList = out.map((s, i) => ({ nr: i + 1, a: s[0], b: s[s.length - 1], t: s }));
@@ -6121,6 +6219,33 @@ async function bvListKern() {
     await kernLoad(fs); box.innerHTML = `<div class="stat">${fs.length} Kerndateien aus dem Ordner Kern gelesen, alle ausgewählt. Abwählen in der Liste unten.</div>`; }
   catch (e) { box.innerHTML = '<div class="stat">Kein Ordner Kern im Speicherordner gefunden.</div>'; }
 }
+/* 1.9: Tagesordner (oder ein Ordner darüber) von Hand öffnen, nur lesen: Tage, Nächte und ZIP-Dateien zur Wahl */
+function bvFromDir(files) {
+  const box = $("slist"); box.innerHTML = "";
+  const path = f => f.webkitRelativePath || f.name, dirOf = p => p.split("/").slice(0, -1).join("/");
+  const byDir = new Map(); files.forEach(f => { const d = dirOf(path(f)); if (!byDir.has(d)) byDir.set(d, []); byDir.get(d).push(f); });
+  const out = [];
+  for (const [d, L] of byDir) {
+    if (/(^|\/)Roh$/.test(d)) continue;
+    const names = L.map(f => f.name), day = /(^|\/)Berichte$/.test(d) ? dirOf(d) : d;
+    L.filter(f => /_Fenster\.json$/.test(f.name)).forEach(f => { const pre = f.name.replace(/Fenster\.json$/, ""), night = names.includes(pre + "Nachtkern.json") || names.includes(pre + "Nachtbericht.pdf") || names.includes(pre + "Zuckungen.xlsx");
+      const kern = L.find(x => x.name === pre + "Nachtkern.json"), act = L.find(x => /^Taetigkeiten_/.test(x.name) && x.name.includes(pre.replace(/_$/, "").split("_").pop()));
+      const csv = [...(byDir.get(day) || []), ...L].filter(x => /_(Atemgurt|Atemzuege|Atemzuege_Gurt|Atemhilfe)\.csv$/.test(x.name) && (x.name.startsWith(pre) || !/_Session/.test(x.name)));
+      out.push({ f, night, d: day, fs: [f, kern, act, ...new Set(csv)].filter(Boolean) }); });
+    L.filter(f => /\.zip$/i.test(f.name)).forEach(f => out.push({ f, zip: true, d, fs: [f] }));
+  }
+  const key = n => { const m = /_(\d{8})-(\d{4})_/.exec(n); return m ? m[1] + m[2] : "0"; };
+  out.sort((x, y) => key(y.f.name).localeCompare(key(x.f.name)) || y.f.name.localeCompare(x.f.name));
+  if (!out.length) { box.innerHTML = '<div class="stat">In diesem Ordner sind keine Tage, Nächte oder ZIP-Dateien. Den Tagesordner (JJJJ-MM-TT) oder einen Ordner darüber wählen.</div>'; return; }
+  for (const it of out) {
+    const m = /_(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})_/.exec(it.f.name);
+    bvItem(box, `<b>${m ? `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}` : bvEsc(it.f.name)}</b> ${it.zip ? "ZIP" : it.night ? "Nacht" : "Tag"} <span class="stat">${bvEsc(it.f.name)}${it.fs.length > 1 ? `, ${it.fs.length - 1} Zusatzdateien` : ""}</span>`, async () => {
+      if (!it.zip) { LK = it.night ? "nacht" : "tag"; bvKindBtn(); }
+      await loadFiles(it.fs, `${it.d || "Ordner"}, ${it.f.name}, ${bvMB(it.f)}`, null); });
+  }
+  const st = document.createElement("div"); st.className = "stat"; st.textContent = `${out.length} Einträge aus dem gewählten Ordner, die neuesten oben. Atemgurt und Atemzüge werden auf die gewählte Aufnahme zugeschnitten.`; box.appendChild(st);
+}
+$("dir").addEventListener("change", ev => { const fs = [...ev.target.files]; ev.target.value = ""; if (fs.length) bvFromDir(fs); });
 function bvList() { return LK === "session" ? bvListSessions() : LK === "tag" ? bvListDays(false) : LK === "nacht" || LK === "serie" ? bvListDays(true) : bvListKern(); }
 /* Die Knöpfe filtern die Liste und schalten zugleich die Ansicht */
 $("mSess").addEventListener("click", () => { LK = "session"; setMode("yoga"); if (S) drawAll(); bvKindBtn(); bvList(); });
