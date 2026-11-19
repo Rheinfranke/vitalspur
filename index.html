@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.9.2</title>
+<title>Vitalspur 1.9.3</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -103,7 +103,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.9.2</h1>
+<h1>Vitalspur 1.9.3</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
@@ -2849,8 +2849,12 @@ function pulseRises(bt, bpm, ok, zt) {
 /* 1.9.1: volle Auflösung (Fuß, Drehrate, Brust) von 5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg, überlappende zusammengelegt */
 function rawWindows(ts, A, F, G, T0) {
   const W = []; [...ts].sort((x, y) => x - y).forEach(t => { const a = t - 5000, b = t + 10000, L = W[W.length - 1]; if (L && a <= L.b) L.b = Math.max(L.b, b); else W.push({ a, b }); });
-  const col = (X, a, b, dec) => { if (!X) return null; const lo = lowerBound(X.t, a), hi = lowerBound(X.t, b), f = 10 ** dec, o = { t: [], x: [], y: [], z: [] };
-    for (let k = lo; k < hi; k++) { o.t.push(Math.round((X.t[k] - T0) * 10) / 10); o.x.push(Math.round(X.c[0][k] * f) / f); o.y.push(Math.round(X.c[1][k] * f) / f); o.z.push(Math.round(X.c[2][k] * f) / f); } return o.t.length ? o : null; };
+  /* 1.9.3 kompakt: t0 in 0,1 ms ab T0, dt = Abstände in 0,1 ms; x0, y0, z0 = erste Werte mal f, dx, dy, dz = Änderungen mal f (ganzzahlig) */
+  const col = (X, a, b, dec) => { if (!X) return null; const lo = lowerBound(X.t, a), hi = lowerBound(X.t, b); if (hi - lo < 2) return null; const f = 10 ** dec, o = { f, t0: 0, dt: [], x0: 0, y0: 0, z0: 0, dx: [], dy: [], dz: [] };
+    let pt = 0, px = 0, py = 0, pz = 0;
+    for (let k = lo; k < hi; k++) { const t = Math.round((X.t[k] - T0) * 10), x = Math.round(X.c[0][k] * f), y = Math.round(X.c[1][k] * f), z = Math.round(X.c[2][k] * f);
+      if (k === lo) { o.t0 = t; o.x0 = x; o.y0 = y; o.z0 = z; } else { o.dt.push(t - pt); o.dx.push(x - px); o.dy.push(y - py); o.dz.push(z - pz); } pt = t; px = x; py = y; pz = z; }
+    return o; };
   return W.map(w => ({ start_ms: Math.round(w.a - T0), ende_ms: Math.round(w.b - T0), fuss: col(F, w.a, w.b, 0), drehrate: col(G, w.a, w.b, 1), brust: col(A, w.a, w.b, 0) }));
 }
 function nightEvents(F, A, G, B, R, steps, fhp, zthr, T0) {
@@ -2969,7 +2973,7 @@ async function buildSpar(D, stamp8) {
   const breaths = (D.belt && D.belt.list ? D.belt.list : []).map(c => Object.assign({}, c, { tE: c.t + c.ein * 1000, tEnd: c.t + c.dauer * 1000 })).sort((a, b) => a.t - b.t);
   say2("Rechne: Zeilen je Herzschlag …"); await wait(20);
   const fhp = F ? magHP(F, W(F, 0.4)) : null, chp = A ? magHP(A, W(A, 0.5)) : null;
-  const zthr = fhp ? Math.max(40, 8 * medianSub(fhp)) : Infinity;
+  const zthr = fhp ? Math.max(30, 8 * medianSub(fhp)) : Infinity; /* 1.9.3: mindestens 30 mg statt 40 (Tal in der Verteilung der Fußspitzen, Nacht 18./19.11.) */
   const gmag = G ? magOf(G) : null;
   const ev = [...L].sort((a, b) => a.start - b.start), pieces = ev.filter(r => r.typ === "Stück");
   const TPs = [...TP].sort((a, b) => a.t - b.t), ATs = [...AT].sort((a, b) => a.t - b.t);
@@ -3021,7 +3025,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.2"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.3"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3066,11 +3070,11 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.9.2", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 1.9.3", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
-    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), spitze_ms: Math.round(p.tPk - T0), puls: p.puls, ruhe: p.ruhe, fuss_mg: p.fuss ?? null, klein: !!p.klein })), ruhegrenze_mg: NE.fa ? Math.round(NE.fa.calm) : null, roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, form: e.form || null, dauer_s: e.dauer ?? null, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
+    nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg; ab 1.9.3 kompakt: t0 und dt in 0,1 ms, Werte mal f als x0 plus Summe der dx).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), spitze_ms: Math.round(p.tPk - T0), puls: p.puls, ruhe: p.ruhe, fuss_mg: p.fuss ?? null, klein: !!p.klein })), ruhegrenze_mg: NE.fa ? Math.round(NE.fa.calm) : null, roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, form: e.form || null, dauer_s: e.dauer ?? null, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
   return { raw: { B, R, NE, A, F, G, steps, T0, TP: TPs, sync, al, breaths, minutes: X9.minutes, mf: X9.mf, actMin: X9.actMin }, xlsx, json, pdf: X9.pdf, blocks: X9.blocks, info: `${B.length} Herzschläge, ${nR + nL} Schritte, ${breaths.length} Atemzüge, ${sync.pairs.length} Abgleich` + (NE ? `, ${NE.ev.length} Ereignisse, ${NE.win.length} Fenster` : "") };
 }
@@ -3407,7 +3411,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.9.2. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 1.9.3. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3994,8 +3998,10 @@ function nbProfile(Rc, t) {
   const k = lowerBound(Rc, t);
   if (k - NB.vor < 1 || k + NB.nach > Rc.length) return null;
   const seg = Rc.slice(k - NB.vor - 1, k + NB.nach), dd = [];
-  for (let i = 1; i < seg.length; i++) { const d = seg[i] - seg[i - 1]; if (d > 2000 || d < 300) return null; dd.push(d); }
-  const sm = [...dd].sort((a, b) => a - b), med = sm[sm.length >> 1]; if (sm[sm.length - 1] > 1.6 * med || sm[0] < 0.6 * med) return null;
+  for (let i = 1; i < seg.length; i++) { const d = seg[i] - seg[i - 1]; if (d > 2500 || d < 300) return null; dd.push(d); }
+  /* 1.9.3: verworfen wird nur das Muster einer übersehenen R-Zacke (Abstand springt auf über 170 % und danach unter 65 %) oder einer doppelten (unter 60 %, danach über 160 %).
+     Die frühere Regel gegen den Median warf bei sehr langsamem Puls gerade die kräftigen Herzantworten heraus. */
+  for (let i = 1; i < dd.length - 1; i++) { const a = dd[i] / dd[i - 1], b = dd[i + 1] / dd[i]; if ((a > 1.7 && b < 0.65) || (a < 0.6 && b > 1.6)) return null; }
   const rel = [], rr = [];
   for (let j = -NB.vor; j <= NB.nach; j++) { if (j === 0) continue; const idx = j < 0 ? k + j : k + j - 1; rel.push(Math.round((Rc[idx] - t) * 10) / 10); rr.push(Rc[idx] - Rc[idx - 1]); }
   return { rel, rr };
@@ -4218,7 +4224,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.2"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.3"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4286,7 +4292,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.9.2. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 1.9.3. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4413,7 +4419,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.2", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.3", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -5440,6 +5446,7 @@ function lvDraw(force) {
   const night = vsNight(), C = night
     ? { bg: "#0d1117", fg: "#8b949e", grid: "#21262d", ein: "rgba(56,139,253,.16)", belt: "#3fb950", chest: "#58a6ff", beat: "#d2683a", line: "#444c56", avg: "#c9d1d9", acc: "#8b949e", foot: "#a371f7", fade: "rgba(13,17,23,.55)", mark: "#d29922", ev: "#6e7681", zuck: "#f85149", ah: "rgba(63,185,80,.35)", mm: "#6e7681" }
     : { bg: "#ffffff", fg: "#555", grid: "#e8e8e8", ein: "rgba(42,120,214,.12)", belt: "#2d6a4f", chest: "#2a78d6", beat: "#e8592c", line: "#bbb", avg: "#333", acc: "#666", foot: "#7b3fbf", fade: "rgba(255,255,255,.6)", mark: "#d9822b", ev: "#999", zuck: "#c62828", ah: "rgba(45,106,79,.25)", mm: "#999" };
+  C.footg = night ? "#2ea043" : "#1baa7a"; C.chestg = night ? "#6e7681" : "#9a9a9a"; /* 1.9.3: Farben wie im Betrachter */
   const full = !!document.fullscreenElement, dpr = window.devicePixelRatio || 1;
   const W = cv.clientWidth || 360, H = full ? Math.max(260, window.innerHeight - $("lvnum").offsetHeight - $("lvctl").offsetHeight - $("lvcalbox").offsetHeight - 16) : Math.round(Math.min(560, Math.max(380, W * 0.9)));
   cv.style.height = H + "px";
@@ -5454,12 +5461,13 @@ function lvDraw(force) {
   if (!lv.spanSet) { lv.span = lvAutoSpan(pw); lv.spanSet = true; document.querySelectorAll("#lvspan button").forEach(b => b.classList.toggle("on", +b.dataset.s === lv.span)); }
   const S = lv.span * 1000, t1 = now, t0 = now - S;
   const X = t => L + (t - t0) / S * pw;
-  const ph = H - T - B, gap = 8, sz = [0.30, 0.34, 0.18, 0.18], P = []; let y = T;
-  sz.forEach(f => { const h = (ph - 3 * gap) * f; P.push({ x: L, y, w: pw, h }); y += h + gap; });
-  const [PA, PH, PB, PF] = P;
+  /* 1.9.3: drei Felder wie in den anderen Ansichten: Atem (Gurt), Puls je Herzschlag, Bewegung */
+  const ph = H - T - B, gap = 8, sz = [0.26, 0.44, 0.30], P = []; let y = T;
+  sz.forEach(f => { const h = (ph - 2 * gap) * f; P.push({ x: L, y, w: pw, h }); y += h + gap; });
+  const [PA, PH, PB] = P;
   g.font = "11px system-ui, sans-serif"; g.lineWidth = 1;
   P.forEach(p => { g.strokeStyle = C.grid; g.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1); });
-  const step = lv.span <= 20 ? 5000 : 10000;
+  const step = [5000, 10000, 15000, 20000, 30000, 60000].find(x => pw / S * x >= 70) || 60000; /* 1.9.3: Beschriftung nach Breite */
   g.fillStyle = C.fg; g.textAlign = "center";
   for (let tt = Math.ceil(t0 / step) * step; tt <= t1; tt += step) { const x = X(tt); g.strokeStyle = C.grid; g.beginPath(); g.moveTo(x + 0.5, T); g.lineTo(x + 0.5, H - B); g.stroke(); g.fillText(hhmm(tt) + ":" + String(new Date(tt).getSeconds()).padStart(2, "0"), x, H - 5); }
   const hline = (p, yy, col, dash) => { g.strokeStyle = col; g.setLineDash(dash || [2, 3]); g.beginPath(); g.moveTo(p.x, Math.round(yy) + 0.5); g.lineTo(p.x + p.w, Math.round(yy) + 0.5); g.stroke(); g.setLineDash([]); };
@@ -5506,7 +5514,9 @@ function lvDraw(force) {
   const room = pw / Math.max(1, vis.length), want = room >= 30 ? 2 : room >= 20 ? 1 : 0;
   if (lv.lab === undefined) lv.lab = 2; if (vis.length >= 3 && want < lv.lab) lv.lab = want;
   const lab = lv.span >= 60 ? 0 : lv.lab;
-  const scH = lvScale("puls", pmn - 3, pmx + (lab === 2 ? 14 : lab === 1 ? 8 : 4)), YH = v => PH.y + PH.h - (v - scH.lo) / (scH.hi - scH.lo) * PH.h;
+  /* 1.9.3: feste Achse 30 bis 185 Schläge pro Minute, Linien rechts beschriftet */
+  const scH = { lo: 30, hi: 185 }, YH = v => PH.y + PH.h - (Math.max(30, Math.min(185, v)) - 30) / 155 * PH.h;
+  [40, 60, 80, 100, 120, 140, 160, 180].forEach(v => { const yy = YH(v); g.strokeStyle = C.grid; g.beginPath(); g.moveTo(L, Math.round(yy) + 0.5); g.lineTo(L + pw, Math.round(yy) + 0.5); g.stroke(); axTxt(String(v), yy, C.fg, true); });
   let avgFirst = null;
   if (vis.length) {
     g.save(); g.beginPath(); g.rect(PH.x, PH.y, PH.w, PH.h); g.clip();
@@ -5525,22 +5535,25 @@ function lvDraw(force) {
     if (avgFirst) { const ya = YH(avgFirst.m); if (Math.abs(ya - yh) >= 11 && Math.abs(ya - yl) >= 11) { g.font = "bold 11px system-ui, sans-serif"; axTxt(Math.round(avgFirst.m), ya, C.avg, false); g.font = "11px system-ui, sans-serif"; } } }
   lvLabel(g, noKontakt ? "Herz: kein Kontakt (Brustgurt anfeuchten oder anlegen)" : `Herz (${BT.quelle})` + (lab === 2 ? ": ms (Puls)" : lab === 1 ? ": Puls" : ""), L + 4, PH.y + 13, noKontakt ? C.zuck : C.fg, C.bg);
 
-  /* Brust: Bewegung */
-  { const a = lvLo(memAcc.t, t0 - 1000), b = memAcc.t.length, ts = [], vs = []; let m = null, mn = Infinity, mx = -Infinity;
-    for (let i = Math.max(0, a - 50); i < b; i++) { const v = Math.hypot(memAcc.x[i], memAcc.y[i], memAcc.z[i]); m = m === null ? v : m + 0.04 * (v - m); if (i < a) continue; const d = v - m; ts.push(memAcc.t[i]); vs.push(d); if (d < mn) mn = d; if (d > mx) mx = d; }
-    const sc = lvScale("acc", Math.min(mn, -5), Math.max(mx, 5)); g.strokeStyle = C.acc; lvPath(g, PB, X, ts, vs, 0, ts.length, sc);
-    axTxt(Math.round(sc.hi), PB.y + 6, C.fg, false); axTxt(Math.round(sc.lo), PB.y + PB.h - 6, C.fg, false);
-    lvLabel(g, "Brust (H10) Bewegung mg", L + 4, PB.y + 13, C.fg, C.bg); }
-
-  /* Fuß */
+  /* 1.9.3: Bewegung wie im Betrachter: größter Ausschlag je 0,1 s, logarithmisch 10 bis 10.000 mg; Fuß grün, Brust grau.
+     Nachts gelbe Linie beim Beginn von Aktivität am Fuß nach 10 s Ruhe (unter 15 mg), wenn in 3 s 30 mg erreicht werden (vorläufig, die Auswertung entscheidet). */
   const zuck = [];
-  { const off = lvFootOff, a = lvLo(lvF.t, t0 - off - 1000), b = lvF.t.length, ts = [], vs = []; let m = null, mn = Infinity, mx = -Infinity;
-    for (let i = Math.max(0, a - 100); i < b; i++) { const v = lvF.m[i]; m = m === null ? v : m + 0.02 * (v - m); if (i < a) continue; const d = v - m, t = lvF.t[i] + off; ts.push(t); vs.push(d); if (d < mn) mn = d; if (d > mx) mx = d;
-      if (night && Math.abs(d) > 150 && (!zuck.length || t - zuck[zuck.length - 1] > 2000)) zuck.push(t); }
-    const sc = lvScale("foot", Math.min(mn, -10), Math.max(mx, 10)); g.strokeStyle = C.foot; lvPath(g, PF, X, ts, vs, 0, ts.length, sc);
-    axTxt(Math.round(sc.hi), PF.y + 6, C.fg, false); axTxt(Math.round(sc.lo), PF.y + PF.h - 6, C.fg, false);
-    lvLabel(g, "Fuß (Sense) mg" + (lvF.t.length ? "" : ": keine Daten"), L + 4, PF.y + 13, C.fg, C.bg); }
-  g.strokeStyle = C.zuck; g.lineWidth = 2; zuck.forEach(t => { if (t < t0) return; const x = X(t); g.beginPath(); g.moveTo(x, PF.y + PF.h - 14); g.lineTo(x, PF.y + PF.h); g.stroke(); }); g.lineWidth = 1;
+  { const lg = v => (Math.log10(Math.max(10, Math.min(10000, v))) - 1) / 3, YB = v => PB.y + PB.h - lg(v) * (PB.h - 16), bw = Math.max(1, pw / S * 100 - 0.3);
+    [10, 100, 1000, 10000].forEach(v => { const yy = YB(v); g.strokeStyle = C.grid; g.beginPath(); g.moveTo(L, Math.round(yy) + 0.5); g.lineTo(L + pw, Math.round(yy) + 0.5); g.stroke(); axTxt(v === 10000 ? "10 000" : String(v), yy, C.fg, false); });
+    const bins = (ts, vs) => { const m = new Map(); for (let i = 0; i < ts.length; i++) { const k = Math.floor(ts[i] / 100), v = Math.abs(vs[i]); if (!(m.get(k) >= v)) m.set(k, v); } return m; };
+    const bars = (M, col, al) => { g.fillStyle = col; g.globalAlpha = al; M.forEach((v, k) => { const tt = k * 100; if (tt < t0 || tt > t1 || v < 10) return; const yy = YB(v); g.fillRect(X(tt), yy, bw, PB.y + PB.h - yy); }); g.globalAlpha = 1; };
+    { const a = lvLo(memAcc.t, t0 - 1000), ts = [], vs = []; let m = null;
+      for (let i = Math.max(0, a - 50); i < memAcc.t.length; i++) { const v = Math.hypot(memAcc.x[i], memAcc.y[i], memAcc.z[i]); m = m === null ? v : m + 0.04 * (v - m); if (i < a) continue; ts.push(memAcc.t[i]); vs.push(v - m); }
+      bars(bins(ts, vs), C.chestg, 0.7); }
+    const off = lvFootOff, fa = lvLo(lvF.t, t0 - off - 13000), ft = [], fv = []; let fm = null;
+    for (let i = Math.max(0, fa - 100); i < lvF.t.length; i++) { const v = lvF.m[i]; fm = fm === null ? v : fm + 0.02 * (v - fm); if (i < fa) continue; ft.push(lvF.t[i] + off); fv.push(v - fm); }
+    const FB = bins(ft, fv); bars(FB, C.footg, 0.9);
+    if (night) { const ks = [...FB.keys()].sort((p, q) => p - q); let lastAct = -1e15;
+      for (let j = 0; j < ks.length; j++) { const tt = ks[j] * 100; if (FB.get(ks[j]) < 15) continue;
+        if (tt - lastAct >= 10000) { let pk = 0; for (let q = j; q < ks.length && ks[q] * 100 < tt + 3000; q++) pk = Math.max(pk, FB.get(ks[q])); if (pk >= 30) zuck.push(tt); }
+        lastAct = tt; } }
+    lvLabel(g, "Bewegung in mg, logarithmisch: Fuß (grün), Brust (grau)" + (lvF.t.length ? "" : ", Fuß: keine Daten"), L + 4, PB.y + 11, C.fg, C.bg); }
+  g.strokeStyle = "#e0b000"; g.lineWidth = 1.5; zuck.forEach(t => { if (t < t0) return; const x = X(t); g.beginPath(); g.moveTo(x, PA.y); g.lineTo(x, PB.y + PB.h); g.stroke(); }); g.lineWidth = 1;
 
   /* 1.5: Atemhilfe, Linie bei jedem Wechsel über Atem und Puls */
   for (let i = log.length - 1; i >= 0; i--) { const r = log[i]; if (r.start < t0 - 600000) break; if (r.typ !== "Atemphase" || r.start < t0 || r.start > t1) continue;
@@ -5874,8 +5887,8 @@ function drawDetail() {
     else { c.fillStyle = "#999"; c.fillText("kein 10-Hz-Strom", L + 80, P.kip[0] + 40); } }
   /* Herzschläge */
   const j0 = lb(S.bt, a), j1 = lb(S.bt, b); const vs = []; for (let k = j0; k < j1; k++) if (S.ok[k]) vs.push(S.bpm[k], S.avg[k]);
-  /* 1.9.1: feste Achse 35 bis 185 Schläge pro Minute */
-  if (vs.length) { const v0 = 35, v1 = 185, Y = v => P.puls[1] - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0) * (P.puls[1] - P.puls[0]); LAY.Yp = Y;
+  /* 1.9.3: feste Achse 30 bis 185 Schläge pro Minute */
+  if (vs.length) { const v0 = 30, v1 = 185, Y = v => P.puls[1] - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0) * (P.puls[1] - P.puls[0]); LAY.Yp = Y;
     axisY(c, L, P.puls[0], P.puls[1], v0, v1, v1 - v0 > 60 ? 20 : v1 - v0 > 30 ? 10 : 5, W);
     c.strokeStyle = "#333"; c.setLineDash([6, 4]); c.lineWidth = 1.6; c.beginPath(); let s = false; for (let k = j0; k < j1; k++) { if (!Number.isFinite(S.avg[k])) continue; const x = X(S.bt[k]), y = Y(S.avg[k]); s ? c.lineTo(x, y) : c.moveTo(x, y); s = true; } c.stroke(); c.setLineDash([]);
     c.strokeStyle = "#bbb"; c.lineWidth = 1; c.beginPath(); s = false; for (let k = j0; k < j1; k++) { if (!S.ok[k]) { s = false; continue; } const x = X(S.bt[k]), y = Y(S.bpm[k]); s ? c.lineTo(x, y) : c.moveTo(x, y); s = true; } c.stroke();
@@ -5959,7 +5972,11 @@ function prList() { if (!S) return []; if (S.pr) return S.pr;
   const thr = J.nacht.schwelle_mg || 40, Fs = S.st.f, fmax = (a, b) => { let m = 0; for (let k = lb(Fs.t, a); k < Fs.t.length && Fs.t[k] < b; k++) if (Fs.aus[k] > m) m = Fs.aus[k]; return m; };
   return S.pr = pulseRisesBV(S.bt, S.bpm, S.ok, zt).filter(p => fmax(p.t - 10000, p.t + 10000) < thr).map(p => { const m = fmax(p.t - 3000, p.tPk + 3000); return Object.assign(p, { fuss: Math.round(m), klein: m >= 15 && m < thr }); }); }
 /* volle Auflösung: |Betrag minus gleitendes Mittel über 0,4 s| je Fenster, einmal gerechnet */
-function rohHP(X) { if (!X || !X.t || X.t.length < 20) return null; if (X._hp) return X._hp; const n = X.t.length, m = new Float64Array(n); for (let k = 0; k < n; k++) m[k] = Math.hypot(X.x[k], X.y[k], X.z[k]);
+/* 1.9.3: kompakte Schreibweise entpacken */
+function rohUnpack(X) { if (!X || X.t || !X.dt) return X; const n = X.dt.length + 1, t = new Float64Array(n), x = new Float32Array(n), y = new Float32Array(n), z = new Float32Array(n);
+  let a = X.t0, b = X.x0, c = X.y0, d = X.z0; for (let k = 0; k < n; k++) { if (k) { a += X.dt[k - 1]; b += X.dx[k - 1]; c += X.dy[k - 1]; d += X.dz[k - 1]; } t[k] = a / 10; x[k] = b / X.f; y[k] = c / X.f; z[k] = d / X.f; }
+  X.t = t; X.x = x; X.y = y; X.z = z; return X; }
+function rohHP(X) { X = rohUnpack(X); if (!X || !X.t || X.t.length < 20) return null; if (X._hp) return X._hp; const n = X.t.length, m = new Float64Array(n); for (let k = 0; k < n; k++) m[k] = Math.hypot(X.x[k], X.y[k], X.z[k]);
   const P = new Float64Array(n + 1); for (let k = 0; k < n; k++) P[k + 1] = P[k] + m[k]; const hw = Math.max(2, Math.round(200 / Math.max(1, (X.t[n - 1] - X.t[0]) / n))), v = new Float32Array(n);
   for (let k = 0; k < n; k++) { const a = Math.max(0, k - hw), b = Math.min(n, k + hw + 1); v[k] = Math.abs(m[k] - (P[b] - P[a]) / (b - a)); } return X._hp = { t: X.t, v }; }
 function buildEvents() {
