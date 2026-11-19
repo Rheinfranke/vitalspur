@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.9.3</title>
+<title>Vitalspur 1.9.4</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -103,7 +103,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.9.3</h1>
+<h1>Vitalspur 1.9.4</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
@@ -2807,14 +2807,18 @@ async function makeZip8(files) {
 
 /* ================= Nachtmodus: Ereignisse und Fenster ================= */
 /* 1.9: Zuckungen, die nicht gezählt werden: aufrecht (Brust in den 5 s vor T0), Klopfen (±3 s um erkannte Klopfgruppen), ab dem Ende-Ablauf bis zum nächsten Start */
-function nightExclude(NE, A, L, sync, steps) {
+function nightExclude(NE, A, L, sync, steps, B) {
   const knock = [...(sync.gc || []), ...(sync.gf || [])].filter(g => g && g.length).map(g => [g[0] - 3000, g[g.length - 1] + 3000]);
   const ends = []; let open = null;
   [...L].sort((a, b) => a.start - b.start).forEach(r => {
     const isEnd = (r.typ === "Abgleich" && /^Abgleich offen: Ende/.test(r.name || "")) || (r.typ === "Aufzeichnung" && /^(Ende-Ablauf begonnen|Alles beendet)/.test(r.name || ""));
-    const isGo = r.typ === "Aufzeichnung" && /^(Alles gestartet|Ende-Ablauf abgebrochen)/.test(r.name || "");
+    /* 1.9.4: auch Neustart von Gurt oder Sense (z. B. nach Neuladen der Seite) schließt das Ende-Intervall */
+    const isGo = (r.typ === "Aufzeichnung" && /^(Alles gestartet|Ende-Ablauf abgebrochen)/.test(r.name || "")) || ((r.typ === "Gurt" || r.typ === "Sense") && /^(Aufzeichnung gestartet|Von Hand neu verbunden)/.test(r.name || ""));
     if (isEnd && open === null) open = r.start; else if (isGo && open !== null) { ends.push([open, r.start]); open = null; } });
   if (open !== null) ends.push([open, Infinity]);
+  /* 1.9.4: spätestens der erste Herzschlag nach einer Lücke von über 60 s beendet ein Ende-Intervall */
+  if (B && B.length > 1) { const tt = B.map(b => b.tt).filter(Number.isFinite).sort((p, q) => p - q);
+    ends.forEach(iv => { for (let k = 1; k < tt.length; k++) if (tt[k] > iv[0] && tt[k] - tt[k - 1] > 60000 && tt[k - 1] >= iv[0] - 60000) { if (tt[k] < iv[1]) iv[1] = tt[k]; break; } }); }
   const S0 = SIDE; try { SIDE = sideCheck(A, steps); } catch (e) {}
   const cnt = { aufrecht: 0, dazwischen: 0, Klopfen: 0, Ende: 0 };
   NE.ev.forEach(e => { if (e.art !== "Zuckung") return; let why = null;
@@ -3025,7 +3029,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.3"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.4"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3038,7 +3042,7 @@ async function buildSpar(D, stamp8) {
   if (nacht) {
     say2("Rechne: Ereignisse der Nacht …"); await wait(20);
     NE = nightEvents(F, A, G, B, R, steps, fhp, zthr, T0);
-    try { nightExclude(NE, A, L, sync, steps); } catch (e) { NE.aus = null; }
+    try { nightExclude(NE, A, L, sync, steps, B); } catch (e) { NE.aus = null; }
     try { const okB = B.filter(b => b.rr > 300 && b.rr < 2000 && !b.drop), zt = Float64Array.from(NE.ev.filter(e => e.art === "Zuckung").map(e => e.t)).sort();
       NE.pr = pulseRises(Float64Array.from(okB, b => b.tt), Float64Array.from(okB, b => 60000 / b.rr), new Uint8Array(okB.length).fill(1), zt);
       /* 1.9.2: Fuß um den Anstieg (3 s vor dem Beginn bis 3 s nach der Spitze): 15 mg bis Schwelle = kleine Zuckung; Schwelle in ±10 s = mitten in Bewegung, kein eigenes Ereignis */
@@ -3070,7 +3074,7 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.9.3", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 1.9.4", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
@@ -3411,7 +3415,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.9.3. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 1.9.4. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -4224,7 +4228,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.3"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.4"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4292,7 +4296,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.9.3. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 1.9.4. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4419,7 +4423,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.3", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.4", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -4638,6 +4642,7 @@ async function vsReport(a, b, night, dayParts, dayStart) {
   const dd = await vsSub(h, dayParts), ber = await vsSub(dd, ["Berichte"]);
   for (const f of z.out) if (!/\.csv$/.test(f.name)) await vsPut(ber, f.name, f.data);
   if (z.kern) await vsPut(await vsSub(h, ["Kern"]), z.kern.name, z.kern.data);
+  if (night) { try { await vsPut(ber, z.name, z.blob); } catch (e) {} } /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
   if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`, from);
   await vsVersuche(h);
   if (VS) { VS.rep = { a, to: b }; vsSave(); }
@@ -4645,6 +4650,11 @@ async function vsReport(a, b, night, dayParts, dayStart) {
   $("savestatus").textContent = `${night ? "Nachtbericht" : "Tagesbericht"} gespeichert in ${dayParts.join("/")}/Berichte.`;
   return true;
 }
+/* 1.9.4: Rückfrage des Browsers vor dem Schließen oder Neuladen, solange aufgezeichnet oder ein Bericht geschrieben wird */
+window.addEventListener("beforeunload", e => { try { if (anyActive() || vsRepBusy) { e.preventDefault(); e.returnValue = ""; return ""; } } catch (x) {} });
+/* 1.9.4: gleitendes Mittel der letzten 20 s (Grundspannung des Atemgurts) */
+function trail20(t, f, w = 20000) { const n = t.length, o = new Float32Array(n); let j = 0, s = 0, c = 0;
+  for (let i = 0; i < n; i++) { if (Number.isFinite(f[i])) { s += f[i]; c++; } while (t[j] < t[i] - w) { if (Number.isFinite(f[j])) { s -= f[j]; c--; } j++; } o[i] = c ? s / c : NaN; } return o; }
 /* 1.9: Bericht der laufenden Phase beim Beenden der Aufnahme (nachts Nachtbericht, am Tag Tagesbericht) */
 var vsRepBusy = false, vsCatchWait = false;
 async function vsPhaseReport(why) {
@@ -5489,14 +5499,15 @@ function lvDraw(force) {
     atemTxt.push([`Brust mg, ${chest.klasse}${chest.unsicher ? ", unsicher (" + chest.akt + ")" : ""}` + (rv !== null && rv !== undefined && belt ? `, Übereinstimmung ${Math.abs(rv).toFixed(2).replace(".", ",")}` : ""), C.chest]);
   }
   if (belt) {
-    const st = belt.st, pad = Math.max(0.3, (st.max - st.min) * 0.06), sc = { lo: st.min - pad, hi: st.max + pad }, Y = v => PA.y + PA.h - (v - sc.lo) / (sc.hi - sc.lo) * PA.h;
-    hline(PA, Y(st.max), C.belt); hline(PA, Y(st.med), C.belt, [6, 4]); hline(PA, Y(st.min), C.belt);
-    const fmt = v => v.toFixed(1).replace(".", ",");
-    const ys = [[Y(st.max), fmt(st.max)], [Y(st.med), fmt(st.med)], [Y(st.min), fmt(st.min)]];
-    ys.forEach(([yy, s], k) => { if (k === 1 && (Math.abs(yy - ys[0][0]) < 11 || Math.abs(yy - ys[2][0]) < 11)) return; axTxt(s, Math.min(PA.y + PA.h - 6, Math.max(PA.y + 6, yy)), C.belt, false); });
-    const a = lvLo(belt.t, t0 - 500); g.strokeStyle = C.belt; g.globalAlpha = 0.3; g.lineWidth = 1; lvPath(g, PA, X, belt.t, belt.f, a, belt.t.length, sc); g.globalAlpha = 1;
-    g.lineWidth = 2.2; lvPath(g, PA, X, belt.t, smoothWin(belt.t, belt.f, a, belt.t.length, 1000, 0), a, belt.t.length, sc); g.lineWidth = 1; /* 1.8: kräftig das Mittel der letzten Sekunde, blass die Rohwerte */
-    atemTxt.unshift(["Gurt N, Mittel 1 s, Linien: 4 min", C.belt]);
+    /* 1.9.4: feste Spanne ±1 N um die Grundspannung (Mittel der letzten 20 s), Grundspannung als Zahl */
+    const sc = { lo: -1.1, hi: 1.1 }, Y = v => PA.y + PA.h - (v - sc.lo) / (sc.hi - sc.lo) * PA.h, base = trail20(belt.t, belt.f);
+    hline(PA, Y(1), C.belt); hline(PA, Y(0), C.belt, [6, 4]); hline(PA, Y(-1), C.belt);
+    [[Y(1), "+1"], [Y(0), "0"], [Y(-1), "−1"]].forEach(([yy, s]) => axTxt(s, Math.min(PA.y + PA.h - 6, Math.max(PA.y + 6, yy)), C.belt, false));
+    const a = lvLo(belt.t, t0 - 500), sm = smoothWin(belt.t, belt.f, a, belt.t.length, 1000, 0), dv = new Float32Array(belt.t.length), ds = new Float32Array(belt.t.length);
+    for (let k = 0; k < belt.t.length; k++) { dv[k] = Math.max(-1.1, Math.min(1.1, belt.f[k] - base[k])); ds[k] = Number.isFinite(sm[k]) ? Math.max(-1.1, Math.min(1.1, sm[k] - base[k])) : NaN; }
+    g.strokeStyle = C.belt; g.globalAlpha = 0.3; g.lineWidth = 1; lvPath(g, PA, X, belt.t, dv, a, belt.t.length, sc); g.globalAlpha = 1;
+    g.lineWidth = 2.2; lvPath(g, PA, X, belt.t, ds, a, belt.t.length, sc); g.lineWidth = 1;
+    atemTxt.unshift([`Gurt ±1 N um die Grundspannung ${(base[base.length - 1] || 0).toFixed(1).replace(".", ",")} N (Mittel 20 s)`, C.belt]);
   }
   g.textAlign = "left"; let lx = L + 4;
   if (!atemTxt.length) atemTxt.push(["Atem: noch keine Daten", C.fg]);
@@ -5769,6 +5780,7 @@ function drawOverview() {
   { const z = $("zoomov").checked; $("ovHint").textContent = (OVV ? `Ausschnitt ${hm(t0)} bis ${hm(t1)} Uhr. Ziehen verschiebt, doppelt tippen zeigt alles. ` : "") + "Antippen wählt die Stelle für die Großaufnahme." + (!OVV && z ? " Zoomen mit Mausrad oder zwei Fingern." : ""); }
   /* Tätigkeiten */
   acts.forEach(a => { c.fillStyle = acol(a.name); c.fillRect(X(a.a), 4, Math.max(2, X(a.b) - X(a.a)), 10); });
+  lageBand(c, X, t0, t1, 15, 19, L, W, false); /* 1.9.4: Lage als schmales Band unter den Tätigkeiten */
   /* Puls */
   const pv = []; for (let i = 0; i < S.bpm.length; i++) if (S.ok[i]) pv.push(S.bpm[i]);
   pv.sort((a, b) => a - b); const v0 = Math.floor((pv[Math.floor(pv.length * 0.005)] - 5) / 10) * 10, v1 = Math.ceil((pv[Math.floor(pv.length * 0.995)] + 5) / 10) * 10;
@@ -5813,7 +5825,7 @@ function drawOverview() {
   if (sel !== null) { const span2 = mode === "nacht" && nSel ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = mode === "nacht" && nSel ? nSel.t - (span2 === 50000 ? 15000 : 5000) : sel;
     c.fillStyle = "rgba(235,104,52,.25)"; c.fillRect(X(a), 16, Math.max(2, X(a + span2) - X(a)), 270); }
   c.restore();
-  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...(J && J.nacht ? [["#e0b000", "Strich gelb: gültige Zuckung"], ["#bbb", "Strich grau: Zuckung ungültig oder nicht gezählt, Umdrehen"], ["#7c3aed", "Strich violett: Pulsanstieg ohne Zuckung, dick: kleine Zuckung (Fuß 15 mg bis Schwelle)"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
+  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...(lageSeg().length ? [...new Set(lageSeg().map(g => g.l))].map(l => [LAGE_COL[l], "Lage " + l]) : []), ...(J && J.nacht ? [["#e0b000", "Strich gelb: gültige Zuckung"], ["#bbb", "Strich grau: Zuckung ungültig oder nicht gezählt, Umdrehen"], ["#7c3aed", "Strich violett: Pulsanstieg ohne Zuckung, dick: kleine Zuckung (Fuß 15 mg bis Schwelle)"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
 }
 $("ov").addEventListener("click", ev => {
   if (ovDragged) { ovDragged = false; return; }
@@ -5841,10 +5853,28 @@ function breathWave(a, b) {
   return { t, w, md: B.md.subarray(i0, i1) };
 }
 /* 1.7: Aufbau der Großaufnahme: Atem (Gurt oder Hinweis), Band der Atemhilfe mit eigenem Platz, Kippen nur auf Wunsch */
+/* 1.9.4: Lage je 5 s aus der Brust (10-Hz-Strom), dazu gehen bei mindestens 4 sicheren Schritten im Abschnitt; gleiche Lage zusammengelegt */
+const LAGE_COL = { "Rücken": "#8ecae6", "Bauch": "#ffb703", "linke Seite": "#90be6d", "rechte Seite": "#f28482", "dazwischen": "#d0d0d0", "aufrecht": "#6c757d", "gehen": "#5a189a" };
+function lageSeg() {
+  if (!S) return []; if (S.lage) return S.lage; const Bs = S.st && S.st.b; if (!Bs || !Bs.t || Bs.t.length < 50) return S.lage = [];
+  const out = [], st = S.steps || [];
+  for (let t = Math.floor(Bs.t[0] / 5000) * 5000; t < Bs.t[Bs.t.length - 1]; t += 5000) {
+    const i0 = lb(Bs.t, t), i1 = lb(Bs.t, t + 5000); if (i1 - i0 < 10) continue;
+    let x = 0, y = 0, z = 0; for (let k = i0; k < i1; k++) { x += Bs.x[k]; y += Bs.y[k]; z += Bs.z[k]; } const n = i1 - i0;
+    let l = null; try { l = lageOf(x / n, y / n, z / n); } catch (e) {}
+    const ns = st.length ? lb(st, t + 5000) - lb(st, t) : 0; if (ns >= 4) l = "gehen"; if (!l) continue;
+    const g = out[out.length - 1]; if (g && g.l === l && t - g.b <= 5000) g.b = t + 5000; else out.push({ a: t, b: t + 5000, l });
+  }
+  return S.lage = out;
+}
+function lageBand(c, X, a, b, y0, y1, L, W, txt) {
+  lageSeg().forEach(g => { if (g.b < a || g.a > b) return; const x0 = Math.max(L, X(g.a)), x1 = Math.min(L + W, X(g.b)); c.fillStyle = LAGE_COL[g.l] || "#ccc"; c.fillRect(x0, y0, Math.max(1, x1 - x0), y1 - y0);
+    if (txt && x1 - x0 > 46) { c.fillStyle = g.l === "gehen" || g.l === "aufrecht" ? "#fff" : "#222"; c.font = "9px system-ui, sans-serif"; c.fillText(g.l, x0 + 2, y1 - 1.5); c.font = "11px system-ui, sans-serif"; } });
+}
 function detLayout() {
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel;
   const showEkg = night && $("nEkg").checked, hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
-  let y = 10; P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
+  let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
   P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 62];
   return { P, kip, h: (showEkg ? P.ekg[1] : P.bew[1]) + 30 };
@@ -5868,16 +5898,23 @@ function drawDetail() {
   /* 1.7: Stoß aus der Bewegung der Brust (grau), Einatmen nur aus den Atemzügen des Gurts (hellblau) */
   { const B = S.st && S.st.b; if (B && B.t) { const i0 = lb(B.t, a), i1 = lb(B.t, b); for (let k = i0; k < i1; k++) if (B.md[k] > 25) { c.fillStyle = "rgba(0,0,0,.08)"; c.fillRect(X(B.t[k]) - W / span * 50, P.atem[0], W / span * 100, P.puls[1] - P.atem[0]); } } }
   (S.az || []).forEach(z => { const e = z.a + z.ein * 1000; if (e < a || z.a > b) return; c.fillStyle = "rgba(42,120,214,.10)"; c.fillRect(Math.max(L, X(z.a)), P.atem[0], Math.min(L + W, X(e)) - Math.max(L, X(z.a)), P.puls[1] - P.atem[0]); });
+  /* 1.9.4: Band Lage über dem Atem */
+  if (lageSeg().length) { c.fillStyle = "#555"; c.fillText("Lage", 4, P.lage[1]); lageBand(c, X, a, b, P.lage[0], P.lage[1], L, W, true); }
   /* Atem: Gurt, Zugkraft in N, oben = Einatmen */
-  if (hasRb) { const R = S.rb, i0 = lb(R.t, a), i1 = lb(R.t, b); c.fillStyle = "#555"; c.fillText("Atem (Gurt, Zugkraft in N, oben = Einatmen)", L, P.atem[0] + 2);
+  if (hasRb) { const R = S.rb, i0 = lb(R.t, a), i1 = lb(R.t, b); c.fillStyle = "#555"; c.fillText("Atem (Gurt, N um die Grundspannung, oben = Einatmen)", L, P.atem[0] + 2);
     if (i1 - i0 > 2) { let mn = Infinity, mx = -Infinity; for (let k = i0; k < i1; k++) { if (R.f[k] < mn) mn = R.f[k]; if (R.f[k] > mx) mx = R.f[k]; }
-      if (mx - mn < 0.6) { const m = (mx + mn) / 2; mn = m - 0.3; mx = m + 0.3; } const pd = (mx - mn) * 0.08; mn -= pd; mx += pd;
-      const g0 = P.atem[0] + 8, Y = v => P.atem[1] - (v - mn) / (mx - mn) * (P.atem[1] - g0), st = [0.2, 0.5, 1, 2, 5, 10].find(x => (mx - mn) / x <= 3.5) || 20;
+      /* 1.9.4: feste Spanne ±1 N um die Grundspannung (gleitendes Mittel der letzten 20 s) */
+      if (!S.rbB) S.rbB = trail20(R.t, R.f);
+      const g0 = P.atem[0] + 8, Y = v => P.atem[1] - (Math.max(-1.1, Math.min(1.1, v)) + 1.1) / 2.2 * (P.atem[1] - g0);
       c.strokeStyle = "#ececec"; c.fillStyle = "#666"; c.lineWidth = 1;
-      for (let v = Math.ceil(mn / st) * st; v <= mx; v += st) { const y = Y(v); c.beginPath(); c.moveTo(L, y); c.lineTo(L + W, y); c.stroke(); c.fillText(String(Math.round(v * 10) / 10).replace(".", ","), 4, y + 4); }
+      [[1, "+1"], [0, "0"], [-1, "−1"]].forEach(([v, tx]) => { const y = Y(v); c.beginPath(); c.moveTo(L, y); c.lineTo(L + W, y); c.stroke(); c.fillText(tx, 4, y + 4); });
+      { const km = lb(R.t, (a + b) / 2), gv = S.rbB[Math.min(km, R.t.length - 1)]; if (Number.isFinite(gv)) { c.fillStyle = "#2d6a4f"; c.fillText(`Grundspannung ${gv.toFixed(1).replace(".", ",")} N`, L + W - 118, P.atem[1] - 3); } }
       if (!S.rbS) S.rbS = smoothWin(R.t, R.f, 0, R.t.length, 500, 500); /* 1.8: Mittel über 1 s, zentriert */
+      if (!S.rbD) { S.rbD = new Float32Array(R.t.length); S.rbSD = new Float32Array(R.t.length); for (let k = 0; k < R.t.length; k++) { S.rbD[k] = R.f[k] - S.rbB[k]; S.rbSD[k] = S.rbS[k] - S.rbB[k]; } }
       const pl = (F, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); let on = false; for (let k = i0; k < i1; k++) { if (!Number.isFinite(F[k])) { on = false; continue; } const x = X(R.t[k]), y = Y(F[k]); if (on && R.t[k] - R.t[k - 1] > 1000) on = false; on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; } c.stroke(); };
-      pl(R.f, "rgba(45,106,79,.3)", 1); pl(S.rbS, "#2d6a4f", 2.2); }
+      pl(S.rbD, "rgba(45,106,79,.3)", 1); pl(S.rbSD, "#2d6a4f", 2.2);
+      /* 1.9.4: Lagewechsel als senkrechte Linie im Atem */
+      lageSeg().forEach((g, i) => { if (!i || g.a < a || g.a > b) return; const x = X(g.a); c.strokeStyle = "rgba(0,0,0,.45)"; c.lineWidth = 1; c.setLineDash([3, 2]); c.beginPath(); c.moveTo(x, P.atem[0] - 14); c.lineTo(x, P.atem[1]); c.stroke(); c.setLineDash([]); }); }
     else { c.fillStyle = "#999"; c.fillText("kein Atemgurt an dieser Stelle", L + 80, P.atem[0] + 50); } }
   else { c.fillStyle = "#888"; c.fillText("Atem: kein Atemgurt", L, P.atem[0] + 12); }
   /* Kippen der Brust: nur auf Wunsch, eine feste Hauptachse über die ganze Aufnahme, ohne Deutung als Ein- oder Ausatmen */
