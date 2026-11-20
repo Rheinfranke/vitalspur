@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 1.9.4</title>
+<title>Vitalspur 2.0</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -88,6 +88,11 @@
 fieldset h3 { font-size: 1rem; font-weight: 600; color: #444; margin: 1.1rem 0 0.3rem; padding-top: 0.6rem; border-top: 1px solid #e3e3e3; }
 fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 #sesend { margin-top: 0.4rem; }
+#bv_pList tr.pTop td { background: #fdecea; }
+#bv_pList tr.pKoe td:first-child { box-shadow: inset 4px 0 #e0a800; } #bv_pList tr.pTop td:first-child { box-shadow: inset 4px 0 #c0392b; }
+#bv_pList tr { cursor: pointer; } #bv_pList button { padding: 2px 6px; font-size: .85rem; }
+/* 2.0: breiter Bildschirm mit Maus: Betrachter und Prüfliste nutzen die Breite */
+@media (min-width: 1100px) { body.bvwide { max-width: none; } body.bvwide #bvbox .scroll { max-height: 55vh; overflow: auto; } }
 </style>
 <script>
 /* 1.8: Vernier-Bibliothek eingebaut, damit der Atemgurt auch ohne Netz verbindet (godirect-js, BSD-3-Clause, Lizenz im Kopf der Bibliothek) */
@@ -103,13 +108,13 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 1.9.4</h1>
+<h1>Vitalspur 2.0</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <fieldset>
   <legend>Vitalspur</legend>
   <label style="font-size:1.1rem">Probanden-ID: <input type="text" id="pid" placeholder="z. B. MS01" style="width:9rem;font-size:1.1rem" autocomplete="off"></label>
-  <button class="main" id="vsphase">Schalter: Tag</button> <button id="vsord">Speicherordner</button>
+  <button class="main" id="vsphase">Schalter: Tag</button> <button id="vsord">Speicherordner</button> <button id="devbtn" title="Name dieses Geräts für die Ausschluss-Datei">Gerät</button>
   <div id="vsstatus" class="stat"></div>
   <div class="hint">Schalter abends auf Nacht: Nachtmodus, Sense am Fuß mit 208 Hz, Thermometer alle 10 Minuten, dazu der Tagesbericht. Morgens auf Tag: Nachtbericht, dann beginnt der neue Tagesordner. Zur Sicherheit zweimal tippen.</div>
   <label><input type="checkbox" id="keepon" checked> Unhörbaren Wachhalte-Ton abspielen (hält die Seite bei gesperrtem Bildschirm wach)</label>
@@ -127,6 +132,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 </fieldset>
 
 <button class="main" id="master" disabled>Noch keine Aufzeichnung aktiv</button>
+<div><button id="einstbtn">Einstellen beginnen</button> <span id="einststat" class="stat"></span></div>
+<div class="hint">Einstellen: vor dem Zurechtrücken von Gurt oder Sense antippen, danach noch einmal. Die Zeit dazwischen zählt nicht (Langzeit/Ausschluss_Gerät.csv).</div>
 <div id="batstatus" class="stat"></div>
 <div id="syncstatus" class="stat"></div>
 <div id="crash" class="hint" style="display:none;color:#b00020"></div>
@@ -303,7 +310,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 </div>
 <div id="bv_slist"></div>
 <div id="bv_recnote" class="warn" style="display:none"></div>
-<div class="row"><button id="bv_mSess" class="on">Session</button><button id="bv_mYoga">Tag</button><button id="bv_mNacht">Nacht</button><button id="bv_mSerie">Serie</button><button id="bv_mSamm">Sammlung</button></div>
+<div class="row"><button id="bv_mSess" class="on">Session</button><button id="bv_mYoga">Tag</button><button id="bv_mNacht">Nacht</button><button id="bv_mSerie">Serie</button><button id="bv_mSamm">Sammlung</button><button id="bv_mPruef">Prüfen</button></div>
 <div id="bv_info" class="stat">Noch keine Messung geladen. Es wird nichts hochgeladen, alles bleibt auf diesem Gerät.</div>
 
 <div class="card" id="bv_ovCard">
@@ -321,6 +328,12 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   </div>
   <div class="scroll"><table><thead><tr><th>Nr</th><th>Uhrzeit</th><th>Art</th><th>Puls vorher</th><th>Spitze</th><th>Anstieg</th><th>Abstand zur vorigen</th><th>Fuß mg</th><th>Brust mg</th><th>Vorprüfung</th><th>Rampe ab</th><th>Schwingen zurück</th></tr></thead><tbody id="bv_nList"></tbody></table></div>
   <div class="hint">Vorprüfung: mindestens 15 s seit der vorigen Zuckung, keine sicheren Schritte in 3 s Umgebung, Brust unter 300 mg. Die genaue Prüfung mit EKG steht im Nachtbericht.</div>
+</div>
+
+<div class="card" id="bv_pCard" style="display:none">
+  <div class="row"><b>Prüfliste</b> <select id="bv_pFilt"><option value="offen">nur ungeprüfte</option><option value="alle">alle, auch geprüfte</option></select> <button id="bv_pCut">Ausschnitt der Großaufnahme ausschließen</button> <span class="stat" id="bv_pCount"></span></div>
+  <div class="scroll"><table><thead><tr><th>Uhrzeit</th><th>Art</th><th>Dauer</th><th>Befund</th><th>Stand</th><th></th></tr></thead><tbody id="bv_pList"></tbody></table></div>
+  <div class="hint" id="bv_pHint"></div>
 </div>
 
 <div class="card" id="bv_detCard">
@@ -381,6 +394,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <legend>Daten als ZIP</legend>
   <button class="main" id="saveall">Aktuellen Abschnitt als ZIP (ohne Rohdaten)</button> <button id="ordnew">Speicherordner wählen</button>
   <button class="main" id="shareall">Teilen</button>
+  <div style="margin-top:.6rem"><b>Am Rechner (Mutterordner):</b> <label class="bvfile">Vom Handy holen, Speicherordner des Handys wählen: <input type="file" id="holdir" webkitdirectory multiple></label> <button id="mappebtn">Tagesmappen erstellen</button></div>
+  <div id="holstat" class="hint">Holen liest das Handy nur und kopiert neue Dateien in den hier gewählten Speicherordner, angehängte Tabellen werden um fehlende Zeilen ergänzt. Tagesmappe: je Tag eine Excel unter Berichte, ausgeschlossene Zeiten fehlen, Blatt Ausschlüsse.</div>
   <button class="main" id="sharenow" style="display:none">Jetzt teilen</button>
   <div id="savestatus" class="hint">Der Speicherordner wird von selbst beschrieben. „Aktuellen Abschnitt als ZIP“ legt Tag oder Nacht bis jetzt als ZIP in den Ordner Berichte des Tagesordners, ohne freigegebenen Speicherordner in die Downloads. „Alles beenden“ schreibt den Tages- oder Nachtbericht gleich mit. „Teilen“ öffnet das Teilen-Menü, z. B. für E-Mail, WhatsApp oder die Claude-App. Die Datei unverändert an Claude schicken.</div>
 </fieldset>
@@ -1814,7 +1829,7 @@ function bgMsg(o) {
   if (o.mk === "ev") {
     if (!bgSeen.has(o.id)) {
       bgSeen.add(o.id); const t = Math.abs(bgOff) < 600000 ? o.t + bgOff : o.t;
-      addEntry({ typ: "Marker", name: String(o.n || "Marker") + " (Uhr)", start: Math.round(t) }); flush();
+      if (/^St(ö|oe)rung/.test(String(o.n || ""))) stoeMsg(o, t); else addEntry({ typ: "Marker", name: String(o.n || "Marker") + " (Uhr)", start: Math.round(t) }); flush();
       bgStatus(`Letzter Marker ${stamp(new Date(t)).slice(0, 8)}: ${o.n}`);
     }
     bgSend(`MK.ack(${o.id | 0})`);
@@ -3029,7 +3044,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 1.9.4"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.0"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3074,13 +3089,13 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 1.9.4", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 2.0", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
     nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg; ab 1.9.3 kompakt: t0 und dt in 0,1 ms, Werte mal f als x0 plus Summe der dx).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), spitze_ms: Math.round(p.tPk - T0), puls: p.puls, ruhe: p.ruhe, fuss_mg: p.fuss ?? null, klein: !!p.klein })), ruhegrenze_mg: NE.fa ? Math.round(NE.fa.calm) : null, roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, form: e.form || null, dauer_s: e.dauer ?? null, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
-  return { raw: { B, R, NE, A, F, G, steps, T0, TP: TPs, sync, al, breaths, minutes: X9.minutes, mf: X9.mf, actMin: X9.actMin }, xlsx, json, pdf: X9.pdf, blocks: X9.blocks, info: `${B.length} Herzschläge, ${nR + nL} Schritte, ${breaths.length} Atemzüge, ${sync.pairs.length} Abgleich` + (NE ? `, ${NE.ev.length} Ereignisse, ${NE.win.length} Fenster` : "") };
+  return { raw: { B, R, NE, A, F, G, E, steps, T0, TP: TPs, sync, al, breaths, minutes: X9.minutes, mf: X9.mf, actMin: X9.actMin }, xlsx, json, pdf: X9.pdf, blocks: X9.blocks, info: `${B.length} Herzschläge, ${nR + nL} Schritte, ${breaths.length} Atemzüge, ${sync.pairs.length} Abgleich` + (NE ? `, ${NE.ev.length} Ereignisse, ${NE.win.length} Fenster` : "") };
 }
 
 /* ================= Version 9: WBGT, 10-Hz-Strom, Hüllkurve, Tätigkeiten, Excel-Diagramme, PDF ================= */
@@ -3415,7 +3430,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 1.9.4. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 2.0. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3619,7 +3634,7 @@ async function extras9(X) {
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
-    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
+    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
     taetigkeiten_auto: act.blocks.map(b => ({ start_ms: rel(b.a), ende_ms: rel(b.b), name: b.name, sicherheit: b.sicher, grund: b.grund })),
     akku: BA.map(b => ({ t: rel(b.t), geraet: b.d, wert: b.txt })),
     strom };
@@ -3719,6 +3734,10 @@ async function buildZip(opts) {
     try { const T = vsDerived(sp); if (T.Atemzuege && T.Atemzuege.length) out.push({ name: P + "Atemzuege.csv", data: enc.encode("\ufeff" + [VS_HEAD.Atemzuege, ...T.Atemzuege].join("\n")) }); } catch (e) {}
     if (!opts.noRaw) try { const K = kippenRows(window.lastStrom); if (K.length) out.push({ name: P + "Kippen_Brust.csv", data: enc.encode("\ufeff" + [KIPPEN_HEAD, ...K].join("\n")) }); } catch (e) {}
     const pdfName = nacht ? "Uebersicht.pdf" : opts.kind === "Tag" ? "Tagesbericht.pdf" : "Auswertung.pdf";
+    /* 2.0: Auffälligkeiten finden, EKG-Fenster um Herz und mögliche Atemstillstände in Fenster.json */
+    window.lastAnom = null;
+    try { const Jo = JSON.parse(sp.json), rbr = sp.raw && sp.raw.rbRaw ? { t: sp.raw.rbRaw.t.map(x => x - Jo.t0_epoch_ms), f: sp.raw.rbRaw.f } : null, an = vsAnom(Jo, rbr);
+      Jo.pruef_fenster = pruefFenster(an, sp.raw); Jo.pruef_regeln = ANOM_REGELN; sp.json = JSON.stringify(Jo); window.lastAnom = { an, T0: Jo.t0_epoch_ms }; } catch (e) { addEntry({ typ: "Fehler", name: "Prüfliste: " + (e.message || e), start: Date.now() }); }
     out.unshift({ name: P + "Messung.xlsx", data: sp.xlsx }, { name: P + "Fenster.json", data: enc.encode(sp.json) });
     if (sp.pdf) out.unshift({ name: P + pdfName, data: sp.pdf });
     addEntry({ typ: "Daten", name: "Auswertung " + (opts.kind || "Speicher") + ": " + sp.info, start: Date.now() });
@@ -4228,7 +4247,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 1.9.4"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.0"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4296,7 +4315,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 1.9.4. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 2.0. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4423,7 +4442,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 1.9.4", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 2.0", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -4521,6 +4540,174 @@ function vsRawRows(kind, arr, offs, hourly) {
     }
   });
   return { rows, byHour };
+}
+
+/* ================= 2.0: Gerät, Ausschlüsse, Auffälligkeiten ================= */
+function devInfo() { let d = null; try { d = JSON.parse(localStorage.getItem("vs_dev") || "null"); } catch (e) {}
+  if (!d || !d.id) { d = { id: Math.random().toString(36).slice(2, 8), name: "" }; try { localStorage.setItem("vs_dev", JSON.stringify(d)); } catch (e) {} } return d; }
+function devClean(n) { return String(n || "").trim().replace(/[^A-Za-z0-9ÄÖÜäöüß-]/g, "").slice(0, 20); }
+function devName() { const d = devInfo(); return d.name || (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "Handy" : "PC"); }
+function devAsk(force) { const d = devInfo(); if (d.name && !force) return d.name;
+  let n = null; try { n = prompt("Name dieses Geräts (für die Datei Langzeit/Ausschluss_<Name>.csv), z. B. Handy oder PC:", devName()); } catch (e) {}
+  n = devClean(n); if (n) { d.name = n; try { localStorage.setItem("vs_dev", JSON.stringify(d)); } catch (e) {} } else if (!d.name) { d.name = devName(); try { localStorage.setItem("vs_dev", JSON.stringify(d)); } catch (e) {} }
+  const b = document.getElementById("devbtn"); if (b) b.textContent = "Gerät: " + d.name; return d.name; }
+const AUS_HEAD = "ID;Aktion;Beginn_Epoch_ms;Ende_Epoch_ms;Von;Bis;Grund;Quelle;betrifft;Notiz";
+function ausDT(ms) { const d = new Date(ms); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function ausCl(s) { return String(s === null || s === undefined ? "" : s).replace(/[;\r\n]+/g, ",").trim(); }
+function ausRow(e) { return [e.id, e.aktion, Math.round(e.a), Math.round(e.b), ausDT(e.a), ausDT(e.b), ausCl(e.grund), ausCl(e.quelle), e.betrifft || "alle", ausCl(e.notiz)].join(";"); }
+function ausQ() { try { return JSON.parse(localStorage.getItem("vs_ausq") || "[]"); } catch (e) { return []; } }
+/* schreibt Zeilen an Langzeit/Ausschluss_<Gerät>.csv; ohne Ordner warten sie im Browser und gehen beim nächsten Mal mit */
+async function ausWrite(list, gesture) {
+  const q = ausQ().concat(list || []); if (!q.length) return true;
+  let h = null; try { h = await vsRoot(!!gesture); } catch (e) {}
+  if (!h) { try { localStorage.setItem("vs_ausq", JSON.stringify(q)); } catch (e) {} return false; }
+  try { await vsAppend(await vsSub(h, ["Langzeit"]), `Ausschluss_${devName()}.csv`, AUS_HEAD, q.map(ausRow)); localStorage.removeItem("vs_ausq"); AUS_CACHE = null; return true; }
+  catch (e) { try { localStorage.setItem("vs_ausq", JSON.stringify(q)); } catch (x) {} return false; }
+}
+function ausParse(txt, map, src) {
+  txt.replace(/^﻿/, "").split(/\r?\n/).forEach((ln, i) => { if (!i || !ln.trim()) return; const c = ln.split(";"); if (c.length < 9) return;
+    const e = { id: c[0], aktion: c[1], a: +c[2], b: +c[3], grund: c[6], quelle: c[7], betrifft: c[8] || "alle", notiz: c[9] || "", datei: src };
+    if (e.id && Number.isFinite(e.a)) map.set(e.id, e); });
+}
+var AUS_CACHE = null;
+/* alle Ausschluss_*.csv lesen; je ID gilt die letzte Zeile */
+async function ausReadAll(force) {
+  if (AUS_CACHE && !force && Date.now() - AUS_CACHE.at < 5000) return AUS_CACHE.map;
+  const map = new Map(); let h = null; try { h = await vsRoot(false); } catch (e) {}
+  if (h) { try { const d = await h.getDirectoryHandle("Langzeit"); const fs = [];
+      for await (const [n, e] of d.entries()) if (e.kind === "file" && /^Ausschluss.*\.csv$/i.test(n)) fs.push([n, e]);
+      fs.sort((x, y) => x[0].localeCompare(y[0]));
+      for (const [n, e] of fs) ausParse(await (await e.getFile()).text(), map, n); } catch (e) {} }
+  ausQ().forEach(e => map.set(e.id, Object.assign({ datei: "wartet" }, e)));
+  AUS_CACHE = { at: Date.now(), map }; return map;
+}
+function ausActive(map) { return [...map.values()].filter(e => e.aktion === "setzen" && e.b >= e.a); }
+
+/* Liste der Auffälligkeiten einer Aufnahme (Zeiten in ms seit t0). rb = Atemgurt { t (ms seit t0), f (N) } */
+const ANOM_REGELN = "Regeln der Prüfliste (2.0): unbestätigte Schläge ab 3 in Folge; Lücken über 5 s (Brustgurt, Atemgurt, Sense); Atemgurt flach (Hub unter 0,1 N über mindestens 10 s), Grundspannung unter 0,5 N über 30 s (locker) bzw. unter 0,3 N über 60 s (abgelegt), Sprünge über 10 N; Fuß unter 4 mg über 30 min; Klopfen; Abgleich offen ohne Klopfen; Seite im Hintergrund; Akku bis 15 %; Uhrzeitsprung; nachts aufrecht; Einstellen; Störung von der Uhr; Ende-Ablauf; Ausschlag über 6000 mg. Körper (nur hervorgehoben): möglicher Extraschlag (kurz unter 80 %, danach lang über 115 % des Medians der Umgebung, beide im EKG bestätigt); Pause über 2 s; unregelmäßiger Rhythmus (über 30 % der Abstände springen mehr als 20 %, ab 2 min); Puls unter 35 oder über 100 im Liegen ab 2 min; möglicher Atemstillstand (Gurt flach, Puls fällt dabei und steigt danach um mehr als 10 gegenüber der Minute davor); Atmung unter 5 oder über 24 je Minute ab 3 min.";
+function vsAnom(J, rb) {
+  const out = [], T0 = J.t0_epoch_ms, sc = J.schlaege || { t: [], rr: [], ok: [] }, n = sc.t.length, P = J.protokoll || [];
+  const add = (code, art, kl, a, b, txt, o) => out.push(Object.assign({ id: `A-${code}-${Math.round(T0 + a)}`, code, art, klasse: kl, a: Math.round(a), b: Math.round(Math.max(a, b)), text: txt, betrifft: "alle", aus: kl === "technik", top: false }, o || {}));
+  const merge = (L, gap) => { L.sort((x, y) => x[0] - y[0]); const o = []; L.forEach(r => { const l = o[o.length - 1]; if (l && r[0] - l[1] <= gap) { l[1] = Math.max(l[1], r[1]); l[2] = (l[2] || 0) + (r[2] || 0); } else o.push(r.slice()); }); return o; };
+  const f1 = v => (Math.round(v * 10) / 10).toString().replace(".", ",");
+  const tEnd = Math.max(n ? sc.t[n - 1] : 0, ...((J.strom && J.strom.brust) || []).map(s => s.start_ms + 100 * s.n));
+  /* Ende-Ablauf und Lücken für die Zuordnung */
+  const gapsH = [];
+  /* --- Technik Brustgurt --- */
+  { const U = []; let k = -1; for (let i = 0; i <= n; i++) { const bad = i < n && sc.ekg_da && sc.ekg_da[i] && !sc.ok[i];
+      if (bad && k < 0) k = i; if (!bad && k >= 0) { if (i - k >= 3) U.push([sc.t[k] - sc.rr[k], sc.t[i - 1], i - k]); k = -1; } }
+    merge(U, 10000).forEach(r => add("H10U", "unbestätigte Schläge", "technik", r[0], r[1], `${r[2]} Schläge ohne Bestätigung im EKG`)); }
+  for (let i = 1; i < n; i++) if (sc.t[i] - sc.t[i - 1] > 5000) { gapsH.push([sc.t[i - 1], sc.t[i]]); add("H10L", "Lücke Brustgurt", "technik", sc.t[i - 1], sc.t[i], `${Math.round((sc.t[i] - sc.t[i - 1]) / 1000)} s ohne Herzschlag`); }
+  for (let i = 1; i < n; i++) if (sc.t[i] < sc.t[i - 1] - 1000) add("ZEIT", "Uhrzeitsprung", "technik", sc.t[i], sc.t[i], "Zeit der Herzschläge springt zurück");
+  P.filter(r => /Kontakt/i.test(r.name || "") && /kein|ohne|verloren/i.test(r.name || "")).forEach(r => add("KONT", "Puls ohne Hautkontakt", "technik", r.t, r.ende || r.t + 10000, r.name));
+  /* --- Brust und Fuß aus dem 10-Hz-Strom --- */
+  const st = J.strom || {}, bt = [], bx = [], by = [], bz = [], ft = [], fa = [];
+  (st.brust || []).forEach(s => { let x = 0, y = 0, z = 0; for (let i = 0; i < s.n; i++) { x += s.x[i]; y += s.y[i]; z += s.z[i]; bt.push(s.start_ms + i * 100); bx.push(x); by.push(y); bz.push(z); } });
+  (st.fuss || []).forEach(s => { for (let i = 0; i < s.n; i++) { ft.push(s.start_ms + i * 100); fa.push(s.aus[i]); } });
+  const gapsF = []; for (let i = 1; i < ft.length; i++) if (ft[i] - ft[i - 1] > 5000) { gapsF.push([ft[i - 1], ft[i]]); add("SENL", "Lücke Sense", "technik", ft[i - 1], ft[i], `${Math.round((ft[i] - ft[i - 1]) / 1000)} s ohne Daten vom Fuß`); }
+  { let k = 0; for (let i = 0; i <= fa.length; i++) { const calm = i < fa.length && fa[i] < 4 && (i === 0 || ft[i] - ft[i - 1] < 5000);
+      if (!calm) { if (i - k > 0 && ft[i - 1] - ft[k] >= 1800000) add("SENR", "Fuß ohne Bewegung", "technik", ft[k], ft[i - 1], `${Math.round((ft[i - 1] - ft[k]) / 60000)} min unter 4 mg, Sense abgerutscht?`); k = i + 1; } } }
+  const lage = []; /* je 5 s */
+  for (let i = 0, j = 0; i < bt.length; i = j) { const a = Math.floor(bt[i] / 5000) * 5000; let sx = 0, sy = 0, sz = 0, c = 0; j = i; while (j < bt.length && bt[j] < a + 5000) { sx += bx[j]; sy += by[j]; sz += bz[j]; c++; j++; } lage.push([a, lageOf(sx / c, sy / c, sz / c)]); }
+  if (J.nacht) { const U = []; lage.forEach(([a, l]) => { if (l === "aufrecht") U.push([a, a + 5000]); }); merge(U, 30000).forEach(r => add("AUFR", "aufrecht in der Nacht", "technik", r[0], r[1], `${Math.round((r[1] - r[0]) / 1000)} s aufrecht`)); }
+  const lieAt = t => { let lo = 0, hi = lage.length; while (lo < hi) { const m = (lo + hi) >> 1; if (lage[m][0] <= t) lo = m + 1; else hi = m; } const q = lage[lo - 1]; return q && t - q[0] < 10000 && q[1] && q[1] !== "aufrecht"; };
+  /* --- Bedienung, Zeit und Gerät aus Protokoll und Fenstern --- */
+  { const K = (J.fenster || []).filter(w => /^Klopfen/.test(w.art)).map(w => [w.start_ms, w.ende_ms]); merge(K, 5000).forEach(r => add("KLOP", "Klopfen", "technik", r[0], r[1], "Klopfen an Gurt und Sense")); }
+  P.forEach((r, i) => { if (r.typ === "Abgleich" && /offen/.test(r.name) && !P.some(q => q.typ === "Abgleich" && /Klopfen.*erkannt/.test(q.name) && q.t >= r.t && q.t - r.t < 120000)) add("ABGL", "Abgleich offen ohne Klopfen", "technik", r.t, r.t + 60000, r.name); });
+  P.filter(r => /im Vordergrund nach/.test(r.name || "") && r.ende).forEach(r => { const a = r.t, b = r.ende, gap = [...gapsH, ...gapsF].some(g => g[1] > a && g[0] < b);
+    add("HINT", "Seite im Hintergrund", "technik", a, b, `${Math.round((b - a) / 1000)} s im Hintergrund` + (gap ? ", mit Datenlücke" : ", Daten ohne Lücke, nur Hinweis"), { aus: gap }); });
+  (J.akku || []).forEach(k => { const v = parseInt(k.wert, 10); if (v <= 15) add("AKKU", "Akku knapp", "technik", k.t, k.t, `${k.geraet} ${k.wert}`); });
+  P.filter(r => r.typ === "Einstellen").forEach(r => add("EIN", "Einstellen", "technik", r.t, r.ende || r.t, r.name));
+  P.filter(r => r.typ === "Störung" && (r.ende || !P.some(q => q.typ === "Störung" && q.ende && Math.abs(q.t - r.t) < 2000))).forEach(r => add("STOE", "Störung gemeldet", "technik", r.t, r.ende || r.t, r.name + (r.ende ? "" : ", einzelner Zeitpunkt, Bereich von Hand setzen"), { aus: !!r.ende }));
+  { const e = P.find(r => /Abgleich offen: Ende|Ende-Ablauf begonnen|Alles beendet/.test(r.name || "")); if (e) add("ENDE", "Ende-Ablauf", "technik", e.t, Math.max(e.t, tEnd), "ab dem Ende-Ablauf"); }
+  ((J.nacht && J.nacht.ereignisse) || []).forEach(e => { if (e.fuss_mg > 6000) add("STOSS", "sehr großer Ausschlag", "technik", e.t_ms - 5000, e.t_ms + 10000, `Fuß ${Math.round(e.fuss_mg)} mg, eher Klopfen oder Stoß`); });
+  /* --- Atemgurt --- */
+  const pulsIn = (a, b) => { let s = 0, c = 0; for (let i = lbA(sc.t, a); i < n && sc.t[i] < b; i++) if (sc.ok[i] && sc.rr[i] > 300 && sc.rr[i] < 2500) { s += 60000 / sc.rr[i]; c++; } return c ? s / c : NaN; };
+  const puls3 = (a, b, fn) => { let best = NaN; for (let i = Math.max(1, lbA(sc.t, a)); i < n - 1 && sc.t[i] < b; i++) { const v = (60000 / sc.rr[i - 1] + 60000 / sc.rr[i] + 60000 / sc.rr[i + 1]) / 3; if (!(sc.rr[i] > 300)) continue; if (!Number.isFinite(best) || fn(v, best)) best = v; } return best; };
+  if (rb && rb.t.length > 200) {
+    const t = rb.t, f = rb.f, s0 = Math.floor(t[0] / 1000), s1 = Math.floor(t[t.length - 1] / 1000), NS = s1 - s0 + 1;
+    const mn = new Float32Array(NS).fill(Infinity), mx = new Float32Array(NS).fill(-Infinity), sm = new Float64Array(NS), cn = new Uint16Array(NS);
+    for (let i = 0; i < t.length; i++) { if (!Number.isFinite(f[i])) continue; const k = Math.floor(t[i] / 1000) - s0; if (f[i] < mn[k]) mn[k] = f[i]; if (f[i] > mx[k]) mx[k] = f[i]; sm[k] += f[i]; cn[k]++; }
+    const gapsR = []; for (let i = 1; i < t.length; i++) if (t[i] - t[i - 1] > 5000) { gapsR.push([t[i - 1], t[i]]); add("GURL", "Lücke Atemgurt", "technik", t[i - 1], t[i], `${Math.round((t[i] - t[i - 1]) / 1000)} s ohne Atemgurt`, { betrifft: "Atemgurt" }); }
+    /* Grundspannung als Mittel der letzten 20 s */
+    const base = new Float32Array(NS).fill(NaN); { let s = 0, c = 0; for (let k = 0; k < NS; k++) { if (cn[k]) { s += sm[k]; c += cn[k]; } if (k >= 20 && cn[k - 20]) { s -= sm[k - 20]; c -= cn[k - 20]; } if (c) base[k] = s / c; } }
+    const runs = (flag, minS, fn) => { let k0 = -1; for (let k = 0; k <= NS; k++) { const on = k < NS && flag(k); if (on && k0 < 0) k0 = k; if (!on && k0 >= 0) { if (k - k0 >= minS) fn((s0 + k0) * 1000, (s0 + k) * 1000); k0 = -1; } } };
+    runs(k => cn[k] && base[k] < 0.3, 60, (a, b) => add("GURA", "Gurt abgelegt", "technik", a, b, `Grundspannung unter 0,3 N`, { betrifft: "Atemgurt" }));
+    runs(k => cn[k] && base[k] >= 0.3 && base[k] < 0.5, 30, (a, b) => add("GURLO", "Gurt locker", "technik", a, b, `Grundspannung 0,3 bis 0,5 N`, { betrifft: "Atemgurt" }));
+    for (let k = 2; k < NS; k++) if (cn[k] && cn[k - 2] && Math.abs(sm[k] / cn[k] - sm[k - 2] / cn[k - 2]) > 10) { add("GURS", "Sprung am Atemgurt", "technik", (s0 + k - 7) * 1000, (s0 + k + 5) * 1000, `Sprung über 10 N (An- oder Ausziehen)`, { betrifft: "Atemgurt" }); k += 10; }
+    /* flach: Hub unter 0,1 N über 10 s */
+    const flat = new Uint8Array(NS); for (let k = 0; k + 10 <= NS; k++) { let lo = Infinity, hi = -Infinity, ok = true; for (let j = k; j < k + 10; j++) { if (!cn[j]) { ok = false; break; } lo = Math.min(lo, mn[j]); hi = Math.max(hi, mx[j]); } if (ok && hi - lo < 0.1 && base[k + 9] >= 0.3) for (let j = k; j < k + 10; j++) flat[j] = 1; }
+    runs(k => flat[k], 10, (a, b) => {
+      const p0 = pulsIn(a - 60000, a), pd = pulsIn(a, b), pmax = puls3(b, b + 30000, (v, w) => v > w);
+      const muster = Number.isFinite(p0) && Number.isFinite(pd) && Number.isFinite(pmax) && pd < p0 && pmax > p0 + 10;
+      if (muster) add("APNO", "möglicher Atemstillstand", "koerper", a, b, `${Math.round((b - a) / 1000)} s flach, Puls ${Math.round(p0)} vorher, ${Math.round(pd)} dabei, danach bis ${Math.round(pmax)}`, { top: true });
+      else add("GURF", "Atemgurt flach", "technik", a, b, `${Math.round((b - a) / 1000)} s ohne Atembewegung, Puls unauffällig`, { betrifft: "Atemgurt" }); });
+  }
+  /* --- Körper Herz --- */
+  { const okc = i => sc.ok[i] && sc.rr[i] > 300 && sc.rr[i] < 3000, E = [], Pz = [];
+    for (let i = 5; i < n - 6; i++) { if (!okc(i) || !okc(i + 1)) continue; const w = []; for (let j = i - 5; j <= i + 6; j++) if (j !== i && j !== i + 1 && okc(j)) w.push(sc.rr[j]); if (w.length < 6) continue; w.sort((x, y) => x - y); const m = w[w.length >> 1];
+      if (sc.rr[i] < 0.8 * m && sc.rr[i + 1] > 1.15 * m) E.push([sc.t[i] - sc.rr[i], sc.t[i + 1], 1]); }
+    merge(E, 10000).forEach(r => add("EXTRA", "möglicher Extraschlag", "koerper", r[0], r[1], `${r[2]}-mal kurzer Abstand mit langer Pause danach`));
+    for (let i = 0; i < n; i++) if (sc.ok[i] && sc.rr[i] > 2000 && sc.rr[i] < 5000) Pz.push([sc.t[i] - sc.rr[i], sc.t[i], 1]);
+    merge(Pz, 10000).forEach(r => add("PAUSE", "Pause über 2 s", "koerper", r[0], r[1], "Herzschlagpause über 2 s, im EKG bestätigt"));
+    const U = []; for (let a = 0; a < tEnd; a += 30000) { let c = 0, j = 0; for (let i = Math.max(1, lbA(sc.t, a)); i < n && sc.t[i] < a + 60000; i++) if (okc(i) && okc(i - 1)) { c++; if (Math.abs(sc.rr[i] / sc.rr[i - 1] - 1) > 0.2) j++; } if (c >= 30 && j / c > 0.3) U.push([a, a + 60000]); }
+    merge(U, 0).filter(r => r[1] - r[0] >= 120000).forEach(r => add("UNREG", "unregelmäßiger Rhythmus", "koerper", r[0], r[1], `${Math.round((r[1] - r[0]) / 60000)} min sehr unregelmäßig`));
+    const H = []; for (let a = 0; a < tEnd; a += 60000) { const p = pulsIn(a, a + 60000); if (Number.isFinite(p) && (p < 35 || p > 100) && lieAt(a + 30000)) H.push([a, a + 60000, Math.round(p)]); }
+    merge(H, 0).filter(r => r[1] - r[0] >= 120000).forEach(r => add("PULS", "Puls im Liegen ungewöhnlich", "koerper", r[0], r[1], `Puls im Mittel ${Math.round(pulsIn(r[0], r[1]))} im Liegen`)); }
+  /* --- Körper Atem: Rate aus den Atemzügen des Gurts --- */
+  { const A = (J.atem || []).filter(x => /Gurt/i.test(x.quelle || "")).map(x => x.t); if (A.length > 20) { const U = [];
+      for (let a = A[0]; a < A[A.length - 1] - 120000; a += 60000) { const c = A.filter(x => x >= a && x < a + 120000).length / 2; if (c > 24 || c < 5) U.push([a, a + 120000, c]); }
+      merge(U, 0).filter(r => r[1] - r[0] >= 180000).forEach(r => add("ATEMR", "Atmung sehr schnell oder langsam", "koerper", r[0], r[1], `${f1((A.filter(x => x >= r[0] && x < r[1]).length) / ((r[1] - r[0]) / 60000))} Atemzüge je Minute`)); } }
+  out.sort((x, y) => (y.top - x.top) || x.a - y.a);
+  return out;
+}
+function lbA(a, x) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; }
+/* EKG-Fenster um Herz-Auffälligkeiten (10 s davor bis 10 s danach) und mögliche Atemstillstände (10 s davor bis 20 s danach) */
+function pruefFenster(an, raw) {
+  if (!raw || !raw.E || !raw.E.t || !raw.E.t.length) return [];
+  const T0 = raw.T0, W = an.filter(x => x.klasse === "koerper" && x.code !== "ATEMR" && x.code !== "PULS" && x.code !== "UNREG" || x.code === "APNO").map(x => ({ art: [x.art], t: x.a, a: x.a - 10000, b: x.b + (x.code === "APNO" ? 20000 : 10000) }));
+  W.sort((p, q) => p.a - q.a); const M = []; W.forEach(w => { const l = M[M.length - 1]; if (l && w.a <= l.b) { l.b = Math.max(l.b, w.b); w.art.forEach(x => { if (!l.art.includes(x)) l.art.push(x); }); } else M.push(w); });
+  const E = raw.E, R = raw.R || [];
+  return M.slice(0, 200).map(w => { const a = T0 + w.a, b = T0 + w.b, i0 = lbA(E.t, a), i1 = lbA(E.t, b), et = [], ev = [];
+    for (let k = i0; k < i1; k++) { et.push(Math.round((E.t[k] - T0) * 10) / 10); ev.push(Math.round(E.c[0][k])); }
+    return { art: w.art.join(", "), t_ms: Math.round(w.t), start_ms: Math.round(w.a), ende_ms: Math.round(w.b), ekg: { t: et, uV: ev }, r_zacken_ms: R.filter(x => x >= a && x < b).map(x => Math.round((x - T0) * 10) / 10) }; }).filter(w => w.ekg.t.length);
+}
+/* automatische Ausschlüsse der technischen Auffälligkeiten schreiben, nur neue IDs */
+async function ausAuto(an, T0, gesture) {
+  const map = await ausReadAll(true), neu = an.filter(x => x.aus && x.b > x.a && x.code !== "EIN" && x.code !== "STOE" && !map.has(x.id)).map(x => ({ id: x.id, aktion: "setzen", a: T0 + x.a, b: T0 + x.b, grund: x.art, quelle: "automatisch", betrifft: x.betrifft, notiz: x.text }));
+  if (neu.length) await ausWrite(neu, gesture); return neu.length;
+}
+/* 2.0: Warnung „Gurt locker“ ohne Ton: nur Anzeige und Protokoll */
+var GL = { on: false, low: 0, high: 0, v: null };
+setInterval(() => { try {
+  if (typeof rbLive === "undefined" || !rbLive || !rbLive.t || rbLive.t.length < 50 || Date.now() - rbLive.t[rbLive.t.length - 1] > 10000) return;
+  const t = rbLive.t, f = rbLive.f, now = t[t.length - 1]; let s = 0, c = 0; for (let i = t.length - 1; i >= 0 && t[i] > now - 20000; i--) if (Number.isFinite(f[i])) { s += f[i]; c++; }
+  if (!c) return; const v = s / c; GL.v = v;
+  if (v < 0.5) { GL.low += 5; GL.high = 0; } else if (v > 0.7) { GL.high += 5; GL.low = 0; }
+  if (!GL.on && GL.low >= 30) { GL.on = true; addEntry({ typ: "Gurt", name: `Gurt locker: Grundspannung ${v.toFixed(2).replace(".", ",")} N (unter 0,5 N)`, start: Date.now() }); }
+  if (GL.on && GL.high >= 30) { GL.on = false; addEntry({ typ: "Gurt", name: `Gurt wieder gespannt: ${v.toFixed(1).replace(".", ",")} N`, start: Date.now() }); }
+} catch (e) {} }, 5000);
+/* 2.0: Knopf „Einstellen“ während der Aufnahme: erster Druck Beginn, zweiter Ende */
+var EINST = null;
+function einstShow() { const b = document.getElementById("einstbtn"); if (b) { b.textContent = EINST ? `Einstellen beenden (seit ${hhmm(EINST.a)} Uhr)` : "Einstellen beginnen"; b.classList.toggle("stop", !!EINST); } }
+async function einstClick() {
+  const now = Date.now();
+  if (!EINST) { EINST = { a: now, id: `K-${devName()}-${now}` }; try { localStorage.setItem("vs_einst", JSON.stringify(EINST)); } catch (e) {} addEntry({ typ: "Notiz", name: "Einstellen begonnen (zählt nicht)", start: now }); einstShow(); return; }
+  const E = EINST; EINST = null; try { localStorage.removeItem("vs_einst"); } catch (e) {}
+  addEntry({ typ: "Einstellen", name: `Einstellen ${Math.round((now - E.a) / 1000)} s`, start: E.a, end: now });
+  const ok = await ausWrite([{ id: E.id, aktion: "setzen", a: E.a, b: now, grund: "Einstellen", quelle: "Knopf", betrifft: "alle", notiz: "" }], false);
+  einstShow(); const s = document.getElementById("einststat"); if (s) s.textContent = `Einstellen ${hhmm(E.a)} bis ${hhmm(now)} Uhr ausgeschlossen` + (ok ? "." : ", wartet auf den Speicherordner.");
+}
+try { EINST = JSON.parse(localStorage.getItem("vs_einst") || "null"); } catch (e) {}
+/* 2.0: Störung von der Markeruhr (Doppeldruck) */
+var STOE = (() => { try { return JSON.parse(localStorage.getItem("vs_stoe") || "{}"); } catch (e) { return {}; } })();
+function stoeMsg(o, t) {
+  const sid = String(o.sid || o.id), off = t - o.t, a = Number.isFinite(o.st) ? o.st + off : t;
+  if (/Beginn/.test(o.n)) { STOE[sid] = Math.round(t); addEntry({ typ: "Störung", name: "Störung gemeldet (Uhr), Beginn", start: Math.round(t) }); }
+  else { const a2 = STOE[sid] || Math.round(a); delete STOE[sid];
+    addEntry({ typ: "Störung", name: `Störung gemeldet (Uhr), ${Math.round((t - a2) / 1000)} s`, start: a2, end: Math.round(t) });
+    ausWrite([{ id: `U-${devName()}-${sid}`, aktion: "setzen", a: a2, b: Math.round(t), grund: "Störung gemeldet", quelle: "Uhr", betrifft: "alle", notiz: "" }], false); }
+  try { localStorage.setItem("vs_stoe", JSON.stringify(STOE)); } catch (e) {}
 }
 
 /* ---------- Speicherordner ---------- */
@@ -4643,6 +4830,8 @@ async function vsReport(a, b, night, dayParts, dayStart) {
   for (const f of z.out) if (!/\.csv$/.test(f.name)) await vsPut(ber, f.name, f.data);
   if (z.kern) await vsPut(await vsSub(h, ["Kern"]), z.kern.name, z.kern.data);
   if (night) { try { await vsPut(ber, z.name, z.blob); } catch (e) {} } /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
+  if (window.lastAnom) { try { const LA = window.lastAnom, k = await ausAuto(LA.an, LA.T0, false), ap = LA.an.filter(x => x.code === "APNO").length;
+      addEntry({ typ: "Daten", name: `Prüfliste: ${LA.an.length} Auffälligkeiten, ${k} neu vorläufig ausgeschlossen` + (ap ? `, ${ap}-mal möglicher Atemstillstand (bei Wiederholung ärztlich abklären)` : ""), start: Date.now() }); } catch (e) {} }
   if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`, from);
   await vsVersuche(h);
   if (VS) { VS.rep = { a, to: b }; vsSave(); }
@@ -4651,6 +4840,79 @@ async function vsReport(a, b, night, dayParts, dayStart) {
   return true;
 }
 /* 1.9.4: Rückfrage des Browsers vor dem Schließen oder Neuladen, solange aufgezeichnet oder ein Bericht geschrieben wird */
+/* ================= 2.0: Mutterordner am Rechner ================= */
+/* Vom Handy holen: Speicherordner des Handys nur lesen, neue Dateien kopieren, angehängte CSV um fehlende Zeilen ergänzen */
+async function vsHolen(files) {
+  const st = $("holstat"), h = await vsRoot(true);
+  if (!h) { st.textContent = "Erst hier den Speicherordner (Mutterordner) wählen, dann vom Handy holen."; return; }
+  let neu = 0, erg = 0, zeilen = 0, gleich = 0, ers = 0, fehl = 0; const L = [], t1 = Date.now();
+  for (let i = 0; i < files.length; i++) { const f = files[i];
+    const parts = (f.webkitRelativePath || f.name).split("/").slice(1); if (!parts.length || parts.some(p => p.startsWith(".")) || parts[0] === "Musik") continue;
+    if (i % 20 === 0) { st.textContent = `Hole ${i + 1} von ${files.length}: ${parts.join("/")}`; await wait(0); }
+    try { const name = parts.pop(); let d = h; for (const p of parts) d = await d.getDirectoryHandle(p, { create: true });
+      let old = null; try { old = await (await d.getFileHandle(name)).getFile(); } catch (e) {}
+      const path = [...parts, name].join("/");
+      if (!old) { await vsPut(d, name, f); neu++; L.push("neu: " + path); continue; }
+      if (old.size === f.size) { gleich++; continue; }
+      if (/\.csv$/i.test(name)) { const A = (await old.text()).replace(/^﻿/, "").split(/\r?\n/), B = (await f.text()).replace(/^﻿/, "").split(/\r?\n/), have = new Set(A);
+        const add = B.slice(1).filter(x => x.trim() && !have.has(x)); if (add.length) { await vsAppend(d, name, B[0], add); erg++; zeilen += add.length; L.push(`ergänzt: ${path} (+${add.length} Zeilen)`); } else gleich++; }
+      else if (f.lastModified > old.lastModified || f.size > old.size) { await vsPut(d, name, f); ers++; L.push("neu geschrieben: " + path); } else gleich++;
+    } catch (e) { fehl++; L.push("Fehler: " + (f.webkitRelativePath || f.name) + " " + (e.message || e)); } }
+  AUS_CACHE = null;
+  const sum = `Vom Handy geholt: ${neu} neue Dateien, ${erg} Tabellen um ${zeilen} Zeilen ergänzt, ${ers} Berichte neu, ${gleich} unverändert` + (fehl ? `, ${fehl} Fehler` : "") + ` (${Math.round((Date.now() - t1) / 1000)} s).`;
+  addEntry({ typ: "Daten", name: sum, start: Date.now() });
+  st.innerHTML = bvEsc2(sum) + (L.length ? `<details><summary>Liste</summary>${L.slice(0, 400).map(bvEsc2).join("<br>")}${L.length > 400 ? "<br>…" : ""}</details>` : "");
+}
+function bvEsc2(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+/* Tagesmappe: je Tag eine Excel aus den Tabellen des Tagesordners, ausgeschlossene Zeiten fehlen, Blatt Ausschlüsse */
+function csvCell(v) { if (v === "") return null; if (/^-?\d+$/.test(v) && v.length < 16) return +v; if (/^-?\d+,\d+$/.test(v)) return +v.replace(",", "."); return v; }
+async function vsTagesmappen(nur) {
+  const st = $("holstat"), h = await vsRoot(true); if (!h) { st.textContent = "Kein Speicherordner freigegeben."; return; }
+  const map = await ausReadAll(true), act = ausActive(map); let nT = 0; const done = [];
+  const ausMod = await (async () => { let m = 0; try { const d = await h.getDirectoryHandle("Langzeit"); for await (const [n, e] of d.entries()) if (e.kind === "file" && /^Ausschluss/.test(n)) m = Math.max(m, (await e.getFile()).lastModified); } catch (e) {} return m; })();
+  for await (const [y, dy] of h.entries()) { if (dy.kind !== "directory" || !/^\d{4}$/.test(y)) continue;
+    for await (const [mo, dm] of dy.entries()) { if (dm.kind !== "directory" || !/^\d{2}$/.test(mo)) continue;
+      for await (const [day, dd] of dm.entries()) { if (dd.kind !== "directory" || !/^\d{4}-\d{2}-\d{2}$/.test(day) || (nur && day !== nur)) continue;
+        const csv = []; for await (const [n, e] of dd.entries()) if (e.kind === "file" && /\.csv$/i.test(n)) csv.push([n, await e.getFile()]);
+        if (!csv.length) continue;
+        const xn = `${day}_Tag.xlsx`; let ber = await dd.getDirectoryHandle("Berichte", { create: true }), old = null; try { old = await (await ber.getFileHandle(xn)).getFile(); } catch (e) {}
+        if (old && !nur && old.lastModified > Math.max(ausMod, ...csv.map(c => c[1].lastModified))) continue;
+        st.textContent = `Tagesmappe ${day} …`; await wait(10);
+        const tabs = new Map(); let weg = 0;
+        csv.sort((p, q) => p[0].localeCompare(q[0]));
+        for (const [n, f] of csv) { const key = n.replace(/^.*?_\d{8}-\d{4}_/, "").replace(/\.csv$/i, ""), lines = (await f.text()).replace(/^﻿/, "").split(/\r?\n/).filter(x => x.trim());
+          if (lines.length < 2) continue; const head = lines[0].split(";"), ei = head.findIndex(x => /^Epoch(_Beginn)?_ms$/i.test(x)), belt = /Atemgurt|Atemzuege/i.test(key);
+          let T = tabs.get(key); if (!T) tabs.set(key, T = { head, rows: [] });
+          for (let k = 1; k < lines.length; k++) { const c = lines[k].split(";");
+            if (ei >= 0) { const v = +c[ei]; if (Number.isFinite(v) && act.some(e => v >= e.a && v <= e.b && (e.betrifft === "alle" || belt))) { weg++; continue; } }
+            T.rows.push(c); } }
+        const sheets = [], used = new Set();
+        for (const [key, T] of tabs) { let rows = T.rows, head = T.head, name = key;
+          /* große Rohtabellen (Atemgurt) als Mittel je Sekunde */
+          if (rows.length > 60000 && /Atemgurt/i.test(key)) { const ei = head.indexOf("Epoch_ms"), fi = head.length - 1, M = new Map();
+            rows.forEach(c => { const s = Math.floor(+c[ei] / 1000), v = +String(c[fi]).replace(",", "."); if (!Number.isFinite(s) || !Number.isFinite(v)) return; const m = M.get(s) || [0, 0]; m[0] += v; m[1]++; M.set(s, m); });
+            head = ["Datum", "Zeit", "Epoch_ms", "Kraft_N_Mittel_1s", "Werte"]; rows = [...M.keys()].sort((p, q) => p - q).map(s => { const d = new Date(s * 1000), m = M.get(s); return [`${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`, `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`, String(s * 1000), String(Math.round(m[0] / m[1] * 1000) / 1000).replace(".", ","), String(m[1])]; }); name = key + "_1s"; }
+          if (rows.length > 1000000) rows = rows.slice(0, 1000000);
+          name = name.replace(/[\\\/\?\*\[\]:]/g, "").slice(0, 31) || "Tabelle"; while (used.has(name)) name = name.slice(0, 29) + "_" + used.size; used.add(name);
+          sheets.push({ name, rows: [head, ...rows.map(c => c.map(csvCell))] }); }
+        const d0 = new Date(day + "T00:00:00").getTime(), d1 = d0 + 36 * 3600000;
+        const AU = [["Von", "Bis", "Dauer_s", "Grund", "Quelle", "betrifft", "Notiz", "ID", "Datei"]];
+        act.filter(e => e.b > d0 && e.a < d1).sort((p, q) => p.a - q.a).forEach(e => AU.push([ausDT(e.a), ausDT(e.b), Math.round((e.b - e.a) / 1000), e.grund, e.quelle, e.betrifft, e.notiz, e.id, e.datei]));
+        AU.push([], [`${weg} Zeilen wegen Ausschluss weggelassen. Die rohen Tabellen im Tagesordner bleiben vollständig.`]);
+        sheets.push({ name: "Ausschlüsse", rows: AU });
+        await vsPut(ber, xn, await makeXlsx(sheets)); nT++; done.push(day); } } }
+  const sum = nT ? `Tagesmappen geschrieben: ${done.join(", ")} (je Tagesordner unter Berichte/JJJJ-MM-TT_Tag.xlsx).` : "Keine Tagesmappe neu nötig, alle sind aktuell.";
+  st.textContent = sum; if (nT) addEntry({ typ: "Daten", name: sum, start: Date.now() });
+}
+function vs20Wire() {
+  const d = devInfo(); if (!d.name) setTimeout(() => devAsk(false), 1500); const b = $("devbtn"); if (b) { b.textContent = "Gerät: " + devName(); b.addEventListener("click", () => devAsk(true)); }
+  $("einstbtn").addEventListener("click", einstClick); einstShow();
+  $("holdir").addEventListener("change", ev => { const fs = [...ev.target.files]; ev.target.value = ""; if (fs.length) vsHolen(fs).catch(e => { $("holstat").textContent = "Holen fehlgeschlagen: " + (e.message || e); }); });
+  $("mappebtn").addEventListener("click", () => vsTagesmappen(null).catch(e => { $("holstat").textContent = "Tagesmappe fehlgeschlagen: " + (e.message || e); }));
+  setTimeout(() => { ausWrite([], false).catch(() => {}); }, 4000); /* wartende Ausschlüsse nachschreiben */
+}
+vs20Wire();
+
 window.addEventListener("beforeunload", e => { try { if (anyActive() || vsRepBusy) { e.preventDefault(); e.returnValue = ""; return ""; } } catch (x) {} });
 /* 1.9.4: gleitendes Mittel der letzten 20 s (Grundspannung des Atemgurts) */
 function trail20(t, f, w = 20000) { const n = t.length, o = new Float32Array(n); let j = 0, s = 0, c = 0;
@@ -5592,7 +5854,7 @@ function lvDraw(force) {
   let brl = [], bq = "";
   if (belt) { brl = belt.list.filter(b => b.te > now - 60000).map(b => b.dauer); bq = "Gurt"; }
   const md = brl.length >= 2 ? brl.slice().sort((x, y) => x - y)[brl.length >> 1] : null;
-  $("lvnum").innerHTML = `<span><b>${noKontakt ? "kein Kontakt" : puls ?? "–"}</b> Puls</span><span><b>${m10 ? Math.round(m10.hi - m10.lo) : "–"}</b> Spannweite</span><span><b>${rm ?? "–"}</b> ms RMSSD (1 min)</span><span><b>${md ? (60 / md).toFixed(1).replace(".", ",") : "–"}</b> Atemzüge/min${bq ? " (" + bq + ")" : ""}</span>`;
+  $("lvnum").innerHTML = `<span><b>${noKontakt ? "kein Kontakt" : puls ?? "–"}</b> Puls</span><span><b>${m10 ? Math.round(m10.hi - m10.lo) : "–"}</b> Spannweite</span><span><b>${rm ?? "–"}</b> ms RMSSD (1 min)</span><span><b>${md ? (60 / md).toFixed(1).replace(".", ",") : "–"}</b> Atemzüge/min${bq ? " (" + bq + ")" : ""}</span>` + (GL.on ? `<span><b style="color:#b00020">Gurt locker</b> ${GL.v === null ? "" : GL.v.toFixed(1).replace(".", ",") + " N"}</span>` : "");
 }
 
 function v131Start() {
@@ -5687,7 +5949,7 @@ async function loadFiles(fs, srcName, dir) {
   let edits = null, rbTxt = [], ahTxt = null, azTxt = [], kern = null;
   try {
     $("info").textContent = "Lade " + (srcName || fs.map(f => f.name).join(", ")) + " …";
-    J = null;
+    J = null; AV = { map: null, an: [], eff: [] };
     for (const f of fs) {
       if (/\.zip$/i.test(f.name)) {
         const z = await unzip(f), jn = z.names.find(n => /(^|_)Fenster\d*_.*\.json$/.test(n) || /(^|_)Fenster\.json$/.test(n)), tn = z.names.find(n => /^Taetigkeiten_.*\.json$/.test(n));
@@ -5720,7 +5982,7 @@ async function loadFiles(fs, srcName, dir) {
       if (rb) { const i0 = rb.t.findIndex(x => x >= lo); let i1 = rb.t.length; while (i1 > 0 && rb.t[i1 - 1] > hi) i1--; rb = i0 < 0 || i1 <= i0 ? null : { t: rb.t.slice(i0, i1), f: rb.f.slice(i0, i1) }; }
       az = az.filter(x => x.a >= lo && x.a <= hi); }
     BX = { rb, ah: ahTxt ? parseAh(ahTxt, J.t0_epoch_ms) : null, az: az.length ? az : null, kern, src: srcName || fs.map(f => f.name).join(", "), dir: dir || null };
-    prepare(edits);
+    prepare(edits); ausLoadV();
   } catch (e) { $("info").textContent = "Fehler beim Laden: " + (e.message || e); }
 }
 $("file").addEventListener("change", ev => loadFiles([...ev.target.files]));
@@ -5873,7 +6135,7 @@ function lageBand(c, X, a, b, y0, y1, L, W, txt) {
 }
 function detLayout() {
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel;
-  const showEkg = night && $("nEkg").checked, hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
+  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span), hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
   let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
   P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 62];
@@ -5892,7 +6154,7 @@ function drawDetail() {
   const cv = $("det"); const LY = S ? detLayout() : null; cv._h = LY ? LY.h : 520; const { c, w, h } = ctxOf(cv); c.clearRect(0, 0, w, h); if (!S || w < 80) return;
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN;
   const a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, R = 8, W = w - L - R, X = t => L + (t - a) / span * W;
-  const showEkg = night && $("nEkg").checked;
+  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span);
   const hasRb = !!S.rb, P = LY.P, showKip = LY.kip;
   LAY = { P, a, b, span, L, W };
   /* 1.7: Stoß aus der Bewegung der Brust (grau), Einatmen nur aus den Atemzügen des Gurts (hellblau) */
@@ -5955,7 +6217,7 @@ function drawDetail() {
 
     for (let k = lb(S.steps, a); k < S.steps.length && S.steps[k] < b; k++) { c.fillStyle = "#1baa7a"; c.fillRect(X(S.steps[k]) - 1, P.bew[1] + 1, 2, 4); } }
   /* EKG */
-  if (showEkg) { const fw = (J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t);
+  if (showEkg) { const fw = (night && $("nEkg").checked && J.nacht ? ((J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t)) : null) || pfAt(a, b);
     if (fw && fw.ekg) { const e = fw.ekg, i0 = lb(e.t, a), i1 = lb(e.t, b); let mn = Infinity, mx = -Infinity; for (let k = i0; k < i1; k++) { mn = Math.min(mn, e.uV[k]); mx = Math.max(mx, e.uV[k]); }
       const Y = v => P.ekg[1] - (v - mn) / (mx - mn || 1) * (P.ekg[1] - P.ekg[0]); c.strokeStyle = "#444"; c.lineWidth = 0.8; c.beginPath(); for (let k = i0; k < i1; k++) { const x = X(e.t[k]), y = Y(e.uV[k]); k === i0 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
@@ -6020,6 +6282,7 @@ function buildEvents() {
   evList = [];
   const E = (J.nacht?.ereignisse || []).slice().sort((a, b) => a.t_ms - b.t_ms); let lastZ = -1e12;
   E.forEach(e => { const it = { nr: e.nr, art: e.art, t: e.t_ms, base: e.puls_vorher, pk: e.puls_spitze, fuss: e.fuss_mg, brust: e.brust_mg, fenster: e.fenster, aus: e.ausgenommen || null, form: e.form || null };
+    { const q = !it.aus && AV.eff.length ? ausHitRel(e.t_ms, false) : null; if (q) it.aus = "Ausschluss: " + q.grund; }
     it.abst = e.art === "Zuckung" && lastZ > -1e11 ? (e.t_ms - lastZ) / 1000 : null;
     const k = lb(S.steps, e.t_ms - 3000), stepNear = k < S.steps.length && S.steps[k] < e.t_ms + 3000;
     it.ok = e.art === "Zuckung" && !it.aus && (it.abst === null || it.abst >= 15) && !stepNear && !(e.brust_mg >= 300);
@@ -6195,7 +6458,9 @@ function kBand(groups, reps, seed) { const G = groups.filter(g => g.length), rnd
   const q = (j, p) => { const v = R.map(c => c[j]).sort((a, b) => a - b); return v[Math.min(v.length - 1, Math.floor(p * v.length))]; };
   const lo = {}, hi = {}; KJ.forEach(j => { lo[j] = q(j, 0.025); hi[j] = q(j, 0.975); }); return { lo, hi, R }; }
 async function kernLoad(files) {
-  for (const f of files) { try { const o = JSON.parse(await f.text()); if (o.format !== "Nachtkern") continue; const id = o.proband + " " + o.nacht; if (KERN.some(k => k.id === id)) continue; KERN.push({ id, on: true, o }); } catch (e) {} }
+  for (const f of files) { try { const o = JSON.parse(await f.text()); if (o.format !== "Nachtkern") continue; const id = o.proband + " " + o.nacht; if (KERN.some(k => k.id === id)) continue; /* 2.0: Ausschlüsse beim Lesen: Zuckungen in ausgeschlossenen Zeiten fallen aus den gültigen */
+      try { const ex = ausActive(await ausReadAll(false)).filter(e => e.betrifft === "alle"); if (ex.length && o.gueltig) { const n0 = o.gueltig.length; o.gueltig = o.gueltig.filter(g => { const z = (o.zuckungen || [])[g.i]; const t = z ? o.t0_epoch_ms + z.t : NaN; return !ex.some(e => t >= e.a && t <= e.b); }); o.ausgeschlossen = n0 - o.gueltig.length; } } catch (e) {}
+      KERN.push({ id, on: true, o }); } catch (e) {} }
   KERN.sort((a, b) => a.o.t0_epoch_ms - b.o.t0_epoch_ms); kernRender();
 }
 async function kernFolder() {
@@ -6429,6 +6694,77 @@ document.getElementById("bvon").addEventListener("click", async () => {
   }
 });
 bvShow();
+
+/* ---------- 2.0: Prüfliste, Ausschlüsse und EKG-Fenster im Betrachter ---------- */
+let AV = { map: null, an: [], eff: [] };
+function ausHitRel(t, belt) { return AV.eff.find(e => (e.betrifft === "alle" || belt) && t >= e.a && t <= e.b) || null; }
+function pfAt(a, b) { return ((J && J.pruef_fenster) || []).find(f => f.ende_ms > a && f.start_ms < b) || null; }
+async function ausLoadV() {
+  if (!J || !S) return; const JJ = J;
+  let an = []; try { an = vsAnom(J, S.rb || null); } catch (e) { $("pHint").textContent = "Prüfliste: " + (e.message || e); }
+  let map = new Map(); try { map = await ausReadAll(true); } catch (e) {}
+  const T0e = J.t0_epoch_ms, file = [...map.values()];
+  an.forEach(x => { if (x.code === "EIN" || x.code === "STOE") { const g = x.code === "EIN" ? "Einstellen" : "Störung gemeldet", e = file.find(e => e.grund === g && Math.abs(e.a - (T0e + x.a)) < 3000); if (e) x.id = e.id; } });
+  try { if (await ausAuto(an, T0e, false)) map = await ausReadAll(true); } catch (e) {}
+  if (J !== JJ) return;
+  AV = { map, an, eff: [] }; ausEffCalc(); ausRefresh();
+}
+function ausEffCalc() {
+  const T0e = J.t0_epoch_ms, hi = (S ? S.tEnd : 0) + 3600000, eff = [];
+  ausActive(AV.map || new Map()).forEach(e => { const a = e.a - T0e, b = e.b - T0e; if (b > -3600000 && a < hi) eff.push({ a, b, betrifft: e.betrifft, grund: e.grund, id: e.id, quelle: e.quelle }); });
+  AV.an.forEach(x => { if (x.aus && x.b > x.a && !(AV.map && AV.map.has(x.id))) eff.push({ a: x.a, b: x.b, betrifft: x.betrifft, grund: x.art, id: x.id, quelle: "automatisch" }); });
+  AV.eff = eff;
+}
+function ausRefresh() {
+  if ((mode === "nacht" || mode === "serie") && J && J.nacht) { const s = nSel; buildEvents(); if (s) { const e = evList.find(v => v.t === s.t && v.art === s.art); nSel = e || null; } }
+  renderPruef(); if (S) drawAll();
+}
+function ausStand(x) { const e = AV.map && AV.map.get(x.id); if (!e) return x.aus ? "vorläufig ausgeschlossen" : "ungeprüft"; return e.aktion === "setzen" ? (e.quelle === "automatisch" ? "vorläufig ausgeschlossen" : "nicht werten") : "werten"; }
+function ausGeprueft(x) { const e = AV.map && AV.map.get(x.id); return !!e && e.quelle !== "automatisch"; }
+async function ausSet(x, aktion, quelle) {
+  const T0e = J.t0_epoch_ms;
+  const ok = await ausWrite([{ id: x.id, aktion, a: T0e + x.a, b: T0e + x.b, grund: x.grund || x.art, quelle, betrifft: x.betrifft || "alle", notiz: x.text || "" }], true);
+  AV.map = await ausReadAll(true); ausEffCalc(); ausRefresh();
+  if (!ok) $("pHint").textContent = "Kein Speicherordner freigegeben: die Bewertung wartet im Browser und wird beim nächsten Mal in Langzeit/Ausschluss_" + devName() + ".csv geschrieben.";
+}
+function renderPruef() {
+  const box = $("pList"); if (!box) return; if (!J || !S) { box.innerHTML = ""; $("pCount").textContent = ""; return; }
+  const T0e = J.t0_epoch_ms, all = $("pFilt").value === "alle", ids = new Set(AV.an.map(x => x.id));
+  const hand = ausActive(AV.map || new Map()).filter(e => !ids.has(e.id) && e.b - T0e > 0 && e.a - T0e < S.tEnd).map(e => ({ id: e.id, art: "Ausschluss " + (e.quelle || ""), grund: e.grund, a: e.a - T0e, b: e.b - T0e, text: e.grund + (e.notiz ? ", " + e.notiz : ""), betrifft: e.betrifft, klasse: "hand" }));
+  const L = [...AV.an, ...hand].filter(x => all || !ausGeprueft(x) || x.klasse === "hand");
+  const offen = AV.an.filter(x => !ausGeprueft(x)).length, apno = AV.an.filter(x => x.code === "APNO").length;
+  $("pCount").textContent = `${AV.an.length} Auffälligkeiten, ${offen} ungeprüft` + (hand.length ? `, ${hand.length} Ausschlüsse von Hand oder Uhr` : "");
+  const dur = x => { const s = Math.round((x.b - x.a) / 1000); return s < 1 ? "Zeitpunkt" : s < 120 ? s + " s" : Math.round(s / 60) + " min"; };
+  box.innerHTML = L.map((x, i) => `<tr data-i="${i}" class="${x.top ? "pTop" : x.klasse === "koerper" ? "pKoe" : ""}"><td>${hms(x.a)}</td><td>${bvEsc(x.art)}${x.betrifft === "Atemgurt" ? " <span class=\"stat\">(nur Gurt)</span>" : ""}</td><td>${dur(x)}</td><td>${bvEsc(x.text || "")}</td><td>${x.klasse === "hand" ? "ausgeschlossen" : ausStand(x)}</td><td style="white-space:nowrap">` +
+    (x.klasse === "hand" ? `<button data-a="auf">aufheben</button>` : `<button data-a="ja">werten</button> <button data-a="nein">nicht werten</button>`) + `</td></tr>`).join("") || `<tr><td colspan="6">${AV.an.length ? "Alles geprüft." : "Keine Auffälligkeiten nach den Regeln."}</td></tr>`;
+  box.querySelectorAll("tr[data-i]").forEach(tr => { const x = L[+tr.dataset.i];
+    tr.addEventListener("click", ev => { const b = ev.target.closest("button");
+      if (b) { ev.stopPropagation(); if (b.dataset.a === "ja") ausSet(x, "geprüft ok", "Prüfung"); else if (b.dataset.a === "nein") ausSet(x, "setzen", "Prüfung"); else ausSet(x, "aufheben", "Betrachter"); return; }
+      nSel = null; SPAN = Math.min(900000, Math.max(20000, x.b - x.a + 20000)); sel = Math.max(0, x.a - 10000); if (mode === "nacht") renderEvents(); drawAll(); $("detCard").scrollIntoView({ block: "start" }); }); });
+  $("pHint").textContent = (apno ? `Hinweis: ${apno}-mal möglicher Atemstillstand nach den Regeln (Gurt flach, Puls fällt und steigt danach deutlich). Wiederholt sich das, gehört es ärztlich abgeklärt; ein Pulsoxymeter für die Nacht würde helfen. ` : "") +
+    "Werten holt eine Stelle zurück, nicht werten schließt sie aus. Technische Auffälligkeiten sind bis zur Prüfung vorläufig ausgeschlossen, körperliche nur hervorgehoben. Gelb umrandet: körperlich, rot: möglicher Atemstillstand. " + ANOM_REGELN;
+}
+$("pFilt").addEventListener("change", renderPruef);
+document.body.classList.add("bvwide");
+$("mPruef").addEventListener("click", () => { const c = $("pCard"), on = c.style.display === "none"; c.style.display = on ? "" : "none"; $("mPruef").classList.toggle("on", on); if (on) renderPruef(); });
+$("pCut").addEventListener("click", async () => { if (!S || !LAY) return; let g = null; try { g = prompt(`Ausschnitt ${hms(LAY.a)} bis ${hms(LAY.b)} Uhr ausschließen. Grund:`, "von Hand"); } catch (e) {} if (g === null) return;
+  await ausSet({ id: `B-${devName()}-${Date.now()}`, art: g || "von Hand", a: LAY.a, b: LAY.b, betrifft: "alle", text: "" }, "setzen", "Betrachter"); });
+/* schraffiertes Band über ausgeschlossenen Zeiten, Rand oben für körperliche Auffälligkeiten */
+let HATCH = null;
+function bandDraw(cv, a, b, L, W, belt) {
+  if (!AV.eff.length && !AV.an.length) return; const r = window.devicePixelRatio || 1, c = cv.getContext("2d"), H = cv.height / r; c.save(); c.setTransform(r, 0, 0, r, 0, 0); c.beginPath(); c.rect(L, 0, W, H); c.clip();
+  if (!HATCH) { const p = document.createElement("canvas"); p.width = p.height = 8; const g = p.getContext("2d"); g.strokeStyle = "rgba(80,80,80,.35)"; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke(); HATCH = p; }
+  const X = t => L + (t - a) / (b - a) * W, pat = c.createPattern(HATCH, "repeat");
+  AV.eff.forEach(e => { if (e.b < a || e.a > b) return; const xa = X(Math.max(a, e.a)), wd = Math.max(2, X(Math.min(b, e.b)) - xa), y0 = e.betrifft === "alle" ? 0 : belt ? belt[0] : 0, y1 = e.betrifft === "alle" ? H : belt ? belt[1] : 24;
+    c.fillStyle = "rgba(120,120,120,.12)"; c.fillRect(xa, y0, wd, y1 - y0); c.fillStyle = pat; c.fillRect(xa, y0, wd, y1 - y0); });
+  AV.an.forEach(x => { if (x.klasse !== "koerper" || x.b < a || x.a > b) return; const xa = X(Math.max(a, x.a)), wd = Math.max(3, X(Math.min(b, x.b)) - xa); c.fillStyle = x.top ? "#c0392b" : "#e0a800"; c.fillRect(xa, 0, wd, 4); });
+  c.restore();
+}
+{ const dO = drawOverview, dD = drawDetail;
+  const LEG = '<span class="ausleg"><i style="background:repeating-linear-gradient(45deg,#888 0 2px,#e8e8e8 2px 5px)"></i>schraffiert: ausgeschlossen (nur über dem Atem bzw. oben schmal: nur Atemgurt)</span><span class="ausleg"><i style="background:#e0a800"></i>Rand oben gelb: körperliche Auffälligkeit, rot: möglicher Atemstillstand</span>';
+  const legAdd = id => { const el = $(id); if (el && (AV.eff.length || AV.an.length) && !el.querySelector(".ausleg")) el.insertAdjacentHTML("beforeend", LEG); };
+  drawOverview = function () { dO(); if (S && ovMap) { bandDraw($("ov"), ovMap.t0, ovMap.t1, ovMap.L, ovMap.W, null); legAdd("legTop"); } };
+  drawDetail = function () { dD(); if (S && LAY) { bandDraw($("det"), LAY.a, LAY.b, LAY.L, LAY.W, LAY.P && LAY.P.atem); legAdd("legDet"); } }; }
 
 /* ---------- 1.6: Zahnrad (Zoom, Pulslinie), Ziehen und Zoomen der Großaufnahme ---------- */
 function bvLine() { return $("line").value; }
