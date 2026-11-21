@@ -1,7 +1,7 @@
 /* Vitalspur 1.9.4: Service Worker. Diese Datei als sw.js neben die index.html legen.
    Die Seite kommt immer frisch aus dem Netz, wenn es eins gibt; sonst aus dem Zwischenspeicher.
    Manifest und Symbol liefert der Worker selbst, damit nur zwei Dateien nötig sind. */
-const CACHE = "vitalspur-2.3";
+const CACHE = "vitalspur-2.6";
 const MAN = { name: "Vitalspur", short_name: "Vitalspur", start_url: "./", scope: "./", display: "standalone", background_color: "#fafaf7", theme_color: "#2d6a4f",
   icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }] };
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#2d6a4f"/><path d="M40 300h110l40-120 60 220 50-170 30 70h142" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></svg>';
