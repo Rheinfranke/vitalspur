@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 2.6</title>
+<title>Vitalspur 2.7</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -52,6 +52,8 @@
   #bvis { display: none; text-align: center; padding: 0.6rem 0; }
   #bcirc { width: 160px; height: 160px; border-radius: 50%; margin: 0 auto; background: #2d6a4f; transform: scale(0.45); }
   #btxt { font-size: 1.4rem; margin-top: 0.3rem; color: #2d6a4f; font-variant-numeric: tabular-nums; }
+  #bltxt { position: absolute; left: 0; right: 0; bottom: 40%; text-align: center; color: #333; font-size: 12px; pointer-events: none; }
+  #moonbtn { position: fixed; left: 6px; bottom: 6px; z-index: 500; width: 40px; height: 40px; border-radius: 20px; padding: 0; font-size: 20px; line-height: 38px; opacity: 0.75; }
   #blackout #bvis { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
   #blackout #bcirc { background: #1d4a38; }
   #blackout #btxt { color: #6f9c88; }
@@ -108,8 +110,61 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.6</h1>
+<h1>Vitalspur 2.7</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
+
+<div class="hint">Geräte in dieser Reihenfolge verbinden: zuerst die Uhr, dann den Atemgurt, solange Bluetooth noch frei ist.</div>
+<fieldset>
+  <legend>Markeruhr (Bangle.js 2)</legend>
+  <div class="hint">Ein Druck auf den Knopf der Uhr setzt einen Marker mit genauer Zeit, danach 10 s Auswahl auf dem Bildschirm. Vorher App Loader oder Espruino IDE trennen, die Uhr kann nur mit einem Gerät verbunden sein.</div>
+  <button id="bgconnect">Uhr verbinden</button> <button id="bgstop" disabled>Uhr trennen</button>
+  <label>Eigene Ereignisse auf der Uhr (durch Komma getrennt): <input id="bgfelder" type="text" style="width:100%" placeholder="zum Beispiel Kaffee, Telefonat, Treppe"></label>
+  <label>Licht der Uhr: <select id="bglicht"><option value="0">aus</option><option value="0.1">schwach</option><option value="0.4">mittel</option><option value="1">hell</option></select></label>
+  <div id="bgstatus" class="stat"></div>
+</fieldset>
+<fieldset>
+  <legend>Atemgurt (Vernier Go Direct)</legend>
+  <div class="hint">Misst die Zugkraft am Brustkorb, 10 Werte pro Sekunde.<br><b>Anlegen:</b> Nach dem Verbinden zeigt die Liveansicht die Grundspannung. Den Gurt nur so fest anlegen, dass er nicht drückt, dann „Kalibrieren: 5 tiefe Atemzüge“ drücken. Automatisch kalibriert die App bei „Alles wieder starten“, beim Beenden, beim Schalter Tag/Nacht sowie bei Beginn und Ende einer Session (wenn H10 und Sense laufen, erst nach dem Klopfabgleich). Das Mittel der fünf tiefsten Züge gilt als 100 %.</div>
+  <button class="main" id="rbconnect">Atemgurt verbinden</button> <button id="rbstop" disabled>Atemgurt trennen</button>
+  <div id="rbstatus" class="stat"></div>
+  <div><span id="rbcalst" class="stat"></span> <button class="main" id="rbcal" disabled>Kalibrieren: 5 tiefe Atemzüge</button></div>
+  <div class="live"><span>Atmung (Gurt)</span><span id="breath">–</span></div>
+</fieldset>
+<fieldset>
+  <legend>Brustgurt verbinden (eSense, Polar H10 oder jeder Bluetooth-Pulsgurt)</legend>
+  <label><input type="checkbox" id="useacc" checked> Polar H10: Beschleunigung aufzeichnen (Atmung und Bewegung)</label>
+  <label>Abtastrate Beschleunigung: <select id="accrate"><option value="25">25 Hz</option><option value="50" selected>50 Hz</option><option value="100">100 Hz</option><option value="200">200 Hz</option></select></label>
+  <label><input type="checkbox" id="useecg" checked> Polar H10: Roh-EKG aufzeichnen (130 Hz, sichert die Herzschläge auch bei langer Hintergrundzeit)</label>
+  <button class="main" id="hrconnect">Gurt verbinden</button>
+  <button id="hrstop" disabled>Aufzeichnung beenden</button>
+  <div id="hrstatus" class="stat"></div>
+  <div id="pmdstatus" class="stat"></div>
+  <div class="hint">Die Hersteller-App vorher schließen. Der Gurt kann nur mit einer App gleichzeitig verbunden sein. Beim eSense werden die Polar-Optionen einfach übergangen.</div>
+</fieldset>
+<fieldset>
+  <legend>Polar Verity Sense</legend>
+  <div class="hint">Einmal kurz drücken und loslassen, nicht halten (Halten schaltet aus). Er startet von selbst mit blauem Licht an der Seite. Warten, bis alle sechs Lämpchen geleuchtet haben, dann verbinden. Polar-App vorher schließen. Am Fuß misst er Bewegung und Drehrate, rechts außen über dem Knöchel. Am Oberarm zusätzlich die Pulswelle, Licht zur Haut, fest anliegend, immer dieselbe Stelle.<br><b>Abgleich:</b> Am Anfang und am Ende den Sense neben den H10 auf den Gurt halten und dreimal mit dem Knöchel auf beide klopfen, etwa im Abstand einer halben Sekunde. Davor und danach zwei Sekunden still halten.</div>
+  <label>Trageort: <select id="vplace"><option value="Fuß">Fuß</option><option value="Oberarm links">Oberarm links</option><option value="Oberarm rechts">Oberarm rechts</option><option value="Handgelenk links">Handgelenk links</option><option value="Handgelenk rechts">Handgelenk rechts</option></select></label>
+  <label>Rate Bewegung: <select id="vrate"><option value="52">52 Hz (Standard)</option><option value="104">104 Hz</option><option value="208">208 Hz (für die Nacht, genauer Beginn der Zuckung)</option></select></label>
+  <label><input type="checkbox" id="usegyro" checked> Am Fuß zusätzlich die Drehrate (Gyroskop) aufzeichnen</label>
+  <button class="main" id="vconnect">Sense verbinden</button>
+  <button id="vstop" disabled>Sense beenden</button>
+  <div id="vstatus" class="stat"></div>
+  <div id="vsync" class="stat"></div>
+</fieldset>
+<fieldset>
+  <legend>Raumtemperatur (ThermoPro TP357, bis zu zwei) und Ruuvi</legend>
+  <div class="hint">Zu Beginn einmal auf „Thermometer verbinden“ tippen und das Gerät wählen. Danach liest der Player die aktuelle Temperatur und Luftfeuchte im gewählten Abstand selbst ab, solange etwas aufgezeichnet wird, und noch einmal beim Beenden der Gurtaufzeichnung. Nach einem Neuladen der Seite einmal neu verbinden.</div>
+  <label>Abruf alle: <select id="tpint"><option value="1">1 Minute</option><option value="2">2 Minuten</option><option value="5" selected>5 Minuten</option><option value="10">10 Minuten</option></select></label>
+  <button class="main" id="tpget">Thermometer verbinden</button>
+  <div id="tpstatus" class="stat"></div>
+  <button id="tp2get">Thermometer 2 verbinden</button>
+  <div id="tp2status" class="stat"></div>
+  <div class="hint">Ruuvi: der kleine Umgebungssensor zum Tragen. Er schickt Temperatur, Luftfeuchte, Luftdruck und Bewegung, solange er verbunden ist.</div>
+  <button id="ruconnect">Ruuvi verbinden</button> <button id="rustop" disabled>Ruuvi trennen</button>
+  <label>Ruuvi getragen: <select id="ruort"><option value="Raum">im Raum (Lufttemperatur, WBGT)</option><option value="Körper">am Körper (Bauch, Hauttemperatur)</option></select></label>
+  <div id="rustatus" class="stat"></div>
+</fieldset>
 
 <fieldset>
   <legend>Vitalspur</legend>
@@ -137,42 +192,13 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <div id="batstatus" class="stat"></div>
 <div id="syncstatus" class="stat"></div>
 <div id="crash" class="hint" style="display:none;color:#b00020"></div>
-<button id="blackbtn">Schwarzsperre</button>
+<button id="blackbtn">Schwarzsperre</button><button id="moonbtn" title="Nachtsperre einschalten">☾</button>
 <div id="bar"><span id="wl">Bildschirm: nicht nötig</span> · <span id="dur">keine Aufzeichnung</span> · <span id="mem">Speicher …</span></div>
 
-<fieldset>
-  <legend>Brustgurt verbinden (eSense, Polar H10 oder jeder Bluetooth-Pulsgurt)</legend>
-  <label><input type="checkbox" id="useacc" checked> Polar H10: Beschleunigung aufzeichnen (Atmung und Bewegung)</label>
-  <label>Abtastrate Beschleunigung: <select id="accrate"><option value="25">25 Hz</option><option value="50" selected>50 Hz</option><option value="100">100 Hz</option><option value="200">200 Hz</option></select></label>
-  <label><input type="checkbox" id="useecg" checked> Polar H10: Roh-EKG aufzeichnen (130 Hz, sichert die Herzschläge auch bei langer Hintergrundzeit)</label>
-  <button class="main" id="hrconnect">Gurt verbinden</button>
-  <button id="hrstop" disabled>Aufzeichnung beenden</button>
-  <div id="hrstatus" class="stat"></div>
-  <div id="pmdstatus" class="stat"></div>
-  <div class="hint">Die Hersteller-App vorher schließen. Der Gurt kann nur mit einer App gleichzeitig verbunden sein. Beim eSense werden die Polar-Optionen einfach übergangen.</div>
-</fieldset>
 
-<fieldset>
-  <legend>Polar Verity Sense</legend>
-  <div class="hint">Einmal kurz drücken und loslassen, nicht halten (Halten schaltet aus). Er startet von selbst mit blauem Licht an der Seite. Warten, bis alle sechs Lämpchen geleuchtet haben, dann verbinden. Polar-App vorher schließen. Am Fuß misst er Bewegung und Drehrate, rechts außen über dem Knöchel. Am Oberarm zusätzlich die Pulswelle, Licht zur Haut, fest anliegend, immer dieselbe Stelle.<br><b>Abgleich:</b> Am Anfang und am Ende den Sense neben den H10 auf den Gurt halten und dreimal mit dem Knöchel auf beide klopfen, etwa im Abstand einer halben Sekunde. Davor und danach zwei Sekunden still halten.</div>
-  <label>Trageort: <select id="vplace"><option value="Fuß">Fuß</option><option value="Oberarm links">Oberarm links</option><option value="Oberarm rechts">Oberarm rechts</option><option value="Handgelenk links">Handgelenk links</option><option value="Handgelenk rechts">Handgelenk rechts</option></select></label>
-  <label>Rate Bewegung: <select id="vrate"><option value="52">52 Hz (Standard)</option><option value="104">104 Hz</option><option value="208">208 Hz (für die Nacht, genauer Beginn der Zuckung)</option></select></label>
-  <label><input type="checkbox" id="usegyro" checked> Am Fuß zusätzlich die Drehrate (Gyroskop) aufzeichnen</label>
-  <button class="main" id="vconnect">Sense verbinden</button>
-  <button id="vstop" disabled>Sense beenden</button>
-  <div id="vstatus" class="stat"></div>
-  <div id="vsync" class="stat"></div>
-</fieldset>
 
 <fieldset id="atemfs">
-  <legend>Atem</legend>
-  <h3 class="first">Atemgurt (Vernier Go Direct)</h3>
-  <div class="hint">Misst die Zugkraft am Brustkorb, 10 Werte pro Sekunde.<br><b>Anlegen:</b> Nach dem Verbinden zeigt die Liveansicht die Grundspannung. Den Gurt nur so fest anlegen, dass er nicht drückt, dann „Kalibrieren: 5 tiefe Atemzüge“ drücken. Automatisch kalibriert die App bei „Alles wieder starten“, beim Beenden, beim Schalter Tag/Nacht sowie bei Beginn und Ende einer Session (wenn H10 und Sense laufen, erst nach dem Klopfabgleich). Das Mittel der fünf tiefsten Züge gilt als 100 %.</div>
-  <button class="main" id="rbconnect">Atemgurt verbinden</button> <button id="rbstop" disabled>Atemgurt trennen</button>
-  <div id="rbstatus" class="stat"></div>
-  <div><span id="rbcalst" class="stat"></span> <button class="main" id="rbcal" disabled>Kalibrieren: 5 tiefe Atemzüge</button></div>
-  <div class="live"><span>Atmung (Gurt)</span><span id="breath">–</span></div>
-  <h3>Atemhilfe</h3>
+  <legend>Atemhilfe</legend>
   <div class="hint">Zeiten in Sekunden, auf Zehntel genau. Eine Pause auf 0 entfällt samt ihrem Ton. Optik und Töne schalten sich getrennt ein und aus.</div>
   <label>Einatmen: <input type="number" id="b0" min="0.5" max="60" step="0.1" value="4" autocomplete="off"></label>
   <label>Pause: <input type="number" id="b1" min="0" max="60" step="0.1" value="0" autocomplete="off"></label>
@@ -251,28 +277,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 </div>
 </fieldset>
 
-<fieldset>
-  <legend>Raumtemperatur (ThermoPro TP357, bis zu zwei) und Ruuvi</legend>
-  <div class="hint">Zu Beginn einmal auf „Thermometer verbinden“ tippen und das Gerät wählen. Danach liest der Player die aktuelle Temperatur und Luftfeuchte im gewählten Abstand selbst ab, solange etwas aufgezeichnet wird, und noch einmal beim Beenden der Gurtaufzeichnung. Nach einem Neuladen der Seite einmal neu verbinden.</div>
-  <label>Abruf alle: <select id="tpint"><option value="1">1 Minute</option><option value="2">2 Minuten</option><option value="5" selected>5 Minuten</option><option value="10">10 Minuten</option></select></label>
-  <button class="main" id="tpget">Thermometer verbinden</button>
-  <div id="tpstatus" class="stat"></div>
-  <button id="tp2get">Thermometer 2 verbinden</button>
-  <div id="tp2status" class="stat"></div>
-  <div class="hint">Ruuvi: der kleine Umgebungssensor zum Tragen. Er schickt Temperatur, Luftfeuchte, Luftdruck und Bewegung, solange er verbunden ist.</div>
-  <button id="ruconnect">Ruuvi verbinden</button> <button id="rustop" disabled>Ruuvi trennen</button>
-  <label>Ruuvi getragen: <select id="ruort"><option value="Raum">im Raum (Lufttemperatur, WBGT)</option><option value="Körper">am Körper (Bauch, Hauttemperatur)</option></select></label>
-  <div id="rustatus" class="stat"></div>
-</fieldset>
 
-<fieldset>
-  <legend>Markeruhr (Bangle.js 2)</legend>
-  <div class="hint">Ein Druck auf den Knopf der Uhr setzt einen Marker mit genauer Zeit, danach 10 s Auswahl auf dem Bildschirm. Vorher App Loader oder Espruino IDE trennen, die Uhr kann nur mit einem Gerät verbunden sein.</div>
-  <button id="bgconnect">Uhr verbinden</button> <button id="bgstop" disabled>Uhr trennen</button>
-  <label>Eigene Ereignisse auf der Uhr (durch Komma getrennt): <input id="bgfelder" type="text" style="width:100%" placeholder="zum Beispiel Kaffee, Telefonat, Treppe"></label>
-  <label>Licht der Uhr: <select id="bglicht"><option value="0">aus</option><option value="0.1">schwach</option><option value="0.4">mittel</option><option value="1">hell</option></select></label>
-  <div id="bgstatus" class="stat"></div>
-</fieldset>
 
 <fieldset>
   <legend>Was tust du gerade? (antippen, wenn sich die Tätigkeit ändert)</legend>
@@ -343,7 +348,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
     <input type="time" id="bv_tpick" step="1"> <button id="bv_go">Gehe zu</button> <button id="bv_cfgb" title="Einstellungen">⚙</button>
     <span class="stat" id="bv_dInfo"></span>
   </div>
-  <div class="row"><button id="bv_foto">Foto</button> <input id="bv_fnote" placeholder="Notiz zum Foto (frei)" style="width:12em"> <button id="bv_fsend">Ausschnitte senden</button> <span class="stat" id="bv_fstat"></span>
+  <div class="row"><button id="bv_fsend">Ausschnitte senden</button> <span class="stat" id="bv_fstat"></span>
   </div>
   <div id="bv_cfg" style="display:none" class="hint">
     <label><input type="checkbox" id="bv_kip"> Kippen der Brust zeigen (Beschleunigung H10, kein Atem, ohne Richtung)</label>
@@ -352,7 +357,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
     <label><input type="checkbox" id="bv_zoom" checked> Zoomen in der Großaufnahme (Mausrad oder zwei Finger, 10 s bis 2 min)</label>
     <label>Pulslinie im Überblick: <select id="bv_line"><option value="60">gleitender Schnitt 60 s</option><option value="10">gleitender Schnitt 10 s</option><option value="px">Mittel je Bildpunkt</option></select> (gestrichelt immer 300 s)</label>
   </div>
-  <div class="legend" id="bv_legDet"></div>
+  <div style="display:flex;align-items:flex-start;gap:6px"><div class="legend" id="bv_legDet" style="flex:1"></div><div style="display:flex;flex-direction:column;gap:4px"><button id="bv_foto" style="padding:2px 8px;font-size:0.85rem">Foto</button><button id="bv_ekgload" style="padding:2px 8px;font-size:0.85rem" title="EKG für diesen Ausschnitt aus dem Gerätespeicher holen">EKG laden</button></div></div>
+  <div id="bv_fpop" style="display:none;position:fixed;left:8px;right:8px;bottom:22%;background:#fff;border:1px solid #888;border-radius:10px;padding:10px;z-index:600;box-shadow:0 4px 16px rgba(0,0,0,.25)"><div style="margin-bottom:6px">Notiz zum Ausschnitt (frei)</div><input id="bv_fnote" style="width:100%;font-size:1rem" autocomplete="off"><div style="margin-top:8px"><button id="bv_fsave">Speichern</button> <button id="bv_fnone">Ohne Notiz</button> <button id="bv_fcancel">Abbrechen</button></div></div>
   <canvas id="bv_det" height="520"></canvas>
 </div>
 
@@ -414,7 +420,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 </fieldset>
 <div id="guard" style="display:none;position:fixed;inset:0;z-index:9998"></div>
 
-<div id="blackout"><div id="unlockq">Entsperren?<br><button id="unlockyes">Ja</button><button id="unlockno">Nein</button></div></div>
+<div id="blackout"><div id="bltxt">Nachtsperre</div><div id="unlockq">Entsperren?<br><button id="unlockyes">Ja</button><button id="unlockno">Nein</button></div></div>
 
 <script>
 const PIECES = [
@@ -463,7 +469,65 @@ function flush() {
 setInterval(flush, 3000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
 window.addEventListener("pagehide", flush);
+/* ===== 2.7: schnelles Lesen eines Zeitbereichs aus dem Gerätespeicher ===== */
+/* Die Schlüssel der Einträge steigen mit der Ankunft. Halbierungssuche nach dem ersten Eintrag ab einer Zeit, dann ein einziger Durchlauf für alle Datenarten. */
+function vsFirstLast() {
+  return new Promise(res => { try { const st = db.transaction("rec").objectStore("rec"), out = {};
+    const a = st.openCursor(null, "next"); a.onsuccess = () => { out.f = a.result ? a.result.key : null;
+      const b = st.openCursor(null, "prev"); b.onsuccess = () => { out.l = b.result ? b.result.key : null; res(out); }; b.onerror = () => res(out); }; a.onerror = () => res({}); } catch (e) { res({}); } });
+}
+function vsRecAt(key) {
+  return new Promise(res => { try { const r = db.transaction("rec").objectStore("rec").openCursor(IDBKeyRange.lowerBound(key));
+    r.onsuccess = () => { const c = r.result; res(c ? { key: c.key, t: recTime(c.value.k, c.value.d) } : null); }; r.onerror = () => res(null); } catch (e) { res(null); } });
+}
+async function vsKeyAtTime(t) {
+  const fl = await vsFirstLast(); if (fl.f == null) return null;
+  let lo = fl.f, hi = fl.l;
+  for (let n = 0; n < 40 && hi - lo > 1; n++) { const mid = Math.floor((lo + hi) / 2), r = await vsRecAt(mid); if (!r) { hi = mid; continue; }
+    if (Number.isFinite(r.t) && r.t < t) lo = r.key; else hi = mid; }
+  return lo;
+}
+async function readKinds(kinds, a, b) {
+  const out = {}; kinds.forEach(k => out[k] = []); const set = new Set(kinds), M = 600000;
+  const k0 = await vsKeyAtTime(a - M);
+  return new Promise(res => { try { let over = 0;
+    const r = db.transaction("rec").objectStore("rec").openCursor(k0 == null ? null : IDBKeyRange.lowerBound(k0));
+    r.onsuccess = () => { const c = r.result; if (!c) return res(out); const v = c.value, t = recTime(v.k, v.d);
+      if (t > b + M) { if (++over > 3000) return res(out); } else over = 0;
+      if (set.has(v.k) && t >= a && t < b) out[v.k].push(v.d); c.continue(); };
+    r.onerror = () => res(out); } catch (e) { res(out); } });
+}
+/* ===== 2.7: unerwartete Fehler ins Protokoll (höchstens einmal je 10 s je Meldung) ===== */
+(function () { const seen = new Map();
+  const note = (msg) => { try { msg = String(msg || "unbekannt").slice(0, 200); const now = Date.now(); if (now - (seen.get(msg) || 0) < 10000) return; seen.set(msg, now);
+    addEntry({ typ: "Fehler", name: "Unerwarteter Fehler: " + msg, start: now }); } catch (e) {} };
+  window.addEventListener("error", e => note((e.message || "") + (e.lineno ? ` (Zeile ${e.lineno})` : "")));
+  window.addEventListener("unhandledrejection", e => note(e.reason && (e.reason.message || e.reason)));
+})();
+/* ===== 2.7: EKG mit fester Achse −600 bis +1000 µV um die mitlaufende Grundlinie, Pfeil mit Wert bei Spitzen außerhalb ===== */
+function ekgAxisDraw(g, t, v, i0, i1, X, y0, y1, o) {
+  o = o || {}; const LO = -600, HI = 1000, H = y1 - y0, Y = u => y1 - (u - LO) / (HI - LO) * H, n = i1 - i0; if (n < 2) return;
+  /* Grundlinie: Median je 2 s, linear dazwischen */
+  const blk = [], ta = t[i0], tb = t[i1 - 1];
+  for (let s = ta; s < tb; s += 2000) { const w = []; for (let k = i0; k < i1; k++) { if (t[k] >= s && t[k] < s + 2000) w.push(v[k]); } if (w.length > 5) { w.sort((p, q) => p - q); blk.push([s + 1000, w[w.length >> 1]]); } }
+  const base = tt => { if (!blk.length) return 0; if (tt <= blk[0][0]) return blk[0][1]; for (let j = 1; j < blk.length; j++) if (tt <= blk[j][0]) { const [p0, q0] = blk[j - 1], [p1, q1] = blk[j]; return q0 + (q1 - q0) * (tt - p0) / (p1 - p0); } return blk[blk.length - 1][1]; };
+  /* Gitter und Beschriftung */
+  g.save(); g.font = (o.font || 9) + "px system-ui, sans-serif"; g.lineWidth = 1;
+  [-500, 0, 500, 1000].forEach(u => { const y = Y(u); g.strokeStyle = u === 0 ? (o.grid0 || "#ccc") : (o.grid || "#eee"); g.beginPath(); g.moveTo(o.xl, y); g.lineTo(o.xr, y); g.stroke(); g.fillStyle = o.lab || "#888"; g.fillText((u > 0 ? "+" : "") + u, o.xr - 30, y - 1); });
+  g.fillStyle = o.lab || "#888"; g.fillText("µV", o.xr - 30, y0 + 9);
+  /* Kurve, abgeschnitten am Rand */
+  g.strokeStyle = o.col || "#444"; g.lineWidth = o.lw || 0.9; g.beginPath(); const clip = [];
+  for (let k = i0; k < i1; k++) { const u = v[k] - base(t[k]), x = X(t[k]); let y = Y(u); if (u > HI || u < LO) { clip.push([x, u, t[k]]); y = u > HI ? y0 : y1; } k === i0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+  g.stroke();
+  /* Pfeile: je zusammenhängender Strecke außerhalb der größte Wert */
+  let lastLx = -1e9, run = null; const flush = () => { if (!run) return; const [x, u] = run, up = u > 0, ya = up ? y0 : y1;
+    g.fillStyle = o.arrow || "#c0392b"; g.beginPath(); if (up) { g.moveTo(x - 4, ya + 6); g.lineTo(x + 4, ya + 6); g.lineTo(x, ya); } else { g.moveTo(x - 4, ya - 6); g.lineTo(x + 4, ya - 6); g.lineTo(x, ya); } g.closePath(); g.fill();
+    if (x - lastLx > 40) { g.fillText(Math.round(u), x + 5, up ? ya + 9 : ya - 2); lastLx = x; } run = null; };
+  clip.forEach(c => { if (run && c[2] - run[2] < 150 && Math.sign(c[1]) === Math.sign(run[1])) { if (Math.abs(c[1]) > Math.abs(run[1])) { run[0] = c[0]; run[1] = c[1]; } run[2] = c[2]; } else { flush(); run = c.slice(); } }); flush();
+  g.restore();
+}
 function readKind(k, a, b) {
+  if (Number.isFinite(a) || Number.isFinite(b)) return readKinds([k], Number.isFinite(a) ? a : -1e15, Number.isFinite(b) ? b : 1e15).then(o => o[k]);
   const lo = Number.isFinite(a) ? a : -Infinity, hi = Number.isFinite(b) ? b : Infinity, all = lo === -Infinity && hi === Infinity;
   return new Promise(res => {
     const out = [], r = db.transaction("rec").objectStore("rec").index("k").openCursor(IDBKeyRange.only(k));
@@ -1282,16 +1346,16 @@ let lastTap = 0, qTimer = null;
 function blackOn() {
   $("blackout").style.display = "block"; $("unlockq").style.display = "none"; $("blackout").appendChild($("bvis"));
   keepAwake();
-  try { document.documentElement.requestFullscreen?.(); } catch (e) {}
+  try { const p = document.documentElement.requestFullscreen?.(); const lock = () => { try { screen.orientation?.lock?.("portrait").catch(() => {}); } catch (e) {} }; if (p && p.then) p.then(lock, lock); else lock(); } catch (e) {}
   addEntry({ typ: "Bildschirm", name: "Schwarzsperre an", start: Date.now() });
 }
 function blackOff() {
   $("guard").style.display = "block"; setTimeout(() => { $("guard").style.display = "none"; }, 1200);
   $("blackout").style.display = "none"; $("unlockq").style.display = "none"; $("bhome").appendChild($("bvis"));
-  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  try { screen.orientation?.unlock?.(); } catch (e) {} try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
   addEntry({ typ: "Bildschirm", name: "Schwarzsperre aus", start: Date.now() });
 }
-$("blackbtn").addEventListener("click", blackOn);
+$("blackbtn").addEventListener("click", blackOn); $("moonbtn").addEventListener("click", blackOn);
 $("blackout").addEventListener("pointerdown", e => {
   e.preventDefault(); e.stopPropagation();
   if (e.target.closest("#unlockq")) return;
@@ -1806,7 +1870,7 @@ function bgFelder() { return ($("bgfelder")?.value || "").split(",").map(s => s.
 function bgLicht() { return parseFloat($("bglicht")?.value || "0") || 0; }
 function bgDevState() {
   const ort = vsNight() ? (($("nort")?.value || "Fuß").startsWith("Kiefer") ? "Kiefer" : "Fuß") : (vPlace === "Arm" ? "Arm" : "Fuß");
-  return { brust: hrDev?.gatt?.connected ? 1 : 0, fuss: vDev?.gatt?.connected ? 1 : 0, ort, temp: (tpDev || tp2Dev || ruDev?.gatt?.connected) ? 1 : 0 };
+  const sy = (typeof syncGate !== "undefined" && syncGate.open) ? 1 : 2; return { brust: hrDev?.gatt?.connected ? sy : 0, fuss: vDev?.gatt?.connected ? sy : 0, ort, temp: (tpDev || tp2Dev || ruDev?.gatt?.connected) ? 1 : 0 };
 }
 function bgSync(first) {
   if (!bgRx || !bgHi) return;
@@ -2992,6 +3056,17 @@ async function buildSpar(D, stamp8) {
   const al = alignBeats(B, R);
   B.forEach((b, i) => { b.tt = al.out[i].t; b.ok = al.out[i].ok; });
   { const eb = ekgBeats(B, R); if (eb) { let m = 0; eb.beats.forEach((x, i) => { if (x.ok || !B[i].ok) { B[i].tt = x.tt; B[i].ok = x.ok; } if (B[i].ok) m++; }); al.ekgSchlaege = m; } }
+  /* 2.7: Störungen beim Drehen. R-Zacken mit unplausiblem Ausschlag (R minus S unter 35 % oder über 250 % des Medians der Umgebung, oder negativ) gelten nicht;
+     je R-Zacke höchstens ein Schlag; ein bestätigter Schlag, dessen Abstand mehr als 120 ms vom Abstand zur vorigen gültigen R-Zacke abweicht, gilt nicht. */
+  if (E && E.t && E.t.length && R.length) { const RA = Array.from(R, r => { const q = rsAmp(E.t, E.c[0], r); return q ? q[0] - q[1] : null; }), RV = [];
+    for (let k = 0; k < R.length; k++) { const v = RA[k]; if (v === null) { RV.push(R[k]); continue; } const w = []; for (let m = Math.max(0, k - 15); m <= Math.min(R.length - 1, k + 15); m++) if (RA[m] !== null) w.push(RA[m]); w.sort((p, q) => p - q); const md = w[w.length >> 1]; if (v > 0 && v >= 0.35 * md && v <= 2.5 * md) RV.push(R[k]); }
+    let nR = 0, nD = 0, nA = 0, last = null;
+    for (const b of B) { if (!b.ok) continue; const j = lowerBound(RV, b.tt - 5);
+      if (j >= RV.length || Math.abs(RV[j] - b.tt) > 5) { b.ok = false; b.art = "R unplausibel"; nR++; continue; }
+      if (last && Math.abs(b.tt - last.tt) < 150) { b.ok = false; b.dup = true; nD++; continue; }
+      if (j > 0) { const dd = b.tt - RV[j - 1]; if (dd >= 300 && dd <= 2500 && Math.abs(dd - b.rr) > 120) { b.ok = false; b.art = "Abstand passt nicht zum EKG"; nA++; continue; } }
+      last = b; }
+    if (nR + nD + nA) addEntry({ typ: "Daten", name: `Schläge nach dem EKG verworfen: ${nR} mit unplausibler R-Zacke, ${nD} doppelt, ${nA} mit falschem Abstand`, start: Date.now() }); }
   for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; }
   /* 1.9: lief zur Zeit des Schlags das EKG und ist er dort nicht bestätigt, zählt er nicht für Puls und Spannweite (z. B. Gurt ohne Hautkontakt) */
   if (E && E.t && E.t.length) for (const b of B) { const k = lowerBound(E.t, b.tt - 1500); b.ekgDa = k < E.t.length && E.t[k] < b.tt + 1500; b.drop = b.ekgDa && !b.ok; }
@@ -3065,7 +3140,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.6"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.7"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3110,7 +3185,7 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 2.6", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 2.7", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
@@ -3451,7 +3526,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 2.6. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 2.7. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3743,7 +3818,7 @@ async function buildZip(opts) {
   $("savestatus").textContent = "Stelle Daten zusammen …";
   await flush();
   const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb"];
-  const ALL = await Promise.all(KINDS.map(k => k === "log" ? readKind(k) : readKind(k, A0, B0)));
+  const RM = await readKinds(KINDS.filter(k => k !== "log"), A0, B0); const ALL = await Promise.all(KINDS.map(k => k === "log" ? readKind(k) : RM[k])); /* 2.7: ein Durchlauf über den Zeitbereich */
   const W = ALL.map((arr, i) => arr.filter(d => { const t = recTime(KINDS[i], d); return t >= A0 && t < B0; }));
   /* Trageorte gelten weiter: letzter Eintrag vor dem Fenster wird an den Anfang gelegt */
   if (Number.isFinite(A0)) ["Trageort", "Trageort Ruuvi", "Trageort Sense", "Proband"].forEach(typ => { const r = ALL[0].filter(x => x.typ === typ && x.start < A0).pop(); if (r && !W[0].some(x => x.typ === typ && x.start < A0 + 60000)) W[0].unshift(Object.assign({}, r, { start: A0 })); });
@@ -3854,15 +3929,18 @@ async function ordReady(neu) {
 }
 async function ordWrite(h, sub, name, data) { const d = await h.getDirectoryHandle(sub, { create: true }); const f = await d.getFileHandle(name, { create: true }); const w = await f.createWritable(); await w.write(data); await w.close(); }
 $("saveall").addEventListener("click", async () => {
-  const z = await buildZip(Object.assign(vsCurWin(), { noBig: true })), mb = (z.blob.size / 1e6).toFixed(1).replace(".", ",");
-  /* 1.9: in den Ordner Berichte des Tagesordners, Downloads nur ohne freigegebenen Speicherordner */
+  /* 2.7: Knopf grau mit Fortschritt, Ordner vor der Rechnung holen, Fehler anzeigen */
+  const btn = $("saveall"), lab = btn.textContent; if (btn.disabled) return; btn.disabled = true; btn.style.opacity = "0.6"; btn.textContent = "Rechne …";
   let h = null; try { h = VS ? await vsRoot(true) : null; } catch (e) {}
-  if (h) { try { const parts = vsDayParts(), ber = await vsSub(await vsSub(h, parts), ["Berichte"]); await vsPut(ber, z.name, z.blob);
-      addEntry({ typ: "Daten", name: `ZIP in den Speicherordner: ${parts.join("/")}/Berichte/${z.name}`, start: Date.now() });
-      $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in ${parts.join("/")}/Berichte.`; return; }
-    catch (e) { addEntry({ typ: "Fehler", name: "ZIP nicht in den Speicherordner geschrieben: " + (e.message || e), start: Date.now() }); } }
-  vsDownload(z.blob, z.name);
-  $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in den Downloads (Speicherordner nicht freigegeben).`;
+  const t1 = Date.now(), mo = setInterval(() => { const st = $("savestatus").textContent; btn.textContent = (st ? st.slice(0, 50) : "Rechne …") + ` (${Math.round((Date.now() - t1) / 1000)} s)`; }, 500);
+  let res = "";
+  try { const z = await buildZip(Object.assign(vsCurWin(), { noBig: true })), mb = (z.blob.size / 1e6).toFixed(1).replace(".", ",");
+    if (h) { const parts = vsDayParts(), ber = await vsSub(await vsSub(h, parts), ["Berichte"]); await vsPut(ber, z.name, z.blob);
+      addEntry({ typ: "Daten", name: `ZIP in den Speicherordner: ${parts.join("/")}/Berichte/${z.name} (${Math.round((Date.now() - t1) / 1000)} s)`, start: Date.now() });
+      $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in ${parts.join("/")}/Berichte.`; res = "Gespeichert in Berichte"; }
+    else { vsDownload(z.blob, z.name); $("savestatus").textContent = `Gespeichert: ${z.name} (${mb} MB) in den Downloads (Speicherordner nicht freigegeben).`; res = "Gespeichert in Downloads"; } }
+  catch (e) { addEntry({ typ: "Fehler", name: "ZIP fehlgeschlagen: " + (e.message || e), start: Date.now() }); $("savestatus").textContent = "ZIP fehlgeschlagen: " + (e.message || e); res = "Fehler, siehe unten"; }
+  finally { clearInterval(mo); btn.textContent = res || lab; setTimeout(() => { btn.textContent = lab; btn.disabled = false; btn.style.opacity = ""; }, 5000); }
 });
 $("ordnew").addEventListener("click", async () => { const h = await ordReady(true); if (h) { vsDir = h; vsDirName = h.name; vsShow(); } $("savestatus").textContent = h ? `Speicherordner: ${h.name}` : ("showDirectoryPicker" in window ? "Kein Ordner gewählt, es wird in Downloads gespeichert." : "Ordnerzugriff nicht verfügbar: Chrome aktualisieren für einen eigenen Ordner."); });
 let shareFile = null;
@@ -4316,7 +4394,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.6"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.7"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4384,7 +4462,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 2.6. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 2.7. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4511,7 +4589,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 2.6", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 2.7", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -4951,7 +5029,7 @@ async function vsReport(a, b, night, dayParts, dayStart) {
   const dd = await vsSub(h, dayParts), ber = await vsSub(dd, ["Berichte"]);
   for (const f of z.out) if (!/\.csv$/.test(f.name)) await vsPut(ber, f.name, f.data);
   if (z.kern) await vsPut(await vsSub(h, ["Kern"]), z.kern.name, z.kern.data);
-  if (night) { try { await vsPut(ber, z.name, z.blob); } catch (e) {} } /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
+  try { await vsPut(ber, z.name, z.blob); } catch (e) {} /* 2.7: auch der Tag als ZIP */ /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
   if (window.lastAnom) { try { const LA = window.lastAnom, k = await ausAuto(LA.an, LA.T0, false), ap = LA.an.filter(x => x.code === "APNO").length;
       addEntry({ typ: "Daten", name: `Prüfliste: ${LA.an.length} Auffälligkeiten, ${k} neu vorläufig ausgeschlossen` + (ap ? `, ${ap}-mal möglicher Atemstillstand (bei Wiederholung ärztlich abklären)` : ""), start: Date.now() }); } catch (e) {} }
   if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`, from);
@@ -5131,10 +5209,9 @@ function lvEkgDraw() {
   g.fillStyle = bg; g.fillRect(0, 0, Wc, Hc); g.fillStyle = fg; g.font = "11px system-ui, sans-serif"; g.fillText("EKG, letzte 8 s", 6, 13);
   const now = lv.frozen || Date.now(); if (!lvE.t.length || now - lvE.last > 5000) { g.fillText("kein EKG", Wc / 2 - 25, Hc / 2); return; }
   const tEnd = lvE.t[lvE.t.length - 1], a = tEnd - 8000; let i0 = lvE.t.length - 1; while (i0 > 0 && lvE.t[i0 - 1] >= a) i0--;
-  const v = lvE.v.slice(i0), sv = v.slice().sort((p, q) => p - q), lo = sv[Math.floor(sv.length * 0.01)], hi = sv[Math.floor(sv.length * 0.995)], span = Math.max(1, hi - lo);
-  const L = 6, W = Wc - 12, X = t => L + (t - a) / 8000 * W, Y = x => 18 + (1 - (x - lo) / span) * (Hc - 24);
+  const L = 6, W = Wc - 12, X = t => L + (t - a) / 8000 * W;
   g.strokeStyle = night ? "#21262d" : "#eee"; g.lineWidth = 1; for (let s = Math.ceil(a / 1000) * 1000; s < tEnd; s += 1000) { g.beginPath(); g.moveTo(X(s), 16); g.lineTo(X(s), Hc); g.stroke(); }
-  g.strokeStyle = ln; g.lineWidth = 1.2; g.beginPath(); for (let k = i0; k < lvE.t.length; k++) { const x = X(lvE.t[k]), y = Math.max(16, Math.min(Hc, Y(lvE.v[k]))); if (k === i0) g.moveTo(x, y); else g.lineTo(x, y); } g.stroke();
+  ekgAxisDraw(g, lvE.t, lvE.v, i0, lvE.t.length, X, 18, Hc - 4, { xl: L, xr: Wc - 2, col: ln, lw: 1.2, grid: night ? "#21262d" : "#eee", grid0: night ? "#30363d" : "#ccc", lab: fg, arrow: night ? "#ffa198" : "#c0392b" });
 }
 setInterval(() => { try { lvEkgDraw(); } catch (e) {} }, 500);
 /* 2.5: Akku des Vernier-Atemgurts, alle 10 min, Hinweis ohne Ton unter 20 % */
@@ -5308,7 +5385,13 @@ async function rbConnect() {
     rbStatus("Lade Vernier-Bibliothek …");
     const gd = await rbLoadLib();
     rbStatus("Gurt wählen …");
-    const d = await gd.selectDevice();
+    /* 2.7: Gerät einmal wählen, dann bis zu 10 Versuche zu öffnen, je 1 s Pause */
+    const ble = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
+    let d = null, lastErr = null;
+    for (let i = 1; i <= 10 && !d; i++) { rbStatus(`Verbinde, Versuch ${i} von 10 …`);
+      try { d = await gd.createDevice(ble, { open: true }); addEntry({ typ: "Atemgurt", name: `Verbunden im Versuch ${i} von 10`, start: Date.now() }); }
+      catch (e) { lastErr = e; addEntry({ typ: "Atemgurt", name: `Verbindungsversuch ${i} von 10 fehlgeschlagen: ${e.message || e}`, start: Date.now() }); try { if (ble.gatt && ble.gatt.connected) ble.gatt.disconnect(); } catch (x) {} await new Promise(r => setTimeout(r, 1000)); } }
+    if (!d) throw new Error("nach 10 Versuchen keine Verbindung. Bitte den Gurt aus- und wieder einschalten. (" + ((lastErr && lastErr.message) || lastErr) + ")");
     rbDev = d; rbWanted = true; rbOn = true; rbRec = idstamp(new Date()); rbN = 0; rbT0 = Date.now(); setTimeout(() => { try { rbBatt(); } catch (e) {} }, 5000);
     let sens = (d.sensors || []).filter(s => s.enabled);
     let force = (d.sensors || []).find(s => /kraft|force/i.test(s.name || "") || (s.unit || "").trim() === "N");
@@ -6361,7 +6444,7 @@ function lageSeg() {
     const i0 = lb(Bs.t, t), i1 = lb(Bs.t, t + 5000); if (i1 - i0 < 10) continue;
     let x = 0, y = 0, z = 0; for (let k = i0; k < i1; k++) { x += Bs.x[k]; y += Bs.y[k]; z += Bs.z[k]; } const n = i1 - i0;
     let l = null; try { l = lageOf(x / n, y / n, z / n); } catch (e) {}
-    const ns = st.length ? lb(st, t + 5000) - lb(st, t) : 0; if (ns >= 4) l = "gehen"; if (!l) continue;
+    const ns = st.length ? lb(st, t + 5000) - lb(st, t) : 0; if (ns >= 4 && l === "aufrecht") l = "gehen"; if (!l) continue; /* 2.7: im Liegen kein gehen */
     const g = out[out.length - 1]; if (g && g.l === l && t - g.b <= 5000) g.b = t + 5000; else out.push({ a: t, b: t + 5000, l });
   }
   return S.lage = out;
@@ -6375,7 +6458,7 @@ function detLayout() {
   const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span), hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
   let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
-  P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 62];
+  P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 102];
   return { P, kip, h: (showEkg ? P.ekg[1] : P.bew[1]) + 30 };
 }
 function kipAll() {
@@ -6456,7 +6539,7 @@ function drawDetail() {
   /* EKG */
   if (showEkg) { const fw = (night && $("nEkg").checked && J.nacht ? ((J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t)) : null) || pfAt(a, b);
     if (fw && fw.ekg) { const e = fw.ekg, i0 = lb(e.t, a), i1 = lb(e.t, b); let mn = Infinity, mx = -Infinity; for (let k = i0; k < i1; k++) { mn = Math.min(mn, e.uV[k]); mx = Math.max(mx, e.uV[k]); }
-      const Y = v => P.ekg[1] - (v - mn) / (mx - mn || 1) * (P.ekg[1] - P.ekg[0]); c.strokeStyle = "#444"; c.lineWidth = 0.8; c.beginPath(); for (let k = i0; k < i1; k++) { const x = X(e.t[k]), y = Y(e.uV[k]); k === i0 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
+      ekgAxisDraw(c, e.t, e.uV, i0, i1, X, P.ekg[0], P.ekg[1], { xl: L, xr: L + W, col: "#444", lw: 0.8 });
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
     else { c.fillStyle = "#999"; c.fillText("kein EKG-Fenster an dieser Stelle", L, P.ekg[0] + 20); } }
   /* Zeitachse, T0 */
@@ -7097,7 +7180,7 @@ const bvFree = () => { const w = bvWin(); if (mode === "nacht" && nSel) { nSel =
 const bvClamp = () => { sel = Math.max(-SPAN / 2, Math.min(S.tEnd - SPAN / 2, sel)); };
 const PT = new Map(); let bvDrag = null, bvPinch = null;
 const det = $("det");
-det.addEventListener("pointerdown", ev => { if (!S) return; PT.set(ev.pointerId, ev.clientX);
+det.addEventListener("pointerdown", ev => { if (!S) return; if (ev.isPrimary) { PT.clear(); bvPinch = null; } PT.set(ev.pointerId, ev.clientX); /* 2.7: alte Finger vergessen */
   try { det.setPointerCapture(ev.pointerId); } catch (e) {}
   if (PT.size === 1) { bvDrag = { x: ev.clientX, a: bvWin().a, moved: false }; }
   else if (PT.size === 2 && $("zoom").checked) { bvFree(); const xs = [...PT.values()], r = det.getBoundingClientRect(), W = det.clientWidth - 48; bvPinch = { d: Math.abs(xs[0] - xs[1]) || 1, span: SPAN, tm: sel + ((xs[0] + xs[1]) / 2 - r.left - 40) / W * SPAN, fx: ((xs[0] + xs[1]) / 2 - r.left - 40) / W }; bvDrag = null; } });
@@ -7107,13 +7190,14 @@ det.addEventListener("pointermove", ev => { if (!PT.has(ev.pointerId) || !S) ret
   if (!bvDrag.moved) { bvDrag.moved = true; bvFree(); bvDrag.a = sel; det.classList.add("drag"); }
   sel = bvDrag.a - dx / W * SPAN; bvClamp(); bvRedraw(); });
 const bvUp = ev => { PT.delete(ev.pointerId); if (PT.size < 2) bvPinch = null; if (!PT.size) { bvDrag = null; det.classList.remove("drag"); } };
-det.addEventListener("pointerup", bvUp); det.addEventListener("pointercancel", bvUp);
+det.addEventListener("pointerup", bvUp); det.addEventListener("pointercancel", bvUp); det.addEventListener("lostpointercapture", bvUp);
+document.addEventListener("visibilitychange", () => { PT.clear(); bvPinch = null; bvDrag = null; try { OPT.clear(); ovPinch = null; ovDrag = null; } catch (e) {} });
 /* 1.8: Überblick zoomen (Mausrad, zwei Finger) und verschieben (ziehen), kleinste Spanne 10 min, doppelt tippen zeigt alles */
 const ovc = $("ov"), OPT = new Map(); let ovDrag = null, ovPinch = null, ovDragged = false;
 const ovCur = () => OVV ? [OVV.a, OVV.b] : [0, S.tEnd];
 const ovT = x => { const [a, b] = ovCur(); return a + (x - ovMap.L) / ovMap.W * (b - a); };
 const ovSet = (a, sp) => { const F = S.tEnd; sp = Math.max(Math.min(600000, F), Math.min(F, sp)); if (sp >= F - 1) OVV = null; else { a = Math.max(0, Math.min(F - sp, a)); OVV = { a, b: a + sp }; } bvRedraw(); };
-ovc.addEventListener("pointerdown", ev => { if (!S || !ovMap || !$("zoomov").checked) return; ovDragged = false; OPT.set(ev.pointerId, ev.clientX);
+ovc.addEventListener("pointerdown", ev => { if (!S || !ovMap || !$("zoomov").checked) return; ovDragged = false; if (ev.isPrimary) { OPT.clear(); ovPinch = null; } OPT.set(ev.pointerId, ev.clientX);
   if (OPT.size === 1) ovDrag = { x: ev.clientX, cur: ovCur(), moved: false };
   else if (OPT.size === 2) { const xs = [...OPT.values()], r = ovc.getBoundingClientRect(), mid = (xs[0] + xs[1]) / 2 - r.left; ovPinch = { d: Math.abs(xs[0] - xs[1]) || 1, cur: ovCur(), tm: ovT(mid) }; ovDrag = null; } });
 ovc.addEventListener("pointermove", ev => { if (!OPT.has(ev.pointerId) || !S) return; OPT.set(ev.pointerId, ev.clientX);
@@ -7141,8 +7225,9 @@ window.vsShots = window.vsShots || [];
 const shiftT = (o, off) => { const c = Object.assign({}, o); ["t", "t_ms", "spitze_ms", "start_ms", "ende_ms", "a", "b"].forEach(k => { if (typeof c[k] === "number") c[k] = rt(c[k] - off); }); return c; };
 
 /* Bild: Titel, Legende, Großaufnahme */
-async function fPng(title, sub) {
-  const cv = $("det"), dpr = cv.width / Math.max(1, cv.clientWidth), W = cv.width, fs = Math.round(12 * dpr), lh = Math.round(16 * dpr), pad8 = Math.round(8 * dpr);
+async function fPng(title, sub, shot) {
+  if (!title && !sub && !shot) { const c0 = $("det"), cp = document.createElement("canvas"); cp.width = c0.width; cp.height = c0.height; cp.getContext("2d").drawImage(c0, 0, 0); return cp; }
+  const cv = shot || $("det"), dpr = cv.width / Math.max(1, ($("det").clientWidth || cv.width)), W = cv.width, fs = Math.round(12 * dpr), lh = Math.round(16 * dpr), pad8 = Math.round(8 * dpr);
   const items = [...($("legDet") ? $("legDet").children : [])].map(s => [(s.querySelector("i") || {}).style ? s.querySelector("i").style.background : "#999", s.textContent || ""]);
   const m = document.createElement("canvas").getContext("2d"); m.font = `${fs}px system-ui, sans-serif`;
   const lines = []; items.forEach(([c, t]) => { const ws = t.split(" "); let cur = ""; let first = true;
@@ -7162,10 +7247,8 @@ async function fRaw(A, B) {
   if (typeof db === "undefined" || !db || typeof readKind !== "function") return null;
   try { await flush(); } catch (e) {}
   const rd = async k => { try { return await readKind(k, A - 5000, B + 5000); } catch (e) { return []; } };
-  fstat("Lese Rohdaten: EKG …"); const EC = await rd("ecg");
-  fstat("Lese Rohdaten: Brust …"); const AC = await rd("acc");
-  fstat("Lese Rohdaten: Fuß …"); const FT = (await rd("foot")).filter(c => (c.w || "Fuß") === "Fuß"), GY = await rd("gyro");
-  fstat("Lese Rohdaten: Atemgurt, Herzschläge, Protokoll …"); const RB = await rd("rb"), BT = await rd("beat");
+  fstat("Lese Rohdaten …"); const RK = await readKinds(["ecg", "acc", "foot", "gyro", "rb", "beat"], A - 5000, B + 5000);
+  const EC = RK.ecg, AC = RK.acc, FT = RK.foot.filter(c => (c.w || "Fuß") === "Fuß"), GY = RK.gyro, RB = RK.rb, BT = RK.beat;
   let LG = []; try { LG = (await readKind("log")).filter(r => r.start < B && (r.end || r.start) >= A); } catch (e) {}
   if (!EC.length && !AC.length && !FT.length && !RB.length) return null;
   const offs = {}; [["a", AC], ["e", EC], ["f", FT.concat(GY)]].forEach(([k, arr]) => arr.forEach(c => { const o = c.t - c.us / 1000, kk = k + (c.s ?? ""); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o; }));
@@ -7242,23 +7325,45 @@ async function fFoto() {
   if (!S || !LAY || !J) { fstat("Zuerst eine Aufnahme laden."); return; }
   const btn = $("foto"); if (btn) btn.disabled = true;
   try {
-    const a = LAY.a, b = LAY.b, A = T0 + a, B = T0 + b, d = new Date(A), name = `Ausschnitt_${ymd(d)}_${fhms(A)}_bis_${fhms(B)}`, notiz = ($("fnote") && $("fnote").value || "").trim();
-    fstat("Foto: Bild …"); const png = await fPng(`Ausschnitt ${dstamp(d)}, ${fclk(A)} bis ${fclk(B)} Uhr`, (notiz ? `${notiz} · ` : "") + `${BX.src || fileId}`);
+    /* 2.7: Ausschnitt und Bild sofort festhalten, Notiz danach */
+    const a = LAY.a, b = LAY.b, A = T0 + a, B = T0 + b, d = new Date(A), name = `Ausschnitt_${ymd(d)}_${fhms(A)}_bis_${fhms(B)}`;
+    const shot = await fPng("", ""), legend = [...($("legDet") ? $("legDet").children : [])].map(s => s.textContent);
+    const notiz = await fAskNote(); if (notiz === null) { fstat("Foto verworfen."); if (btn) btn.disabled = false; return; }
+    fstat("Foto: Bild …"); const png = await fPng(`Ausschnitt ${dstamp(d)}, ${fclk(A)} bis ${fclk(B)} Uhr`, (notiz ? `${notiz} · ` : "") + `${BX.src || fileId}`, shot);
     fstat("Foto: Daten …"); const { O, Sh } = await fBuild(a, b, notiz, name);
     const json = JSON.stringify(O), xl = await makeXlsx(Sh);
     const row = [name, ymd(d), fclk(A), fclk(B), csvq(notiz), csvq(O.quelle.datei), O.roh ? "ja" : "nein", O.geraet].join(";");
     let h = null; try { h = await vsRoot(true); } catch (e) {}
     if (h) { const dir = await vsSub(h, [...vsDayParts(ymd(new Date(T0))), "Ausschnitte"]), rd = await vsSub(dir, ["Rohdaten"]);
       await vsPut(dir, name + ".png", png); await vsPut(dir, name + ".xlsx", xl); await vsPut(rd, name + ".json", new TextEncoder().encode(json)); await vsAppend(dir, "ausschnitte.csv", FCSV, [row]);
-      fstat(`Gespeichert in ${vsDayParts(ymd(new Date(T0))).join("/")}/Ausschnitte: ${name} (Bild, Excel` + (O.roh ? ", Rohdaten aus dem Gerätespeicher)" : ", ohne Rohdaten aus dem Gerätespeicher)")); }
-    else { vsDownload(png, name + ".png"); vsDownload(new Blob([xl]), name + ".xlsx"); fstat(`Kein Speicherordner: Bild und Excel in den Downloads, die Rohdaten warten bis „Ausschnitte senden“.`); }
+      fstat(`Gespeichert in ${vsDayParts(ymd(new Date(T0))).join("/")}/Ausschnitte: ${name}` + (O.roh ? " (mit Rohdaten)" : " (ohne Rohdaten aus dem Gerätespeicher)")); }
+    else { vsDownload(png, name + ".png"); vsDownload(new Blob([xl]), name + ".xlsx"); fstat(`Kein Speicherordner: Bild und Excel in den Downloads.`); }
     window.vsShots.push({ name, json, row, day: ymd(new Date(T0)) });
     try { addEntry({ typ: "Daten", name: `Ausschnitt gespeichert: ${name}` + (notiz ? ` (${notiz})` : ""), start: Date.now() }); } catch (e) {}
-    if ($("fnote")) $("fnote").value = "";
   } catch (e) { fstat("Foto fehlgeschlagen: " + (e.message || e)); }
   if (btn) btn.disabled = false;
 }
-
+/* 2.7: Notizfeld erst nach dem Tippen auf Foto; Speichern oder Enter legt ab, Ohne Notiz geht schnell, Abbrechen verwirft */
+function fAskNote() {
+  return new Promise(res => { const pop = $("fpop"), inp = $("fnote"); pop.style.display = "block"; inp.value = ""; setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    const end = v => { pop.style.display = "none"; $("fsave").onclick = $("fnone").onclick = $("fcancel").onclick = null; inp.onkeydown = null; res(v); };
+    $("fsave").onclick = () => end(inp.value.trim()); $("fnone").onclick = () => end(""); $("fcancel").onclick = () => end(null);
+    inp.onkeydown = e => { if (e.key === "Enter") end(inp.value.trim()); }; });
+}
+/* 2.7: EKG für den sichtbaren Ausschnitt aus dem Gerätespeicher nachladen (nur am Handy, solange die Daten da sind) */
+async function fEkgLoad() {
+  if (!S || !LAY) return; const btn = $("ekgload"); btn.disabled = true; const a = LAY.a - 5000, b = LAY.b + 5000;
+  try { if (typeof db === "undefined" || !db) { fstat("Kein Gerätespeicher in diesem Browser."); return; }
+    fstat("Lade EKG aus dem Gerätespeicher …"); const t1 = Date.now(); const EC = (await readKinds(["ecg"], T0 + a, T0 + b)).ecg;
+    if (!EC.length) { fstat("Für diesen Ausschnitt liegt kein EKG mehr im Gerätespeicher (nur etwa 36 Stunden, nur am aufnehmenden Handy)."); return; }
+    const offs = {}; EC.forEach(c => { const o = c.t - c.us / 1000, kk = "e" + (c.s ?? ""); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o; });
+    const E = expand(EC, offs, "e", 1); let R = []; try { if (E.t.length >= 600) R = rPeaks(E); } catch (e) {}
+    const et = [], ev = []; for (let i = 0; i < E.t.length; i++) { const tt = E.t[i] - T0; if (tt >= a && tt < b) { et.push(Math.round(tt * 10) / 10); ev.push(Math.round(E.c[0][i])); } }
+    J.pruef_fenster = J.pruef_fenster || []; J.pruef_fenster.unshift({ art: "nachgeladen", start_ms: a, ende_ms: b, ekg: { t: et, uV: ev }, r_zacken_ms: Array.from(R).map(r => Math.round((r - T0) * 10) / 10).filter(r => r >= a && r < b) });
+    fstat(`EKG nachgeladen: ${et.length} Werte in ${((Date.now() - t1) / 1000).toFixed(1).replace(".", ",")} s.`); bvRedraw();
+  } catch (e) { fstat("EKG laden fehlgeschlagen: " + (e.message || e)); } finally { btn.disabled = false; }
+}
+$("ekgload").addEventListener("click", fEkgLoad);
 /* „Ausschnitte senden“: alle noch nicht gesendeten JSON der letzten 10 Tage in eine ZIP, dazu ausschnitte.csv */
 async function fGet(h, parts) { let d = h; try { for (const p of parts) d = await d.getDirectoryHandle(p); return d; } catch (e) { return null; } }
 async function fText(dir, name) { try { return await (await (await dir.getFileHandle(name)).getFile()).text(); } catch (e) { return ""; } }
@@ -7276,14 +7381,20 @@ async function fSend() {
     if (!use.length) { if (!pick.length) { fstat("Keine Ausschnitte gefunden (letzte 10 Tage)."); if (btn) btn.disabled = false; return; }
       if (!confirm(`Keine neuen Ausschnitte. Alle ${pick.length} der letzten 10 Tage noch einmal senden?`)) { if (btn) btn.disabled = false; return; } use = pick; }
     use.sort((p, q) => p.nm < q.nm ? -1 : 1);
-    const entries = []; for (let i = 0; i < use.length; i++) { fstat(`Packe ${i + 1} von ${use.length} …`); entries.push({ name: use[i].nm + ".json", data: await use[i].get() }); }
-    entries.push({ name: "ausschnitte.csv", data: new TextEncoder().encode("﻿" + [heads, ...use.map(p => p.row)].join("\n") + "\n") });
-    const blob = await zipBin(entries), now = new Date(), zn = `Ausschnitte_${ymd(now)}_${fhms(now.getTime())}.zip`;
-    vsDownload(blob, zn);
+    /* 2.7: je Tagesordner der Aufnahme eine ZIP in dessen Ordner Ausschnitte (Nacht gehört zum Vortag); ohne Speicherordner in die Downloads */
+    const groups = new Map(); use.forEach(p => { const k = p.dir || "dl"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
+    const now = new Date(), zn = `Ausschnitte_${ymd(now)}_${fhms(now.getTime())}.zip`, done = []; let mb = 0, cnt = 0;
+    for (const [dir, items] of groups) {
+      const entries = []; for (const p of items) { cnt++; fstat(`Packe ${cnt} von ${use.length} …`); entries.push({ name: p.nm + ".json", data: await p.get() }); }
+      entries.push({ name: "ausschnitte.csv", data: new TextEncoder().encode("﻿" + [heads, ...items.map(p => p.row)].join("\n") + "\n") });
+      const blob = await zipBin(entries); mb += blob.size / 1e6;
+      if (dir !== "dl") { await vsPut(dir, zn, blob); done.push(`${vsDayParts(items[0].day).join("/")}/Ausschnitte/${zn}`); }
+      else { vsDownload(blob, zn); done.push(`Downloads/${zn}`); }
+    }
     const byDir = new Map(); use.forEach(p => { if (p.ref) p.ref.sent = true; if (p.dir && !p.sent) { if (!byDir.has(p.dir)) byDir.set(p.dir, []); byDir.get(p.dir).push(p.nm); } });
     for (const [dir, names] of byDir) { try { const fh = await dir.getFileHandle("gesendet.txt", { create: true }), f = await fh.getFile(), w = await fh.createWritable({ keepExistingData: true }); await w.seek(f.size); await w.write(names.join("\n") + "\n"); await w.close(); } catch (e) {} }
-    fstat(`${use.length} Ausschnitte in ${zn} (${(blob.size / 1e6).toFixed(1).replace(".", ",")} MB), in den Downloads.`);
-    try { addEntry({ typ: "Daten", name: `Ausschnitte gesendet: ${use.length} in ${zn}`, start: Date.now() }); } catch (e) {}
+    fstat(`${use.length} Ausschnitte (${mb.toFixed(1).replace(".", ",")} MB) gespeichert: ${done.join(", ")}`);
+    try { addEntry({ typ: "Daten", name: `Ausschnitte gesendet: ${use.length} in ${done.join(", ")}`, start: Date.now() }); } catch (e) {}
   } catch (e) { fstat("Senden fehlgeschlagen: " + (e.message || e)); }
   if (btn) btn.disabled = false;
 }
