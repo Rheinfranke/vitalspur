@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 2.7</title>
+<title>Vitalspur 2.7.1</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -110,7 +110,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.7</h1>
+<h1>Vitalspur 2.7.1</h1>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <div class="hint">Geräte in dieser Reihenfolge verbinden: zuerst die Uhr, dann den Atemgurt, solange Bluetooth noch frei ist.</div>
@@ -402,6 +402,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <fieldset>
   <legend>Daten als ZIP</legend>
   <button class="main" id="saveall">Aktuellen Abschnitt als ZIP (ohne Rohdaten)</button> <button id="ordnew">Speicherordner wählen</button>
+  <button id="rohekg" title="Ganzes EKG aus dem Gerätespeicher (rund 36 h) als gepackte Datei in den Tagesordner, Unterordner RohEKG">Roh-EKG exportieren</button>
   <button class="main" id="shareall">Teilen</button>
   <div style="margin-top:.6rem" id="pcblk"><b>Am Rechner (Mutterordner):</b> <label class="bvfile">Vom Handy holen, Speicherordner des Handys wählen: <input type="file" id="holdir" webkitdirectory multiple></label> <button id="mappebtn">Tagesmappen erstellen</button> <button id="importbtn">Pakete aus Import einlesen</button></div>
   <div style="margin-top:.6rem" id="handyblk"><b>Am Handy:</b> <button id="paketbtn">Paket für den Rechner (3 Tage)</button> <button id="vollbtn">Vollpaket</button> <span id="paketstat" class="hint"></span></div>
@@ -3140,7 +3141,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.7"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.7.1"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3185,7 +3186,7 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 2.7", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 2.7.1", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
@@ -3526,7 +3527,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 2.7. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 2.7.1. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3928,6 +3929,55 @@ async function ordReady(neu) {
   } catch (e) { return null; }
 }
 async function ordWrite(h, sub, name, data) { const d = await h.getDirectoryHandle(sub, { create: true }); const f = await d.getFileHandle(name, { create: true }); const w = await f.createWritable(); await w.write(data); await w.close(); }
+/* ===== 2.7.1: Roh-EKG aus dem Gerätespeicher exportieren (alles, was noch da ist, rund 36 h) ===== */
+function vsDayOf(ms) { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+async function rohEkgExport(say) {
+  await flush();
+  const fl = await vsFirstLast(); if (fl.f == null) throw new Error("Gerätespeicher ist leer");
+  const first = await vsRecAt(fl.f); let a0 = first && Number.isFinite(first.t) ? first.t : Date.now() - 40 * 3600000;
+  const now = Date.now(); if (a0 < now - 48 * 3600000) a0 = now - 48 * 3600000;
+  const H = 3600000, files = [], liste = [], sess = [], offs = {}; let tA = null, tB = null, nAll = 0;
+  for (let a = Math.floor(a0 / H) * H; a < now; a += H) {
+    say(`Lese EKG ${pad(new Date(a).getHours())}:00 …`);
+    const pk = ((await readKinds(["ecg"], a, a + H)).ecg || []).filter(p => p && p.v && p.v.length).sort((p, q) => p.t - q.t);
+    if (!pk.length) continue;
+    const n = pk.length; let m = 0; pk.forEach(p => m += p.v.length);
+    const meta = new Float64Array(4 * n), cnt = new Uint32Array(n), val = new Int32Array(m); let j = 0, prev = 0;
+    pk.forEach((p, i) => { let si = sess.indexOf(String(p.s)); if (si < 0) { sess.push(String(p.s)); si = sess.length - 1; }
+      meta[4 * i] = p.t; meta[4 * i + 1] = p.us; meta[4 * i + 2] = si; meta[4 * i + 3] = p.r || 130; cnt[i] = p.v.length;
+      const o = p.t - p.us / 1000, kk = String(p.s); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o;
+      for (const x of p.v) { val[j++] = x - prev; prev = x; } });
+    const head = new Uint32Array([0x31455356, n, m]);
+    const data = new Uint8Array(await new Blob([head, meta, cnt, val]).arrayBuffer());
+    const name = `EKG_${idstamp(new Date(a)).slice(0, 11)}.bin`;
+    files.push({ name, data }); liste.push({ datei: name, von: stamp(new Date(pk[0].t)), bis: stamp(new Date(pk[n - 1].t)), pakete: n, werte: m });
+    if (tA === null) tA = pk[0].t; tB = pk[n - 1].t; nAll += m;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  if (!files.length) throw new Error("kein EKG im Gerätespeicher");
+  const info = { format: "Vitalspur-RohEKG", version: 1, player: "Vitalspur 2.7.1", erstellt: new Date().toISOString(), von_epoch_ms: Math.round(tA), bis_epoch_ms: Math.round(tB),
+    werte: nAll, sitzungen: sess, offs_ms: offs,
+    aufbau: "Je Stunde eine Datei EKG_JJJJMMTT-HH.bin, little endian: Uint32 Kennung 'VSE1', Uint32 n (Pakete), Uint32 m (Werte); Float64[4n] je Paket: t_ms (Ankunft am Handy, Epoch), us (Zeitstempel des H10 in µs), Index in sitzungen, Rate in Hz; Uint32[n] Zahl der Werte je Paket; Int32[m] EKG in µV als Differenz zum vorigen Wert (erster Wert gegen 0, fortlaufend über alle Pakete der Datei).",
+    zeit: "Zeit eines Werts wie im Player: letzter Wert eines Pakets bei us/1000 + offs_ms[Sitzung], davor im Abstand 1000/Rate (bzw. aus dem Abstand der Zeitstempel).",
+    dateien: liste };
+  files.unshift({ name: "info.json", data: new TextEncoder().encode(JSON.stringify(info, null, 1)) });
+  say("Packe ZIP …");
+  const blob = await makeZip8(files), name = `RohEKG_${idstamp(new Date(tA))}_bis_${idstamp(new Date(tB))}.zip`;
+  let ort = "Downloads"; const h = await vsRoot(false);
+  if (h) { const dir = await vsSub(h, [...vsDayParts(vsDayOf(tA)), "RohEKG"]); await vsPut(dir, name, blob); ort = vsDayParts(vsDayOf(tA)).join("/") + "/RohEKG"; }
+  else vsDownload(blob, name);
+  addEntry({ typ: "Daten", name: `Roh-EKG exportiert: ${name}, ${nAll} Werte, ${Math.round(blob.size / 1e6)} MB, ${ort}`, start: Date.now() });
+  return `${Math.round(blob.size / 1e6)} MB, ${files.length - 1} Stunden, in ${ort}`;
+}
+$("rohekg").addEventListener("click", async () => {
+  const btn = $("rohekg"), lab = btn.textContent; if (btn.disabled) return; btn.disabled = true; btn.style.opacity = "0.6";
+  try { await vsRoot(true); } catch (e) {}
+  const t1 = Date.now(), say = m => { btn.textContent = m + ` (${Math.round((Date.now() - t1) / 1000)} s)`; $("savestatus").textContent = "Roh-EKG: " + m; };
+  try { const r = await rohEkgExport(say); btn.textContent = "Gespeichert: " + r; $("savestatus").textContent = "Roh-EKG gespeichert: " + r; }
+  catch (e) { btn.textContent = "Fehler: " + (e.message || e); $("savestatus").textContent = "Roh-EKG fehlgeschlagen: " + (e.message || e); addEntry({ typ: "Fehler", name: "Roh-EKG fehlgeschlagen: " + (e.message || e), start: Date.now() }); }
+  finally { btn.disabled = false; btn.style.opacity = ""; setTimeout(() => { if (!btn.disabled) btn.textContent = lab; }, 15000); }
+});
+
 $("saveall").addEventListener("click", async () => {
   /* 2.7: Knopf grau mit Fortschritt, Ordner vor der Rechnung holen, Fehler anzeigen */
   const btn = $("saveall"), lab = btn.textContent; if (btn.disabled) return; btn.disabled = true; btn.style.opacity = "0.6"; btn.textContent = "Rechne …";
@@ -4394,7 +4444,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.7"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.7.1"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4462,7 +4512,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 2.7. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 2.7.1. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4589,7 +4639,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 2.7", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 2.7.1", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
