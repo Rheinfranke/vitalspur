@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.4</h1>
+<h1>Vitalspur 2.9.5</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -935,19 +935,19 @@ function liveBeats(rrs, now) {
   const sum = rrs.reduce((a, b) => a + b, 0);
   let t = (lastBeat !== null && Math.abs(lastBeat + sum - now) < 3000) ? lastBeat + sum : now;
   const fresh = [];
-  for (let i = rrs.length - 1; i >= 0; i--) { fresh.unshift([t, Math.round(rrs[i]), hrRec, now]); t -= rrs[i]; }
+  for (let i = rrs.length - 1; i >= 0; i--) { fresh.unshift([t, Math.round(rrs[i] * 10) / 10, hrRec, now]); /* 2.9.5: 0,1 ms */ t -= rrs[i]; }
   if (rrs.length) lastBpm = Math.round(60000 / rrs[rrs.length - 1]);
   fresh.forEach(b => { put("beat", [Math.round(b[0]), b[1], b[2], b[3]]); memBeat(b[0], b[1]); }); nBeats += fresh.length; lastBeat = fresh[fresh.length - 1][0];
 }
 function finishBurst(endT) {
   const b = burst; burst = null; if (!b) return;
-  if (b.n < 3) { let t = endT; const out = []; for (let i = b.rr.length - 1; i >= 0; i--) { out.unshift(t); t -= b.rr[i]; } b.rr.forEach((r, i) => { put("beat", [Math.round(out[i]), Math.round(r), hrRec, Date.now()]); memBeat(out[i], r); }); nBeats += b.rr.length; lastBeat = Math.round(endT); return; }
+  if (b.n < 3) { let t = endT; const out = []; for (let i = b.rr.length - 1; i >= 0; i--) { out.unshift(t); t -= b.rr[i]; } b.rr.forEach((r, i) => { put("beat", [Math.round(out[i]), Math.round(r * 10) / 10, hrRec, Date.now()]); memBeat(out[i], r); }); nBeats += b.rr.length; lastBeat = Math.round(endT); return; }
   const total = b.rr.reduce((a, c) => a + c, 0), elapsed = endT - b.from, now = Date.now();
   let times = [];
   if (Math.abs(elapsed - total) < 3000) { let t = b.from; b.rr.forEach(r => { t += r; times.push(t); }); }
   else { let t = endT; for (let i = b.rr.length - 1; i >= 0; i--) { times.unshift(t); t -= b.rr[i]; }
     if (elapsed - total > 3000) addEntry({ typ: "Gurt", name: `Herzschläge fehlen für ca. ${Math.round((elapsed - total) / 1000)} s vor dem Nachliefern (EKG prüfen)`, start: b.from, end: Math.round(endT - total) }); }
-  b.rr.forEach((r, i) => { put("beat", [Math.round(times[i]), Math.round(r), hrRec, now]); memBeat(times[i], r); });
+  b.rr.forEach((r, i) => { put("beat", [Math.round(times[i]), Math.round(r * 10) / 10, hrRec, now]); memBeat(times[i], r); });
   nBeats += b.rr.length; nLate += b.rr.length; lastBeat = Math.round(times[times.length - 1]);
   addEntry({ typ: "Gurt", name: `${b.rr.length} Herzschläge nachgeliefert und zurückgerechnet`, start: b.from, end: Math.round(endT) });
 }
@@ -2591,14 +2591,100 @@ function rPeaks(E) {
   for (let i = 0; i < n; i++) hp[i] = e[i] - base[i];
   for (let i = 2; i < n; i++) { const x = hp[i] - hp[i - 2]; d[i] = x * x; }
   const s = movMean(d, 15), thr = new Float32Array(n), B = 1300;
-  for (let a = 0; a < n; a += B) { const b = Math.min(n, a + B), seg = Array.from(s.subarray(a, b)).sort((x, y) => x - y); thr.fill(0.3 * seg[Math.floor(0.98 * (seg.length - 1))], a, b); }
+  for (let a = 0; a < n; a += B) { const b = Math.min(n, a + B), seg = Array.from(s.subarray(a, b)).sort((x, y) => x - y); thr.fill(0.1 * seg[Math.floor(0.98 * (seg.length - 1))], a, b); } /* 2.9.5: 0,1 statt 0,3. s ist ein Quadrat; 0,3 verwarf Zacken unter 55 % der größten im 10-s-Block, bei tiefem Atem (Atemhilfe) fielen so Schläge aus. 0,1 entspricht 32 %. */
   const pk = [];
   for (let i = 1; i < n - 1; i++) if (s[i] > thr[i] && s[i] >= s[i - 1] && s[i] > s[i + 1]) {
     const L = pk.length ? pk[pk.length - 1] : -1;
     if (L >= 0 && t[i] - t[L] < 330) { if (s[i] > s[L]) pk[pk.length - 1] = i; } else pk.push(i);
   }
-  return pk.map(i => { let b = i; for (let k = Math.max(0, i - 11); k < Math.min(n, i + 11); k++) if (Math.abs(hp[k]) > Math.abs(hp[b])) b = k; return t[b]; });
+  /* 2.9.5: Richtung der Zacke aus der Umgebung (Mehrheit von je 31 Schlägen), damit nicht ein Schlag an der R-Spitze und der nächste am S-Tal gemessen wird.
+     Dann Spitze über eine Parabel durch drei Werte verfeinern: ohne sie liegen die R-Zeiten auf dem Raster von 7,7 ms (Abstände auf 3 ms genau), mit ihr auf unter 1 ms. */
+  const sg = new Int8Array(pk.length);
+  pk.forEach((i, q) => { let a = 0, b = 0; for (let k = Math.max(0, i - 11); k < Math.min(n, i + 11); k++) { if (hp[k] > a) a = hp[k]; if (-hp[k] > b) b = -hp[k]; } sg[q] = a >= b ? 1 : -1; });
+  const ps = new Int32Array(pk.length + 1); for (let q = 0; q < pk.length; q++) ps[q + 1] = ps[q] + sg[q];
+  return pk.map((i, q) => { const sgn = ps[Math.min(pk.length, q + 16)] - ps[Math.max(0, q - 15)] >= 0 ? 1 : -1;
+    let b = i; for (let k = Math.max(0, i - 11); k < Math.min(n, i + 11); k++) if (sgn * hp[k] > sgn * hp[b]) b = k;
+    if (b < 1 || b > n - 2) return t[b];
+    const y0 = hp[b - 1], y1 = hp[b], y2 = hp[b + 1], den = y0 - 2 * y1 + y2, dt = (t[b + 1] - t[b - 1]) / 2;
+    if (!den || !(dt > 0 && dt < 12)) return t[b];
+    const off = 0.5 * (y0 - y2) / den; return Math.abs(off) <= 0.5 ? t[b] + off * dt : t[b]; });
 }
+/* 2.9.5: Kette. Die Abstände des Gurts hängen lückenlos aneinander; sie werden als Ganzes, in ihrer Reihenfolge, neben die Abstände der R-Zacken gelegt
+   (Ausrichtung nach Needleman und Wunsch in einem Band um die erwartete Zeit). Jeder Abstand gehört danach zu genau einem Paar von R-Zacken.
+   Erlaubt sind: Paar (Gurt-Abstand = R-Abstand), R-Zacke ohne Gurt-Schlag, Gurt-Schlag ohne R-Zacke, ein Gurt-Abstand über zwei R-Abstände (überzählige R-Zacke)
+   und zwei Gurt-Abstände in einem R-Abstand (übersehene R-Zacke). Bestätigt ist ein Schlag, wenn sein Abstand auf 20 ms zum R-Abstand passt.
+   Anders als die Blockanlage (9.3) kann die Kette bei gleichmäßigem Puls oder Atemtakt nicht um einen Schlag oder eine Atemwelle verrutschen,
+   weil ein Verrutschen zwei Lücken kostet und die ganze Strecke gegen sich hat. R-Zacken, die der Gurt nicht gemeldet hat, werden als Schläge ergänzt,
+   wenn ihr Abstand zum Rhythmus passt (nurEkg). */
+function chainBeats(B, R, lag) {
+  const N = B.length, M = R ? R.length : 0; if (M < 50 || !N) return null;
+  const HB = 40, Wd = 2 * HB + 1, CAP = 60, GAPG = 40, GAPR = 40, MS = 15, JUMP = 60, TW = 20000, INF = 1e15, TOLOK = 20;
+  lag = Number.isFinite(lag) ? lag : 0;
+  const c = new Int32Array(N + 2); for (let i = 0; i < N; i++) c[i] = lowerBound(R, B[i].t - lag); c[N] = Math.min(M, c[N - 1] + 1); c[N + 1] = c[N];
+  for (let i = 1; i <= N + 1; i++) if (c[i] < c[i - 1]) c[i] = c[i - 1];
+  const C = new Float64Array((N + 1) * Wd).fill(INF), P = new Uint8Array((N + 1) * Wd), JK = new Int32Array(N + 1).fill(-1);
+  const relax = (i, k, v, p) => { if (k < 0 || k >= Wd) return; const q = i * Wd + k; if (v < C[q]) { C[q] = v; P[q] = p; } };
+  for (let k = 0; k < Wd; k++) { const j = c[0] - HB + k; if (j >= 0 && j <= M) C[k] = 0; }
+  for (let i = 0; i <= N; i++) {
+    const row = i * Wd;
+    if (i > 0) {
+      let all = true; for (let k = 0; k < Wd; k++) if (C[row + k] < INF) { all = false; break; }
+      if (all || (i < N && B[i].t - B[i - 1].t > 5000)) {
+        let mn = INF, km = -1; for (let k = 0; k < Wd; k++) if (C[row - Wd + k] < mn) { mn = C[row - Wd + k]; km = k; }
+        if (km >= 0) { const jm = c[i - 1] - HB + km, v = mn + GAPG + JUMP; let any = false;
+          for (let k = 0; k < Wd; k++) { const j = c[i] - HB + k; if (j < jm || j < 0 || j > M) continue; if (v < C[row + k]) { C[row + k] = v; P[row + k] = 6; any = true; } }
+          if (any) JK[i] = km; }
+      }
+    }
+    for (let k = 0; k < Wd; k++) {
+      const j = c[i] - HB + k; if (j < 0 || j > M) continue; const cur = C[row + k]; if (cur >= INF) continue;
+      if (j < M) relax(i, k + 1, cur + GAPR, 3);
+      if (i >= N) continue;
+      const g = B[i].rr, tx = B[i].t - lag, k2 = j - c[i + 1] + HB;
+      relax(i + 1, k2, cur + GAPG, 2);
+      if (j >= 1 && j < M && Math.abs(R[j] - tx) < TW) relax(i + 1, k2 + 1, cur + Math.min(Math.abs(g - (R[j] - R[j - 1])), CAP), 1);
+      if (j >= 1 && j + 1 < M && Math.abs(R[j + 1] - tx) < TW) relax(i + 1, k2 + 2, cur + Math.min(Math.abs(g - (R[j + 1] - R[j - 1])), CAP) + MS, 4);
+      if (i + 1 < N && j >= 1 && j < M && Math.abs(R[j] - (B[i + 1].t - lag)) < TW && B[i + 1].t - B[i].t < 5000) relax(i + 2, j + 1 - c[i + 2] + HB, cur + Math.min(Math.abs(g + B[i + 1].rr - (R[j] - R[j - 1])), CAP) + MS, 5);
+    }
+  }
+  let kb = -1, mb = INF; for (let k = 0; k < Wd; k++) if (C[N * Wd + k] < mb) { mb = C[N * Wd + k]; kb = k; }
+  if (kb < 0) return null;
+  const ops = []; { let i = N, k = kb, guard = 0;
+    while (i > 0 && guard++ < 4 * (N + M) + 10) { const p = P[i * Wd + k], j = c[i] - HB + k;
+      if (p === 1) { ops.push([1, i - 1, j - 1]); i--; k = j - 1 - c[i] + HB; }
+      else if (p === 2) { ops.push([2, i - 1, -1]); i--; k = j - c[i] + HB; }
+      else if (p === 3) { ops.push([3, -1, j - 1]); k--; }
+      else if (p === 4) { ops.push([4, i - 1, j - 1]); i--; k = j - 2 - c[i] + HB; }
+      else if (p === 5) { ops.push([5, i - 2, j - 1]); i -= 2; k = j - 1 - c[i] + HB; }
+      else if (p === 6) { ops.push([2, i - 1, -1]); const kk = JK[i]; i--; k = kk; }
+      else break; }
+    while (i > 0) { ops.push([2, i - 1, -1]); i--; } }
+  ops.reverse();
+  const used = new Uint8Array(M), out = []; let run = lag, nOk = 0, nUn = 0, nMerge = 0, nSplit = 0;
+  const cp = (b, tt, ok) => Object.assign({}, b, { tt, ok, ekg: ok ? 1 : 0 });
+  for (const [p, i, j] of ops) {
+    if (p === 1) { const d = Math.abs(B[i].rr - (R[j] - R[j - 1])), ok = d <= TOLOK; if (ok) { used[j] = 1; run = B[i].t - R[j]; nOk++; out.push(cp(B[i], R[j], true)); } else { nUn++; out.push(cp(B[i], B[i].t - run, false)); } }
+    else if (p === 2) { nUn++; out.push(cp(B[i], B[i].t - run, false)); }
+    else if (p === 4) { const d = Math.abs(B[i].rr - (R[j] - R[j - 2])), ok = d <= TOLOK; if (ok) { used[j] = 1; used[j - 1] = 2; run = B[i].t - R[j]; nOk++; nMerge++; out.push(cp(B[i], R[j], true)); } else { nUn++; out.push(cp(B[i], B[i].t - run, false)); } }
+    else if (p === 5) { const d = Math.abs(B[i].rr + B[i + 1].rr - (R[j] - R[j - 1])), ok = d <= TOLOK;
+      if (ok) { used[j] = 1; run = B[i + 1].t - R[j]; nOk++; nUn++; nSplit++; out.push(cp(B[i], R[j] - B[i + 1].rr, false)); out.push(cp(B[i + 1], R[j], true)); }
+      else { nUn += 2; out.push(cp(B[i], B[i].t - run, false)); out.push(cp(B[i + 1], B[i + 1].t - run, false)); } }
+  }
+  /* R-Zacken ohne Gurt-Schlag: als Schlag ergänzen, wenn der Abstand zur vorigen Zacke zum Rhythmus passt */
+  let nE = 0, ref = null, refT = -1e18;
+  for (let j = 1; j < M; j++) {
+    const e = R[j] - R[j - 1];
+    if (used[j] === 1) { if (e > 300 && e < 2000) { ref = e; refT = R[j]; } continue; }
+    if (used[j] === 2 || used[j - 1] === 2 || e <= 300 || e >= 2000) continue;
+    let r0 = R[j] - refT < 3000 ? ref : null;
+    if (r0 === null && j + 1 < M && used[j + 1] !== 2) { const e2 = R[j + 1] - R[j]; if (e2 > 300 && e2 < 2000) r0 = e2; }
+    if (r0 === null || Math.abs(e - r0) > 0.25 * r0) continue;
+    out.push({ t: R[j] + run, rr: Math.round(e * 10) / 10, tt: R[j], ok: true, ekg: 1, nurEkg: true }); used[j] = 1; ref = e; refT = R[j]; nE++;
+  }
+  out.sort((a, b) => a.tt - b.tt);
+  return { beats: out, nOk, nUn, nE, nMerge, nSplit, kosten: mb };
+}
+
 /* Herzschläge auf die R-Zacken legen (V9.1): Schlag für Schlag am Muster der Abstände entlang.
    1. Fang: Versatz je 5 Minuten aus Schlägen, deren Abstand und der vorige Abstand zu zwei R-Abständen passen (je 25 ms).
    2. Lauf: ist der vorige Schlag zugeordnet, folgt die nächste R-Zacke, wenn ihr Abstand zum Schlag passt (40 ms);
@@ -3060,7 +3146,11 @@ async function buildSpar(D, stamp8) {
   const R = E ? rPeaks(E) : [];
   const al = alignBeats(B, R);
   B.forEach((b, i) => { b.tt = al.out[i].t; b.ok = al.out[i].ok; });
-  { const eb = ekgBeats(B, R); if (eb) { let m = 0; eb.beats.forEach((x, i) => { if (x.ok || !B[i].ok) { B[i].tt = x.tt; B[i].ok = x.ok; } if (B[i].ok) m++; }); al.ekgSchlaege = m; } }
+  /* 2.9.5: Zuordnung über die Kette statt über Blöcke; die alte Blockanlage bleibt nur als Rückfall, wenn die Kette nicht rechnen kann */
+  { let kb = null; try { kb = chainBeats(B, R, al.lag); } catch (e) { addEntry({ typ: "Fehler", name: "Kette Gurt gegen EKG: " + (e.message || e), start: Date.now() }); }
+    if (kb) { B.length = 0; for (const x of kb.beats) B.push(x); al.ok = kb.nOk + kb.nE; al.ekgSchlaege = al.ok; al.kette = kb;
+      addEntry({ typ: "Daten", name: `Herzschläge über die Kette zugeordnet: ${kb.nOk} vom Gurt im EKG bestätigt, ${kb.nUn} ohne passende R-Zacke, ${kb.nE} nur im EKG gefunden und ergänzt` + (kb.nMerge + kb.nSplit ? `, ${kb.nMerge} überzählige und ${kb.nSplit} übersehene R-Zacken` : ""), start: Date.now() }); }
+    else { const eb = ekgBeats(B, R); if (eb) { let m = 0; eb.beats.forEach((x, i) => { if (x.ok || !B[i].ok) { B[i].tt = x.tt; B[i].ok = x.ok; } if (B[i].ok) m++; }); al.ekgSchlaege = m; } } }
   /* 2.7: Störungen beim Drehen. R-Zacken mit unplausiblem Ausschlag (R minus S unter 35 % oder über 250 % des Medians der Umgebung, oder negativ) gelten nicht;
      je R-Zacke höchstens ein Schlag; ein bestätigter Schlag, dessen Abstand mehr als 120 ms vom Abstand zur vorigen gültigen R-Zacke abweicht, gilt nicht. */
   if (E && E.t && E.t.length && R.length) { const RA = Array.from(R, r => { const q = rsAmp(E.t, E.c[0], r); return q ? q[0] - q[1] : null; }), RV = [];
@@ -3072,7 +3162,7 @@ async function buildSpar(D, stamp8) {
       if (j > 0) { const dd = b.tt - RV[j - 1]; if (dd >= 300 && dd <= 2500 && Math.abs(dd - b.rr) > 120) { b.ok = false; b.art = "Abstand passt nicht zum EKG"; nA++; continue; } }
       last = b; }
     if (nR + nD + nA) addEntry({ typ: "Daten", name: `Schläge nach dem EKG verworfen: ${nR} mit unplausibler R-Zacke, ${nD} doppelt, ${nA} mit falschem Abstand`, start: Date.now() }); }
-  for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; }
+  for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round((b.tt - p.tt) * 10) / 10 : null; }
   /* 1.9: lief zur Zeit des Schlags das EKG und ist er dort nicht bestätigt, zählt er nicht für Puls und Spannweite (z. B. Gurt ohne Hautkontakt) */
   if (E && E.t && E.t.length) for (const b of B) { const k = lowerBound(E.t, b.tt - 1500); b.ekgDa = k < E.t.length && E.t[k] < b.tt + 1500; b.drop = b.ekgDa && !b.ok; }
   /* 2.6: R-Höhe und S-Tiefe je bestätigtem Schlag */
@@ -3085,7 +3175,7 @@ async function buildSpar(D, stamp8) {
     for (let i = 0; i + 1 < okB.length; i++) { const s0 = okB[i].stU; if (!Number.isFinite(s0) || s0 < 15) continue; const rr = okB[i + 1].tt - okB[i].tt; let bad = s0 >= 40;
       if (!bad) { const w = []; for (let m = Math.max(1, i - 8); m <= Math.min(okB.length - 1, i + 9); m++) if (m !== i + 1) w.push(okB[m].tt - okB[m - 1].tt); w.sort((p, q) => p - q); const md = w[w.length >> 1]; if (md && Math.abs(rr - md) > 0.25 * md) bad = true; }
       if (bad) { okB[i + 1].ok = false; okB[i + 1].art = "EKG gestört"; okB[i + 1].stAus = true; nS++; } }
-    if (nS) { for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; if (b.stAus) b.drop = true; }
+    if (nS) { for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round((b.tt - p.tt) * 10) / 10 : null; if (b.stAus) b.drop = true; }
       addEntry({ typ: "Daten", name: `Schläge wegen gestörtem EKG nicht gewertet: ${nS}`, start: Date.now() }); } }
   try { if ((D.OX && D.OX.length) || (D.OXW && D.OXW.length)) oxBeats(B, D.OX, D.OXW); } catch (e) { addEntry({ typ: "Fehler", name: "Oxymeter je Herzschlag: " + (e.message || e), start: Date.now() }); } /* 2.9.3 */
   const T0 = Math.min(...[B[0]?.tt, A?.t[0], F?.t[0], L.length ? Math.min(...L.map(r => r.start)) : undefined].filter(Number.isFinite));
@@ -4104,7 +4194,7 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9.4", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9.5", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
@@ -4121,7 +4211,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.4";
+const VS_VERSION = "2.9.5";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
