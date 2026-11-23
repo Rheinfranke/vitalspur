@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.3</h1>
+<h1>Vitalspur 2.9.4</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -4104,7 +4104,7 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9.3", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9.4", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
@@ -4121,7 +4121,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.3";
+const VS_VERSION = "2.9.4";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -5646,21 +5646,26 @@ function rbValue(f) {
   if (rbN === 300) addEntry({ typ: "Atemgurt", name: `${(rbN / ((now - rbT0) / 1000)).toFixed(1)} Werte pro Sekunde`, start: now, session: rbRec });
 }
 let rbBle = null, rbLostWanted = false;
+async function rbPrep(ble) { const sv = await withTO(ble.gatt.connect(), 15000, "Atemgurt"), svc = await sv.getPrimaryService("d91714ef-28b9-4f91-ba16-f0d9a604f112"),
+  ch = await svc.getCharacteristic("b41e6675-a329-40e0-aa01-44d2f444babe"); await ch.startNotifications(); await wait(800); }
 async function rbConnect(bleGiven) {
   try {
+    rbStatus("Gurt wählen …");
+    /* 2.9.4: Auswahl sofort beim Antippen, erst danach die Bibliothek */
+    const ble = bleGiven || await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
     rbStatus("Lade Vernier-Bibliothek …");
     const gd = await rbLoadLib();
-    rbStatus("Gurt wählen …");
-    /* 2.9: Gerät einmal wählen und merken (für Bluetooth zurück); Versuche mit wachsenden Pausen 2, 4, 8 s */
-    const ble = bleGiven || await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
     rbBle = ble; rbLostWanted = true;
     if ((hrWanted || vWanted) && !bleGiven) addEntry({ typ: "Hinweis", name: "Atemgurt nach H10 oder Sense verbunden; klappt es nicht, den Atemgurt zuerst verbinden", start: Date.now() });
     let d = null, lastErr = null;
     for (let i = 1; i <= 10 && !d; i++) { rbStatus(`Verbinde, Versuch ${i} von 10 …`);
+      /* 2.9.4: Die Vernier-Bibliothek schaltet den Antwortkanal ein, wartet aber nicht darauf und schickt sofort den ersten Befehl (1a).
+         Auf Android ist der Kanal dann oft noch nicht bereit und die Antwort geht verloren. Darum vorher selbst verbinden, Antwortkanal einschalten, kurz warten. */
+      try { await rbPrep(ble); } catch (e) { addEntry({ typ: "Atemgurt", name: `Vorbereitung Versuch ${i}: ${(e && e.message) || e}`, start: Date.now() }); }
       try { d = await gd.createDevice(ble, { open: true }); addEntry({ typ: "Atemgurt", name: `Verbunden im Versuch ${i} von 10`, start: Date.now() }); }
       catch (e) { lastErr = e; const em = (e && e.message) || String(e); addEntry({ typ: "Fehler", name: `Atemgurt: Verbindungsversuch ${i} von 10 fehlgeschlagen: ${em}`, start: Date.now() });
         try { if (ble.gatt && ble.gatt.connected) ble.gatt.disconnect(); } catch (x) {}
-        const pz = Math.min(8000, 2000 * 2 ** Math.min(2, i - 1)) + (/characteristics not found/i.test(em) ? 3000 : 0);
+        const pz = Math.max(3000, Math.min(8000, 2000 * 2 ** Math.min(2, i - 1))) + (/characteristics not found/i.test(em) ? 3000 : 0); /* 2.9.4: mindestens 3 s, damit Android die Verbindung abräumt */
         rbStatus(`Versuch ${i} gescheitert, warte ${Math.round(pz / 1000)} s` + ((hrWanted || vWanted) ? ". Tipp: Atemgurt zuerst verbinden, dann H10 und Sense." : ""));
         await new Promise(r => setTimeout(r, pz)); } }
     if (!d) throw new Error("nach 10 Versuchen keine Verbindung. Bitte den Gurt aus- und wieder einschalten. (" + ((lastErr && lastErr.message) || lastErr) + ")");
