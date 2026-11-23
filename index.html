@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9</h1>
+<h1>Vitalspur 2.9.1</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -4099,7 +4099,7 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9.1", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
@@ -4116,7 +4116,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9";
+const VS_VERSION = "2.9.1";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -5553,7 +5553,7 @@ function vsStart() {
   $("pid").addEventListener("change", () => { $("pid").value = pidVal(); try { localStorage.setItem("vs_pid", $("pid").value); } catch (e) {} addEntry({ typ: "Proband", name: $("pid").value || "(leer)", start: Date.now() }); flush(); vsShow(); });
   $("acts").addEventListener("click", e => { const a = e.target.dataset.a; if (!a) return; vsActSel = a; vsShowSes(); });
   if (VS && VS.ses) document.querySelectorAll(".act").forEach(x => x.classList.toggle("on", x.dataset.a === VS.ses.name));
-  $("rbconnect").addEventListener("click", rbConnect); $("rbstop").addEventListener("click", rbStop);
+  $("rbconnect").addEventListener("click", () => rbConnect()); /* 2.9.1: das Antippen nicht als Gerät übergeben */ $("rbstop").addEventListener("click", rbStop);
   $("sesbtn").addEventListener("click", vsSesToggle);
   $("vsphase").addEventListener("click", async () => {
     if (vsSw) return;
