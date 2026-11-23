@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.2</h1>
+<h1>Vitalspur 2.9.3</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -3087,6 +3087,7 @@ async function buildSpar(D, stamp8) {
       if (bad) { okB[i + 1].ok = false; okB[i + 1].art = "EKG gestört"; okB[i + 1].stAus = true; nS++; } }
     if (nS) { for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; if (b.stAus) b.drop = true; }
       addEntry({ typ: "Daten", name: `Schläge wegen gestörtem EKG nicht gewertet: ${nS}`, start: Date.now() }); } }
+  try { if ((D.OX && D.OX.length) || (D.OXW && D.OXW.length)) oxBeats(B, D.OX, D.OXW); } catch (e) { addEntry({ typ: "Fehler", name: "Oxymeter je Herzschlag: " + (e.message || e), start: Date.now() }); } /* 2.9.3 */
   const T0 = Math.min(...[B[0]?.tt, A?.t[0], F?.t[0], L.length ? Math.min(...L.map(r => r.start)) : undefined].filter(Number.isFinite));
   say2("Rechne: Schritte …"); await wait(20);
   const steps = stepsNoKnock(stepsDetect(F, G, A), L); /* 2.9: Klopfen ist kein Schritt */
@@ -3110,7 +3111,7 @@ async function buildSpar(D, stamp8) {
   const TPs = [...TP].sort((a, b) => a.t - b.t), ATs = [...AT].sort((a, b) => a.t - b.t);
   const stepT = Float64Array.from(steps, s => s.t), sureT = Float64Array.from(steps.filter(s => s.sicher), s => s.t), brT = Float64Array.from(breaths, s => s.t);
   const tx = ms => stamp(new Date(ms));
-  const H = ["Nr", "Uhrzeit", "t_s", "RR_ms", "Puls", "EKG_bestaetigt", "RR_EKG_ms", "Brust_x_mg", "Brust_y_mg", "Brust_z_mg", "Brust_Bewegung_mg", "Atemwert_mg", "Atemphase", "Fuss_x_mg", "Fuss_y_mg", "Fuss_z_mg", "Fuss_Bewegung_mg", "Fuss_Spitze_mg", "Fuss_Drehrate_max_dps", "Zuckung", "Schritt_Nr", "Schritt_Seite", "Temperatur_C", "Luftfeuchte_Prozent", "Stueck", "Block", "Position", "Abspielposition_s", "Atemhilfe_Phase", "Lautstaerke_dB", "Taetigkeit", "Testabschnitt", "Marker", "Notiz", "Epoch_ms", "R_Hoehe_uV", "S_Tiefe_uV", "EKG_Stoerung_uV"];
+  const H = ["Nr", "Uhrzeit", "t_s", "RR_ms", "Puls", "EKG_bestaetigt", "RR_EKG_ms", "Brust_x_mg", "Brust_y_mg", "Brust_z_mg", "Brust_Bewegung_mg", "Atemwert_mg", "Atemphase", "Fuss_x_mg", "Fuss_y_mg", "Fuss_z_mg", "Fuss_Bewegung_mg", "Fuss_Spitze_mg", "Fuss_Drehrate_max_dps", "Zuckung", "Schritt_Nr", "Schritt_Seite", "Temperatur_C", "Luftfeuchte_Prozent", "Stueck", "Block", "Position", "Abspielposition_s", "Atemhilfe_Phase", "Lautstaerke_dB", "Taetigkeit", "Testabschnitt", "Marker", "Notiz", "Epoch_ms", "R_Hoehe_uV", "S_Tiefe_uV", "EKG_Stoerung_uV", "SpO2_Prozent", "PI_Prozent", "Pulsankunft_ms", "Pulshoehe_rel"];
   const rows = [H];
   let ei = 0, act = "", test = "", vol = null, ti = 0, ai = 0;
   const win = (X, t0, t1) => { if (!X) return null; const a = lowerBound(X.t, t0), b = lowerBound(X.t, t1); return b > a ? [a, b] : null; };
@@ -3144,7 +3145,7 @@ async function buildSpar(D, stamp8) {
     rows.push([i + 1, tx(t), (t - T0) / 1000, b.rr, Math.round(600000 / b.rr) / 10, b.ok ? "ja" : (R.length ? "nein" : null), b.rre,
       cx, cy, cz, cmv, aw, ph, fx, fy, fz, fmv, fpk, gpk, zuck, sn, ss, tp ? tp.c : null, tp ? tp.h : null,
       pc ? pc.name : null, pc ? pc.block : null, pc ? pc.pos : null, pc ? (t - pc.start) / 1000 : null, at, vol,
-      act || null, test || null, mk.join(" | ") || null, nt.join(" | ") || null, Math.round(t), b.rU ?? null, b.sU ?? null, b.stU ?? null]);
+      act || null, test || null, mk.join(" | ") || null, nt.join(" | ") || null, Math.round(t), b.rU ?? null, b.sU ?? null, b.stU ?? null, b.spo2 ?? null, b.pi ?? null, b.pat ?? null, b.ph ?? null]);
   }
   const SR = [["Nr", "Uhrzeit", "t_s", "Seite", "Dauer_bis_naechster_s", "Doppelschritt_s", "Fuss_Spitze_mg", "Aufprall_x_mg", "Aufprall_y_mg", "Aufprall_z_mg", "Drehrate_Spitze_dps", "Schwungdauer_s", "Brust_Stoss_mg", "sicher", "Epoch_ms"]];
   steps.forEach((s, i) => SR.push([i + 1, tx(s.t), (s.t - T0) / 1000, s.sicher ? s.side : null, s.dauer, s.doppel, s.spitze, s.vec ? s.vec[0] : null, s.vec ? s.vec[1] : null, s.vec ? s.vec[2] : null, s.gyro, s.swing, s.brust, s.sicher ? "ja" : null, Math.round(s.t)]));
@@ -3786,7 +3787,7 @@ async function extras9(X) {
   const json9 = {
     gurt_versatz: gvz.length ? { hinweis: "je 5 min: Versatz des Atemgurts gegen das Kippen der Brust in ms (positiv: Gurt später), r = Übereinstimmung; nur festgehalten, nichts verschoben", liste: gvz } : null,
     oxi: oxi.length ? { hinweis: "Pulsoxymeter PC-60FW, t in ms seit t0, spo2 in %, puls je min, pi in %", t: oxi.map(o => Math.round(o.t - T0)), spo2: oxi.map(o => o.s), puls: oxi.map(o => o.p), pi: oxi.map(o => o.pi) } : null,
-    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0), r_uV: B.map(b => b.rU ?? null), s_uV: B.map(b => b.sU ?? null), stoer_uV: B.map(b => b.stU ?? null), hinweis_stoer: "stoer_uV: Effektivwert des EKG über 20 Hz zwischen den Schlägen, Ruhe etwa 2 µV, ab 15 µV gestört (Muskeln, Niesen, Bewegung)", hinweis_rs: "r_uV, s_uV: Höhe der R-Zacke und Tiefe des S-Tals gegen die Grundlinie 120 bis 50 ms vor dem Schlag, nur bestätigte Schläge" },
+    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0), r_uV: B.map(b => b.rU ?? null), s_uV: B.map(b => b.sU ?? null), stoer_uV: B.map(b => b.stU ?? null), spo2: B.map(b => b.spo2 ?? null), pi: B.map(b => b.pi ?? null), pulsankunft_ms: B.map(b => b.pat ?? null), pulshoehe_rel: B.map(b => b.ph ?? null), hinweis_oxy: "spo2, pi: letzter Wert des Oxymeters bis 3 s vor dem Schlag; pulsankunft_ms: steilster Anstieg der Pulswelle im Finger nach der R-Zacke (Zeiten nach Ankunft am Handy, enthält die Verzögerung des Geräts; nur Verläufe vergleichen); pulshoehe_rel: Ausschlag der Pulswelle bis zum nächsten Schlag geteilt durch den Median der 2 min davor", hinweis_stoer: "stoer_uV: Effektivwert des EKG über 20 Hz zwischen den Schlägen, Ruhe etwa 2 µV, ab 15 µV gestört (Muskeln, Niesen, Bewegung)", hinweis_rs: "r_uV, s_uV: Höhe der R-Zacke und Tiefe des S-Tals gegen die Grundlinie 120 bis 50 ms vor dem Schlag, nur bestätigte Schläge" },
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
@@ -3836,7 +3837,7 @@ async function buildZip(opts) {
   const A0 = Number.isFinite(opts.a) ? opts.a : -Infinity, B0 = Number.isFinite(opts.b) ? opts.b : Infinity;
   $("savestatus").textContent = "Stelle Daten zusammen …";
   await flush();
-  const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb", "ox"];
+  const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb", "ox", "oxw"];
   const RM = await readKinds(KINDS.filter(k => k !== "log"), A0, B0); const ALL = await Promise.all(KINDS.map(k => k === "log" ? readKind(k) : RM[k])); /* 2.7: ein Durchlauf über den Zeitbereich */
   const W = ALL.map((arr, i) => arr.filter(d => { const t = recTime(KINDS[i], d); return t >= A0 && t < B0; }));
   /* Trageorte gelten weiter: letzter Eintrag vor dem Fenster wird an den Anfang gelegt */
@@ -3846,7 +3847,7 @@ async function buildZip(opts) {
     if (ub && Number.isFinite(A0) && !W[0].some(r => r.typ === "Abgleich" && /erkannt/.test(r.name || ""))) { const ra = ub.ref - 8000, rz = Math.min(A0, ub.ref + 8000);
       if (rz > ra) { for (const [i, k] of [[4, "acc"], [9, "foot"], [12, "gyro"]]) { const x = (await readKind(k, ra, rz)).filter(d => { const t = recTime(k, d); return t >= ra && t < rz; }); W[i] = x.concat(W[i]); }
         const hh = ALL[0].find(r => r.typ === "Abgleich" && /erkannt/.test(r.name || "") && Math.abs(r.start - ub.ref) < 3000); if (hh) W[0].unshift(Object.assign({}, hh, { name: hh.name + " (Referenz, übernommen)" })); } } }
-  const [L, BT, SN, EV, AC, EC, SY, AT, TP, FT0, PP, VH, GY, RU, BA, RB, OX] = W; window.lastOxi = (OX || []).slice().sort((p, q) => p.t - q.t);
+  const [L, BT, SN, EV, AC, EC, SY, AT, TP, FT0, PP, VH, GY, RU, BA, RB, OX, OXW] = W; window.lastOxi = (OX || []).slice().sort((p, q) => p.t - q.t);
   const belt = RB.length ? rbBreaths(RB, calRefs(ALL[0])) : null;
   const files = [], big = $("bigdata").checked && !opts.noRaw && !opts.noBig;
   const pid = (typeof pidVal === "function" && pidVal()) || "ohneID", id = idstamp(new Date());
@@ -3890,7 +3891,7 @@ async function buildZip(opts) {
   const beltCsv = () => { if (belt && belt.list.length && !opts.noRaw) { const s = ["Datum;Zeit;Epoch_ms;Einatmen_s;Ausatmen_s;Dauer_s;Atemzuege_pro_min;Tiefe_N;Tiefe_Prozent"]; belt.list.forEach(c => s.push([...tcols(c.t), num(c.ein, 2), num(c.aus, 2), num(c.dauer, 2), num(60 / c.dauer), num(c.tiefe, 2), Number.isFinite(c.prozent) ? num(c.prozent) : ""].join(";"))); out.push({ name: P + "Atemzuege_Gurt.csv", data: enc.encode("\ufeff" + s.join("\n")) }); } };
   const nacht = opts.nacht !== undefined ? !!opts.nacht : $("nacht").checked;
   try {
-    sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht, belt, rbF: RB.length ? rbFlat(RB) : null }, id);
+    sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht, belt, rbF: RB.length ? rbFlat(RB) : null, OX: OX || [], OXW: OXW || [] }, id);
     if (sp && sp.raw && belt) sp.raw.belt = belt;
     try { beltCsv(); } catch (e) {}
     if (sp && sp.raw) sp.raw.rbRaw = RB.length ? rbFlat(RB) : null; /* 1.9.1: Atem um die Zuckung aus dem Gurt */
@@ -4103,7 +4104,7 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9.2", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9.3", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
@@ -4120,7 +4121,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.2";
+const VS_VERSION = "2.9.3";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4211,11 +4212,12 @@ function oxStatus(t) { const el = $("oxstatus"); if (el) el.textContent = t; }
 function oxFrame(fr) {
   const ty = fr[4]; oxTypes[ty] = (oxTypes[ty] || 0) + 1;
   if (oxRawLogged < 12 && oxTypes[ty] <= 3) { oxRawLogged++; addEntry({ typ: "Oxymeter", name: `Rahmen Typ ${ty}: ${[...fr].map(b => b.toString(16).padStart(2, "0")).join(" ")}`, start: Date.now() }); }
+  if (ty === 0x02) { oxWave(fr); return; } /* 2.9.3 */
   if (ty !== 0x01 || fr.length < 9) return;
   const sp = fr[5], pr = fr[6] | ((fr[7] & 0x01) << 8), pi = fr[8] / 10, now = Date.now();
   const ok = sp >= 50 && sp <= 100 && pr >= 25 && pr <= 250;
   put("ox", { t: now, s: ok ? sp : null, p: ok ? pr : null, pi: ok ? pi : null, raw: [...fr.slice(4, Math.min(fr.length, 12))] });
-  oxN++; if (ok) { oxLast = { sp, pr, pi }; oxLastT = now; markRec(); }
+  oxN++; if (ok) { oxLast = { sp, pr, pi }; oxLastT = now; markRec(); oxLivePush(now, sp, pi); }
   const v = $("oxval"); if (v) v.textContent = ok ? `${sp} % · Puls ${pr} · PI ${String(pi).replace(".", ",")}` : "kein gültiger Wert (Finger?)";
 }
 function oxData(ev) {
@@ -4239,8 +4241,48 @@ async function oxConnect() {
     addEntry({ typ: "Oxymeter", name: "Verbunden: " + (d.name || "PC-60FW"), start: Date.now() }); oxStatus("Verbunden mit " + (d.name || "PC-60FW") + ". Warte auf Werte …"); $("oxstop").disabled = false;
   } catch (e) { oxStatus("Nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Oxymeter: " + (e.message || e), start: Date.now() }); } }
 function oxStop() { oxWanted = false; try { oxDev?.gatt.disconnect(); } catch (e) {} addEntry({ typ: "Oxymeter", name: `Beendet, ${oxN} Werte`, start: Date.now() }); oxStatus("Beendet."); $("oxstop").disabled = true; flush(); }
-$("oxconnect").addEventListener("click", oxConnect); $("oxstop").addEventListener("click", oxStop);
-setInterval(() => { if (!oxWanted) return; const age = oxLastT ? Math.round((Date.now() - oxLastT) / 1000) : null; oxStatus((age === null ? "noch kein gültiger Wert" : age > 5 ? `kein gültiger Wert seit ${age} s` : "läuft") + ` · ${oxN} Werte · Rahmen ${Object.entries(oxTypes).map(([k, v]) => k + ":" + v).join(" ")}`); }, 2000);
+/* ===== 2.9.3: Pulswelle des Oxymeters (Rahmen Typ 02, 5 Werte je Rahmen, höchstes Bit = Pulsmarkierung) ===== */
+var oxLive = { t: [], s: [], pi: [] }, oxwBuf = { ft: [], v: [], n: [] }, oxwN = 0;
+function oxLivePush(t, s, pi) { oxLive.t.push(t); oxLive.s.push(s); oxLive.pi.push(pi); if (oxLive.t.length > 1200) { oxLive.t.splice(0, 300); oxLive.s.splice(0, 300); oxLive.pi.splice(0, 300); } }
+function oxWave(fr) { const t = Date.now(), vals = []; for (let k = 5; k < fr.length - 1; k++) vals.push(fr[k]); if (!vals.length) return;
+  oxwBuf.ft.push(t); oxwBuf.n.push(vals.length); vals.forEach(v => oxwBuf.v.push(v)); oxwN += vals.length; }
+function oxwFlush() { if (!oxwBuf.ft.length) return; put("oxw", { t: oxwBuf.ft[oxwBuf.ft.length - 1], ft: oxwBuf.ft, n: oxwBuf.n, v: oxwBuf.v }); oxwBuf = { ft: [], v: [], n: [] }; }
+setInterval(oxwFlush, 1000);
+/* Werte mit Zeit: letzter Wert eines Rahmens bei der Ankunft, davor je 20 ms (50 je Sekunde) */
+function oxwExpand(RECS) { const t = [], v = [], m = [];
+  for (const r of RECS) { let j = 0; for (let f = 0; f < r.ft.length; f++) { const nv = r.n[f]; for (let k = 0; k < nv; k++) { const x = r.v[j++]; t.push(r.ft[f] - (nv - 1 - k) * 20); v.push(x & 0x7f); m.push(x & 0x80 ? 1 : 0); } } }
+  const o = t.map((x, i) => i).sort((p, q) => t[p] - t[q]); return { t: Float64Array.from(o, i => t[i]), v: Float32Array.from(o, i => v[i]), m: Uint8Array.from(o, i => m[i]) }; }
+/* je Herzschlag: SpO2 und PI (letzter gültiger Wert bis 3 s davor), Pulsankunft (steilster Anstieg der Welle nach der R-Zacke) und Pulshöhe (Ausschlag bis zum nächsten Schlag, geteilt durch den Median der 2 min davor) */
+function oxBeats(B, OX, OXW) {
+  const oxs = (OX || []).filter(o => o && Number.isFinite(o.s)).sort((p, q) => p.t - q.t), ot = oxs.map(o => o.t);
+  let n1 = 0, n2 = 0;
+  if (oxs.length) for (const b of B) { const k = lowerBound(ot, b.tt + 1) - 1; if (k >= 0 && b.tt - ot[k] <= 3000) { b.spo2 = oxs[k].s; b.pi = oxs[k].pi; n1++; } }
+  if (OXW && OXW.length) { const W = oxwExpand(OXW), okB = B.filter(b => b.ok), amps = [];
+    for (let i = 0; i + 1 < okB.length; i++) { const b = okB[i], rr = okB[i + 1].tt - b.tt; if (rr < 300 || rr > 2500) continue;
+      const a0 = lowerBound(W.t, b.tt), a1 = lowerBound(W.t, b.tt + rr); if (a1 - a0 < 8 || W.t[a1 - 1] - W.t[a0] > rr + 200) continue;
+      let lo = Infinity, hi = -Infinity, best = -Infinity, bi = -1;
+      for (let k = a0; k < a1; k++) { const v = W.v[k]; if (v < lo) lo = v; if (v > hi) hi = v; if (k >= a0 + 1 && k + 1 < a1) { const s = W.v[k + 1] - W.v[k - 1]; if (s > best) { best = s; bi = k; } } }
+      if (bi < 0 || hi - lo < 2) continue; b.pat = Math.round(W.t[bi] - b.tt); b.pamp = hi - lo; amps.push([b.tt, hi - lo]); n2++; }
+    for (const b of okB) { if (!Number.isFinite(b.pamp)) continue; const w = amps.filter(([t]) => t < b.tt && t >= b.tt - 120000).map(x => x[1]).sort((p, q) => p - q); if (w.length >= 20) b.ph = Math.round(100 * b.pamp / w[w.length >> 1]) / 100; } }
+  if (n1 || n2) addEntry({ typ: "Daten", name: `Oxymeter je Herzschlag: SpO2 bei ${n1}, Pulsankunft bei ${n2} Schlägen`, start: Date.now() });
+}
+/* Pulswelle als Datei: je Stunde PW_JJJJMMTT-HH.bin, Uint32 'VSP1', n Rahmen, m Werte, 0; Float64[n] Ankunft; Uint8[n] Werte je Rahmen; Uint8[m] Werte (Bit 7 = Pulsmarkierung) */
+async function oxwExport(a, b, parts, name) {
+  const H = 3600000, files = [], liste = []; let m0 = 0;
+  for (let h = Math.floor(a / H) * H; h < b; h += H) {
+    const R = ((await readKinds(["oxw"], Math.max(a, h), Math.min(b, h + H))).oxw || []).filter(r => r.t >= Math.max(a, h) && r.t < Math.min(b, h + H)).sort((p, q) => p.t - q.t); if (!R.length) continue;
+    const ft = [], n = [], v = []; R.forEach(r => { r.ft.forEach((x, i) => { ft.push(x); n.push(r.n[i]); }); r.v.forEach(x => v.push(x)); });
+    const nm = `PW_${idstamp(new Date(h)).slice(0, 11)}.bin`;
+    files.push({ name: nm, data: new Uint8Array(await new Blob([new Uint32Array([0x31505356, ft.length, v.length, 0]), Float64Array.from(ft), Uint8Array.from(n), Uint8Array.from(v)]).arrayBuffer()) });
+    liste.push({ datei: nm, rahmen: ft.length, werte: v.length }); m0 += v.length; }
+  if (!files.length) return null;
+  files.unshift({ name: "info.json", data: new TextEncoder().encode(JSON.stringify({ format: "Vitalspur-Pulswelle", version: 1, player: "Vitalspur " + VS_VERSION, werte: m0,
+    aufbau: "Je Stunde PW_JJJJMMTT-HH.bin, little endian: Uint32 'VSP1', n Rahmen, m Werte, 0; Float64[n] Ankunft am Handy (Epoch ms); Uint8[n] Werte je Rahmen; Uint8[m] Werte 0 bis 127, Bit 7 = Pulsmarkierung des Geräts. Zeit eines Werts: Ankunft des Rahmens minus (Anzahl−1−Index)·20 ms.", dateien: liste }, null, 1)) });
+  const blob = await makeZip8(files), h = await vsRoot(false); if (!h) return null; await vsPut(await vsSub(h, parts), name, blob);
+  return `${m0} Werte, ${(blob.size / 1e6).toFixed(1).replace(".", ",")} MB`; }
+
+$("oxconnect").addEventListener("click", () => oxConnect()); $("oxstop").addEventListener("click", oxStop);
+setInterval(() => { if (!oxWanted) return; const age = oxLastT ? Math.round((Date.now() - oxLastT) / 1000) : null; oxStatus((age === null ? "noch kein gültiger Wert" : age > 5 ? `kein gültiger Wert seit ${age} s` : "läuft") + ` · ${oxN} Werte, Pulswelle ${oxwN} · Rahmen ${Object.entries(oxTypes).map(([k, v]) => k + ":" + v).join(" ")}`); }, 2000);
 window.oxFrameTest = oxData;
 /* Ausschnitte auch von hier senden */
 $("fsend2").addEventListener("click", async () => { if (typeof window.vsAusSend !== "function") return; $("savestatus").textContent = "Packe Ausschnitte …"; await window.vsAusSend(); const s = document.getElementById("bv_fstat"); if (s) $("savestatus").textContent = s.textContent; });
@@ -4835,7 +4877,7 @@ const VS_HEAD = {
   Akku: "Datum;Zeit;Epoch_ms;Geraet;Prozent;Wert",
   Sense_Puls: "Sitzung;Datum;Zeit;Epoch_ms;Puls",
   Klima: "Datum;Zeit;Epoch_ms;Quelle;Temperatur_C;Luftfeuchte_Prozent;Luftdruck_hPa;WBGT_geschaetzt_C",
-  Herzschlaege: "Datum;Zeit;Epoch_ms;RR_ms;Puls;EKG_bestaetigt;R_Hoehe_uV;S_Tiefe_uV;EKG_Stoerung_uV",
+  Herzschlaege: "Datum;Zeit;Epoch_ms;RR_ms;Puls;EKG_bestaetigt;R_Hoehe_uV;S_Tiefe_uV;EKG_Stoerung_uV;SpO2_Prozent;PI_Prozent;Pulsankunft_ms;Pulshoehe_rel",
   Schritte: "Datum;Zeit;Epoch_ms;Seite;sicher;Dauer_bis_naechster_s;Doppelschritt_s",
   Atemzuege: "Datum;Zeit;Epoch_ms;Einatmen_s;Ausatmen_s;Dauer_s;Atemzuege_pro_min;Quelle;sicher;Tiefe_N;Tiefe_Prozent",
   Atemgurt: "Datum;Zeit;Epoch_ms;Kraft_N",
@@ -5196,7 +5238,7 @@ function kippenRows(ls) {
 }
 function vsDerived(sp) {
   const R = sp.raw || {}, T = {}, r1 = v => Number.isFinite(v) ? num(v) : "", r2 = v => Number.isFinite(v) ? num(v, 2) : "";
-  T.Herzschlaege = (R.B || []).map(b => [...tcols(b.tt), b.rr, num(60000 / b.rr), b.ok ? "ja" : "nein", b.rU ?? "", b.sU ?? "", b.stU ?? ""].join(";"));
+  T.Herzschlaege = (R.B || []).map(b => [...tcols(b.tt), b.rr, num(60000 / b.rr), b.ok ? "ja" : "nein", b.rU ?? "", b.sU ?? "", b.stU ?? "", b.spo2 ?? "", b.pi ?? "", b.pat ?? "", b.ph ?? ""].join(";"));
   T.Schritte = (R.steps || []).map(s => [...tcols(s.t), s.side, s.sicher ? "ja" : "", r2(s.dauer), r2(s.doppel)].join(";"));
   { const belt = R.belt || { list: [], cover: [] };
     const all = [...belt.list].sort((a, b) => a.t - b.t); /* 1.9: nur Gurt */
@@ -5252,6 +5294,9 @@ async function vsReport0(a, b, night, dayParts, dayStart) {
     try { const r = await rohEkgExport(m => { $("savestatus").textContent = `${wer} gespeichert. Volles EKG ${wo}: ` + m; }, { a, b, parts: [...dayParts, "RohEKG"], name: `${P}EKG.zip` });
       $("savestatus").textContent = `${wer} gespeichert in ${dayParts.join("/")}/Berichte, volles EKG: ${r}.`; diagT("Volles EKG " + wo, Date.now() - t1); }
     catch (e) { if (!/kein EKG/.test(e.message || "")) addEntry({ typ: "Fehler", name: `Volles EKG ${wo} nicht gespeichert: ` + (e.message || e), start: Date.now() }); } }
+  /* 2.9.3: Pulswelle des Oxymeters daneben */
+  try { const r = await oxwExport(a, b, [...dayParts, "RohEKG"], `${P}Pulswelle.zip`); if (r) addEntry({ typ: "Daten", name: `Pulswelle gespeichert: ${P}Pulswelle.zip, ${r}`, start: Date.now() }); }
+  catch (e) { addEntry({ typ: "Fehler", name: "Pulswelle nicht gespeichert: " + (e.message || e), start: Date.now() }); }
   return true;
 }
 /* 1.9.4: Rückfrage des Browsers vor dem Schließen oder Neuladen, solange aufgezeichnet oder ein Bericht geschrieben wird */
@@ -6127,7 +6172,8 @@ function lvDraw(force) {
   /* 1.9: nach dem Beenden keine stehen gebliebenen Werte */
   if (!anyActive() && !lv.frozen) { g.fillStyle = C.fg; g.textAlign = "center"; g.font = "bold 15px system-ui, sans-serif"; g.fillText(lvStopT ? `Aufzeichnung beendet um ${hhmm(lvStopT)} Uhr` : "Keine Aufzeichnung aktiv", W / 2, H / 2); g.font = "11px system-ui, sans-serif"; g.textAlign = "left";
     $("lvnum").innerHTML = `<span><b>–</b> Puls</span><span><b>–</b> Spannweite</span><span><b>–</b> ms RMSSD (1 min)</span><span><b>–</b> Atemzüge/min</span>`; return; }
-  const L = 40, R = 40, T = 4, B = 18, pw = W - L - R;
+  const oxOn = typeof oxLive !== "undefined" && oxLive.t.length > 0 && Date.now() - oxLive.t[oxLive.t.length - 1] < 30000; /* 2.9.3 */
+  const L = 40, R = oxOn ? 74 : 44, T = 4, B = 18, pw = W - L - R;
   if (!lv.spanSet) { lv.span = lvAutoSpan(pw); lv.spanSet = true; document.querySelectorAll("#lvspan button").forEach(b => b.classList.toggle("on", +b.dataset.s === lv.span)); }
   const S = lv.span * 1000, t1 = now, t0 = now - S;
   const X = t => L + (t - t0) / S * pw;
@@ -6167,10 +6213,22 @@ function lvDraw(force) {
     for (let k = 0; k < belt.t.length; k++) { dv[k] = Math.max(-1.1, Math.min(1.1, belt.f[k] - base[k])); ds[k] = Number.isFinite(sm[k]) ? Math.max(-1.1, Math.min(1.1, sm[k] - base[k])) : NaN; }
     g.strokeStyle = C.belt; g.globalAlpha = 0.3; g.lineWidth = 1; lvPath(g, PA, X, belt.t, dv, a, belt.t.length, sc); g.globalAlpha = 1;
     g.lineWidth = 2.2; lvPath(g, PA, X, belt.t, ds, a, belt.t.length, sc); g.lineWidth = 1;
-    atemTxt.unshift([`Gurt ±1 N um die Grundspannung ${(base[base.length - 1] || 0).toFixed(1).replace(".", ",")} N (Mittel 20 s)`, C.belt]);
+    /* 2.9.3: rechts innen die echte Zugkraft in N als dünne Kurve */
+    { let mn = Infinity, mx = -Infinity; for (let k = a; k < belt.t.length; k++) { const v = belt.f[k]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      if (Number.isFinite(mn)) { let lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { const c = (lo + hi) / 2; lo = Math.floor(c - 1); hi = lo + 2; }
+        const scA = { lo, hi }, YA = v => PA.y + PA.h - (v - lo) / (hi - lo) * PA.h; g.strokeStyle = C.acc; g.globalAlpha = 0.8; g.lineWidth = 1; g.setLineDash([3, 2]); lvPath(g, PA, X, belt.t, belt.f, a, belt.t.length, scA); g.setLineDash([]); g.globalAlpha = 1;
+        g.font = "10px system-ui, sans-serif"; g.fillStyle = C.acc; g.textAlign = "left"; [[hi, PA.y + 9], [lo, PA.y + PA.h - 3]].forEach(([v, yy]) => g.fillText(v + " N", L + pw + 3, yy)); g.font = "11px system-ui, sans-serif"; } }
+    atemTxt.unshift([`Gurt ±1 N um ${(base[base.length - 1] || 0).toFixed(1).replace(".", ",")} N (Mittel 20 s)`, C.belt], ["gestrichelt: Zugkraft in N (rechts)", C.acc]);
   }
   g.textAlign = "left"; let lx = L + 4;
   if (!atemTxt.length) atemTxt.push(["Atem: noch keine Daten", C.fg]);
+  /* 2.9.3: PI des Oxymeters rot, Skala rechts außen 0 bis 20 % */
+  if (oxOn) { const red = night ? "#f85149" : "#d32f2f", YP = v => PA.y + PA.h - Math.max(0, Math.min(20, v)) / 20 * PA.h;
+    g.save(); g.beginPath(); g.rect(PA.x, PA.y, PA.w, PA.h); g.clip(); g.strokeStyle = red; g.lineWidth = 1.6; g.beginPath(); let on = false;
+    for (let k = 0; k < oxLive.t.length; k++) { const tt = oxLive.t[k], v = oxLive.pi[k]; if (tt < t0 - 2000 || !Number.isFinite(v)) { on = false; continue; } const x = X(tt), yy = YP(v); if (on && tt - oxLive.t[k - 1] > 3000) on = false; on ? g.lineTo(x, yy) : g.moveTo(x, yy); on = true; }
+    g.stroke(); g.restore(); g.lineWidth = 1; g.font = "10px system-ui, sans-serif"; g.fillStyle = red; g.textAlign = "left";
+    [[20, PA.y + 9], [10, YP(10) + 4], [0, PA.y + PA.h - 3]].forEach(([v, yy]) => g.fillText(v + " %", L + pw + 36, yy)); g.font = "11px system-ui, sans-serif";
+    atemTxt.push(["PI rot (%)", red]); }
   atemTxt.forEach(([s, c], k) => lvLabel(g, s, L + 4, PA.y + 13 + 13 * k, c, C.bg));
 
   /* Herzschläge */
@@ -6204,7 +6262,13 @@ function lvDraw(force) {
   /* Achse: Maximum und Minimum der letzten 10 Schläge, dazwischen das gleitende Mittel am linken Rand */
   if (m10) { const yh = YH(m10.hi), yl = YH(m10.lo); axTxt(Math.round(m10.hi), Math.max(PH.y + 6, yh), C.fg, false); axTxt(Math.round(m10.lo), Math.min(PH.y + PH.h - 6, yl), C.fg, false);
     if (avgFirst) { const ya = YH(avgFirst.m); if (Math.abs(ya - yh) >= 11 && Math.abs(ya - yl) >= 11) { g.font = "bold 11px system-ui, sans-serif"; axTxt(Math.round(avgFirst.m), ya, C.avg, false); g.font = "11px system-ui, sans-serif"; } } }
-  lvLabel(g, noKontakt ? "Herz: kein Kontakt (Brustgurt anfeuchten oder anlegen)" : `Herz (${BT.quelle})` + (lab === 2 ? ": ms (Puls)" : lab === 1 ? ": Puls" : ""), L + 4, PH.y + 13, noKontakt ? C.zuck : C.fg, C.bg);
+  /* 2.9.3: SpO2 blau, Skala rechts außen 70 bis 100 %, gestrichelt 90 %, Dreieck unter 70 % */
+  if (oxOn) { const blue = night ? "#58a6ff" : "#1565c0", YS = v => PH.y + PH.h - (Math.max(70, Math.min(100, v)) - 70) / 30 * PH.h;
+    g.save(); g.beginPath(); g.rect(PH.x, PH.y, PH.w, PH.h); g.clip(); hline(PH, YS(90), blue, [5, 4]); g.strokeStyle = blue; g.lineWidth = 2; g.beginPath(); let on = false, low = [];
+    for (let k = 0; k < oxLive.t.length; k++) { const tt = oxLive.t[k], v = oxLive.s[k]; if (tt < t0 - 2000 || !Number.isFinite(v)) { on = false; continue; } const x = X(tt), yy = YS(v); if (v < 70) low.push([x, v]); if (on && tt - oxLive.t[k - 1] > 3000) on = false; on ? g.lineTo(x, yy) : g.moveTo(x, yy); on = true; }
+    g.stroke(); g.lineWidth = 1; g.fillStyle = blue; low.filter((p, i) => !i || p[0] - low[i - 1][0] > 40).forEach(([x, v]) => { const yb = PH.y + PH.h; g.beginPath(); g.moveTo(x - 5, yb - 9); g.lineTo(x + 5, yb - 9); g.lineTo(x, yb - 1); g.fill(); g.font = "10px system-ui, sans-serif"; g.textAlign = "center"; g.fillText(v + " %", x, yb - 12); });
+    g.restore(); g.font = "10px system-ui, sans-serif"; g.fillStyle = blue; g.textAlign = "left"; [100, 90, 80, 70].forEach(v => g.fillText(v + (v === 100 ? " %" : ""), L + pw + 36, Math.min(PH.y + PH.h - 3, Math.max(PH.y + 9, YS(v) + 4)))); g.font = "11px system-ui, sans-serif"; }
+  lvLabel(g, noKontakt ? "Herz: kein Kontakt (Brustgurt anfeuchten oder anlegen)" : `Herz (${BT.quelle})` + (lab === 2 ? ": ms (Puls)" : lab === 1 ? ": Puls" : "") + (oxOn ? " · SpO₂ blau" : ""), L + 4, PH.y + 13, noKontakt ? C.zuck : C.fg, C.bg);
 
   /* 1.9.3: Bewegung wie im Betrachter: größter Ausschlag je 0,1 s, logarithmisch 10 bis 10.000 mg; Fuß grün, Brust grau.
      Nachts gelbe Linie beim Beginn von Aktivität am Fuß nach 10 s Ruhe (unter 15 mg), wenn in 3 s 30 mg erreicht werden (vorläufig, die Auswertung entscheidet). */
@@ -6350,13 +6414,25 @@ function parseAz(txt, t0, allGurt) {
 const dedupT = o => { const k = o.t.map((x, i) => i).sort((p, q) => o.t[p] - o.t[q]), t = [], f = []; let last = -Infinity; k.forEach(i => { if (o.t[i] !== last) { t.push(o.t[i]); f.push(o.f[i]); last = o.t[i]; } }); return { t: Float64Array.from(t), f: Float32Array.from(f) }; };
 /* ===== 2.9: volles EKG im Betrachter (RohEKG-ZIP, je Stunde eine Datei, erst beim Ansehen entpackt) ===== */
 const EKGF = { src: [], cache: new Map(), pend: new Set(), maxSpan: 600000 };
-async function ekgFullOpen(files) { EKGF.src = []; EKGF.cache.clear(); EKGF.pend.clear();
+async function ekgFullOpen(files) { EKGF.src = []; EKGF.cache.clear(); EKGF.pend.clear(); OXWF.src = []; OXWF.cache.clear(); OXWF.pend.clear();
   for (const f of files) { try { const z = await unzip(f); if (!z.names.includes("info.json")) continue; const info = JSON.parse(new TextDecoder().decode(await z.get("info.json")));
-    if (info.format !== "Vitalspur-RohEKG") continue;
-    const hours = z.names.map(n => { const m = /^EKG_(\d{4})(\d\d)(\d\d)-(\d\d)\.bin$/.exec(n); return m ? { datei: n, a: new Date(+m[1], m[2] - 1, +m[3], +m[4]).getTime() } : null; }).filter(Boolean);
-    EKGF.src.push({ z, info, name: f.name, hours }); } catch (e) {} }
-  return EKGF.src.length; }
-function ekgIsZip(z) { return z.names.includes("info.json") && z.names.some(n => /^EKG_\d{8}-\d\d\.bin$/.test(n)); }
+    const pw = info.format === "Vitalspur-Pulswelle"; if (info.format !== "Vitalspur-RohEKG" && !pw) continue;
+    const hours = z.names.map(n => { const m = /^(?:EKG|PW)_(\d{4})(\d\d)(\d\d)-(\d\d)\.bin$/.exec(n); return m ? { datei: n, a: new Date(+m[1], m[2] - 1, +m[3], +m[4]).getTime() } : null; }).filter(Boolean);
+    (pw ? OXWF : EKGF).src.push({ z, info, name: f.name, hours }); } catch (e) {} }
+  return EKGF.src.length + OXWF.src.length; }
+function ekgIsZip(z) { return z.names.includes("info.json") && z.names.some(n => /^(EKG|PW)_\d{8}-\d\d\.bin$/.test(n)); }
+/* 2.9.3: Pulswelle (PW_…bin) */
+const OXWF = { src: [], cache: new Map(), pend: new Set() };
+function oxwHas() { return OXWF.src.length > 0; }
+async function oxwDecode(src, datei) { const u8 = await src.z.get(datei), buf = u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength ? u8.buffer : u8.slice().buffer, hd = new Uint32Array(buf, 0, 4); if (hd[0] !== 0x31505356) return null;
+  const n = hd[1], m = hd[2], ft = new Float64Array(buf, 16, n), cnt = new Uint8Array(buf, 16 + 8 * n, n), val = new Uint8Array(buf, 16 + 9 * n, m), t = new Float64Array(m), v = new Float32Array(m), mk = new Uint8Array(m); let j = 0;
+  for (let f = 0; f < n; f++) for (let k = 0; k < cnt[f]; k++) { t[j] = ft[f] - (cnt[f] - 1 - k) * 20 - T0; v[j] = val[j] & 0x7f; mk[j] = val[j] & 0x80 ? 1 : 0; j++; }
+  const o = Array.from(t.keys()).sort((p, q) => t[p] - t[q]); return { t: Float64Array.from(o, i => t[i]), v: Float32Array.from(o, i => v[i]), m: Uint8Array.from(o, i => mk[i]) }; }
+function oxwGet(a, b, redraw) { if (!OXWF.src.length) return null; const A = a + T0, B = b + T0, H = 3600000, parts = []; let miss = false;
+  for (const s of OXWF.src) for (const h of s.hours) { if (h.a + H <= A || h.a >= B) continue; const key = s.name + "/" + h.datei, d = OXWF.cache.get(key); if (d) { parts.push(d); continue; } miss = true;
+    if (!OXWF.pend.has(key)) { OXWF.pend.add(key); oxwDecode(s, h.datei).then(x => { OXWF.pend.delete(key); if (x) { OXWF.cache.set(key, x); if (OXWF.cache.size > 4) OXWF.cache.delete(OXWF.cache.keys().next().value); } if (redraw) redraw(); }).catch(() => OXWF.pend.delete(key)); } }
+  if (miss) return { lade: true }; const R = []; parts.forEach(d => { for (let k = lb(d.t, a); k < d.t.length && d.t[k] < b; k++) R.push([d.t[k], d.v[k], d.m[k]]); }); R.sort((p, q) => p[0] - q[0]);
+  return R.length > 5 ? { t: R.map(x => x[0]), v: R.map(x => x[1]), m: R.map(x => x[2]) } : { leer: true }; }
 async function ekgDecode(src, datei) {
   const u8 = await src.z.get(datei), buf = u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength ? u8.buffer : u8.slice().buffer, hd = new Uint32Array(buf, 0, 4);
   if (hd[0] !== 0x32455356) return null; const n = hd[1], m = hd[2], bits = hd[3], meta = new Float64Array(buf, 16, 4 * n), cnt = new Uint32Array(buf, 16 + 32 * n, n);
@@ -6577,7 +6653,8 @@ function detLayout() {
   let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
   P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 102];
-  return { P, kip, h: (showEkg ? P.ekg[1] : P.bew[1]) + 30 + (stateSeg().length ? 12 : 0) };
+  if (showEkg && oxwHas() && span <= EKGF.maxSpan) P.pw = [P.ekg[1] + 14, P.ekg[1] + 54]; /* 2.9.3: Pulswelle unter dem EKG */
+  return { P, kip, h: (P.pw ? P.pw[1] : showEkg ? P.ekg[1] : P.bew[1]) + 30 + (stateSeg().length ? 12 : 0) };
 }
 function kipAll() {
   if (S.kipW !== undefined) return S.kipW; const B = S.st && S.st.b; if (!B || !B.t || B.t.length < 100) { S.kipW = null; return null; }
@@ -6662,6 +6739,11 @@ function drawDetail() {
       ekgAxisDraw(c, e.t, e.uV, i0, i1, X, P.ekg[0], P.ekg[1], { xl: L, xr: L + W, col: "#444", lw: 0.8 });
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
     else { c.fillStyle = "#999"; c.fillText(FE && FE.lade ? "EKG wird entpackt …" : ekgFullHas() && span > EKGF.maxSpan ? "volles EKG erst ab 10 min Ausschnitt und enger" : "kein EKG an dieser Stelle", L, P.ekg[0] + 20); } }
+  if (P.pw) { const PWd = oxwGet(a, b, () => { try { drawDetail(); } catch (e) {} }), y0 = P.pw[0], y1 = P.pw[1]; c.fillStyle = "#555"; c.fillText("Pulswelle (Finger)", L, y0 - 3);
+    if (PWd && PWd.t) { let mn = Infinity, mx = -Infinity; PWd.v.forEach(v => { if (v < mn) mn = v; if (v > mx) mx = v; }); const Yp = v => y1 - (v - mn) / Math.max(1, mx - mn) * (y1 - y0);
+      c.strokeStyle = "#c2185b"; c.lineWidth = 1; c.beginPath(); PWd.t.forEach((t, k) => { const x = X(t), yy = Yp(PWd.v[k]); if (k && t - PWd.t[k - 1] > 200) c.moveTo(x, yy); else if (k) c.lineTo(x, yy); else c.moveTo(x, yy); }); c.stroke();
+      c.fillStyle = "#c2185b"; PWd.t.forEach((t, k) => { if (PWd.m[k]) c.fillRect(X(t) - 0.5, y1 + 1, 1, 4); }); }
+    else { c.fillStyle = "#999"; c.fillText(PWd && PWd.lade ? "Pulswelle wird entpackt …" : "keine Pulswelle an dieser Stelle", L + 110, y0 + 20); } }
   evSelDraw(c, X, a, b, L, W, h); /* 2.9 */
   if (J.oxi && J.oxi.t && J.oxi.t.length) { const o = J.oxi, v = []; for (let k = lb(o.t, a); k < o.t.length && o.t[k] < b; k++) if (Number.isFinite(o.spo2[k])) v.push(o.spo2[k]);
     if (v.length) { c.save(); c.font = "bold 11px system-ui, sans-serif"; c.fillStyle = Math.min(...v) < 90 ? "#c0392b" : "#1d3557"; c.textAlign = "right"; c.fillText(`SpO₂ ${Math.min(...v)}${Math.max(...v) !== Math.min(...v) ? "–" + Math.max(...v) : ""} %`, L + W - 4, 12); c.restore(); } }
@@ -7066,7 +7148,7 @@ async function bvListDays(night) {
       if (it.kern) fs.push(await (await it.ber.getFileHandle(it.kern)).getFile());
       if (it.act) fs.push(await (await it.ber.getFileHandle(it.act)).getFile());
       for await (const [n, e] of it.dd.entries()) if (e.kind === "file" && /_(Atemgurt|Atemzuege)\.csv$/.test(n)) fs.push(await e.getFile());
-      try { const rd = await it.dd.getDirectoryHandle("RohEKG"); for await (const [n, e] of rd.entries()) if (e.kind === "file" && /EKG\.zip$/.test(n)) fs.push(await e.getFile()); } catch (e) {} /* 2.9: volles EKG */
+      try { const rd = await it.dd.getDirectoryHandle("RohEKG"); for await (const [n, e] of rd.entries()) if (e.kind === "file" && /(EKG|Pulswelle)\.zip$/.test(n)) fs.push(await e.getFile()); } catch (e) {} /* 2.9: volles EKG, 2.9.3: Pulswelle */
       await loadFiles(fs, `${it.d}, ${it.n}, ${bvMB(fs[0])}`, it.ber); });
   }
   const st = document.createElement("div"); st.className = "stat"; st.textContent = out.length ? `${out.length} ${night ? "Nächte" : "Tage"}, die neuesten oben.` : `Keine ${night ? "Nächte" : "Tage"} in den Tagesordnern gefunden.`; box.appendChild(st);
