@@ -1,4 +1,4 @@
-/* Vitalspur 1.9.4: Service Worker. Diese Datei als sw.js neben die index.html legen.
+/* Vitalspur 2.9: Service Worker (holt die Seite immer am Zwischenspeicher des Browsers vorbei). Diese Datei als sw.js neben die index.html legen.
    Die Seite kommt immer frisch aus dem Netz, wenn es eins gibt; sonst aus dem Zwischenspeicher.
    Manifest und Symbol liefert der Worker selbst, damit nur zwei Dateien nötig sind. */
 const CACHE = "vitalspur";
@@ -17,7 +17,7 @@ self.addEventListener("fetch", e => {
   if (!page) return;
   e.respondWith((async () => {
     const c = await caches.open(CACHE);
-    try { const res = await timeout(fetch(r), 6000); if (res.ok) { await c.put(r, res.clone()); if (r.mode === "navigate") await c.put("./", res.clone()); } return res; }
+    try { const res = await timeout(fetch(r.url, { cache: "no-cache", credentials: "same-origin" }), 15000); if (res.ok && !u.searchParams.has("vc")) { await c.put(r, res.clone()); if (r.mode === "navigate") await c.put("./", res.clone()); } return res; }
     catch (err) { return (await c.match(r, { ignoreSearch: true })) || (await c.match("./")) || new Response("Vitalspur ist offline noch nicht gespeichert. Einmal mit Netz öffnen.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); }
   })());
 });

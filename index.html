@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitalspur 2.8</title>
+<title>Vitalspur 2.9</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 680px; margin: 1.5rem auto; padding: 0 1rem; color: #222; background: #fafaf7; line-height: 1.5; }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.2rem; }
@@ -13,6 +13,14 @@
   input[type=number] { width: 5rem; font-size: 1rem; }
   input[type=text] { width: 60%; font-size: 1rem; padding: 0.3rem; }
   select { font-size: 1rem; padding: 0.2rem; max-width: 100%; }
+  /* 2.9: Seite nicht breiter als der Bildschirm, kein Flackern beim ersten Tippen */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  input, select, textarea { max-width: 100%; box-sizing: border-box; }
+  fieldset { min-width: 0; } canvas, img, table { max-width: 100%; }
+  button, input, select, label { touch-action: manipulation; }
+  #vsbar { will-change: transform; }
+  #verbanner { display: none; background: #fff3cd; border: 1px solid #e0b000; border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 14px; }
+  #diagmsg { font-size: 13px; color: #2d6a4f; margin: 4px 0; }
   button { font-size: 1rem; padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid #888; background: #fff; cursor: pointer; margin: 0.25rem 0.25rem 0.25rem 0; }
   button.main { background: #2d6a4f; color: #fff; border-color: #2d6a4f; }
   button.main.stop { background: #b3261e; border-color: #b3261e; }
@@ -98,7 +106,11 @@
 fieldset h3 { font-size: 1rem; font-weight: 600; color: #444; margin: 1.1rem 0 0.3rem; padding-top: 0.6rem; border-top: 1px solid #e3e3e3; }
 fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 #sesend { margin-top: 0.4rem; }
-#bv_pList tr.pTop td { background: #fdecea; }
+#bv_pList tr.pTop td, #bv_eList tr.pTop td { background: #fdecea; }
+#bv_nachtCard, #bv_pCard { display: none !important; }
+#bv_eList tr { cursor: pointer; } #bv_eList tr.eSel td { background: #ede4fb; } #bv_eList tr.eGrau td { color: #999; }
+#bv_eList tr.pKoe td:first-child { box-shadow: inset 4px 0 #e0a800; } #bv_eList tr.pTop td:first-child { box-shadow: inset 4px 0 #c0392b; }
+details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 #bv_pList tr.pKoe td:first-child { box-shadow: inset 4px 0 #e0a800; } #bv_pList tr.pTop td:first-child { box-shadow: inset 4px 0 #c0392b; }
 #bv_pList tr { cursor: pointer; } #bv_pList button { padding: 2px 6px; font-size: .85rem; }
 /* 2.0: breiter Bildschirm mit Maus: Betrachter und Prüfliste nutzen die Breite */
@@ -118,7 +130,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.8</h1>
+<h1>Vitalspur 2.9</h1>
+<div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
 <div class="hint">Geräte in dieser Reihenfolge verbinden: zuerst die Uhr, dann den Atemgurt, solange Bluetooth noch frei ist.</div>
@@ -135,6 +148,9 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <div class="hint">Misst die Zugkraft am Brustkorb, 10 Werte pro Sekunde.<br><b>Anlegen:</b> Nach dem Verbinden zeigt die Liveansicht die Grundspannung. Den Gurt nur so fest anlegen, dass er nicht drückt, dann „Kalibrieren: 5 tiefe Atemzüge“ drücken. Automatisch kalibriert die App bei „Alles wieder starten“, beim Beenden, beim Schalter Tag/Nacht sowie bei Beginn und Ende einer Session (wenn H10 und Sense laufen, erst nach dem Klopfabgleich). Das Mittel der fünf tiefsten Züge gilt als 100 %.</div>
   <button class="main" id="rbconnect">Atemgurt verbinden</button> <button id="rbstop" disabled>Atemgurt trennen</button>
   <div id="rbstatus" class="stat"></div>
+  <button class="main" id="oxconnect">Pulsoxymeter verbinden</button> <button id="oxstop" disabled>Pulsoxymeter trennen</button>
+  <div id="oxstatus" class="stat"></div>
+  <div class="live"><span>SpO₂ (Pulsoxymeter)</span><span id="oxval">–</span></div>
   <div><span id="rbcalst" class="stat"></span> <button class="main" id="rbcal" disabled>Kalibrieren: 5 tiefe Atemzüge</button></div>
   <div class="live"><span>Atmung (Gurt)</span><span id="breath">–</span></div>
 </fieldset>
@@ -143,7 +159,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <label><input type="checkbox" id="useacc" checked> Polar H10: Beschleunigung aufzeichnen (Atmung und Bewegung)</label>
   <label>Abtastrate Beschleunigung: <select id="accrate"><option value="25">25 Hz</option><option value="50" selected>50 Hz</option><option value="100">100 Hz</option><option value="200">200 Hz</option></select></label>
   <label><input type="checkbox" id="useecg" checked> Polar H10: Roh-EKG aufzeichnen (130 Hz, sichert die Herzschläge auch bei langer Hintergrundzeit)</label>
-  <button class="main" id="hrconnect">Gurt verbinden</button>
+  <button class="main" id="hrconnect">H10 verbinden</button>
   <button id="hrstop" disabled>Aufzeichnung beenden</button>
   <div id="hrstatus" class="stat"></div>
   <div id="pmdstatus" class="stat"></div>
@@ -201,7 +217,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <div id="syncstatus" class="stat"></div>
 <div id="crash" class="hint" style="display:none;color:#b00020"></div>
 <button id="blackbtn">Schwarzsperre</button>
-<div id="vsbar"><button id="moonbtn" title="Nachtsperre einschalten">☾</button><div id="barnbox"><input id="barnote" type="text" placeholder="Notiz" enterkeyhint="send" autocomplete="off"><span id="barnt"></span></div><button id="barok" title="Notiz speichern">✓</button><button id="barfoto" title="Foto: 30 s davor bis 15 s danach">Foto</button><button id="barrec" title="Aufnahme in voller Auflösung, höchstens 15 min">● Aufnahme</button><span id="barq"></span></div>
+<div id="vsbar"><button id="moonbtn" title="Nachtsperre einschalten">☾</button><div id="barnbox"><input id="barnote" type="text" placeholder="Notiz" enterkeyhint="send" autocomplete="off"><span id="barnt"></span></div><button id="barok" title="Notiz speichern">✓</button><button id="barfoto" title="Foto: 30 s davor bis 15 s danach">Foto</button><button id="barrec" title="Aufnahme in voller Auflösung, höchstens 15 min">● Aufn.</button><span id="barq"></span></div>
 <div id="bar"><span id="wl">Bildschirm: nicht nötig</span> · <span id="dur">keine Aufzeichnung</span> · <span id="mem">Speicher …</span></div>
 
 
@@ -329,16 +345,16 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 <div id="bv_info" class="stat">Noch keine Messung geladen. Es wird nichts hochgeladen, alles bleibt auf diesem Gerät.</div>
 
 <div class="card" id="bv_ovCard">
-  <div class="legend" id="bv_legTop"></div>
-  <canvas id="bv_ov" height="300"></canvas>
+  <details class="legbox"><summary>Legende</summary><div class="legend" id="bv_legTop"></div></details>
+  <canvas id="bv_ov" height="316"></canvas>
   <div class="hint" id="bv_ovHint">Antippen wählt die Stelle für die Großaufnahme.</div>
 </div>
 
 <div class="card" id="bv_nachtCard" style="display:none">
   <div class="row"><b>Zuckungen</b>
-    <select id="bv_nFilter"><option value="gueltig">nur vorgeprüft gültige</option><option value="zuck">alle Zuckungen</option><option value="alle">alle Ereignisse</option><option value="vergleich">Vergleichsfenster</option></select>
+    <select id="bv_nFilter"><option value="gueltig">nur vorgeprüft gültige</option><option value="zuck">alle Zuckungen</option><option value="alle" selected>alle Ereignisse</option><option value="vergleich">Vergleichsfenster</option></select>
     <select id="bv_nSpan"><option value="50">ganzes Fenster (15 s davor, 35 s danach)</option><option value="20">20 s um T0 (5 s davor)</option></select>
-    <label><input type="checkbox" id="bv_nEkg"> EKG zeigen</label>
+    <label><input type="checkbox" id="bv_nEkg" checked> EKG zeigen</label>
     <span class="stat" id="bv_nCount"></span>
   </div>
   <div class="scroll"><table><thead><tr><th>Nr</th><th>Uhrzeit</th><th>Art</th><th>Puls vorher</th><th>Spitze</th><th>Anstieg</th><th>Abstand zur vorigen</th><th>Fuß mg</th><th>Brust mg</th><th>Vorprüfung</th><th>Rampe ab</th><th>Schwingen zurück</th></tr></thead><tbody id="bv_nList"></tbody></table></div>
@@ -351,10 +367,12 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
   <div class="hint" id="bv_pHint"></div>
 </div>
 
-<div class="card" id="bv_eCard" style="display:none">
-  <div class="row"><b>Ereignisliste</b> <select id="bv_eFilt"><option value="alle">alle</option><option value="bew">Zuckungen und Bewegungen</option><option value="lage">Lagewechsel und Nachrücken</option><option value="puls">Pulsanstiege</option><option value="ekg">EKG gestört</option><option value="prot">Marker, Notizen, Ansagen</option></select> <button id="bv_eCsv">als CSV</button> <span class="stat" id="bv_eCount"></span></div>
-  <div class="scroll"><table><thead><tr><th>Uhrzeit</th><th>Art</th><th>Zustand</th><th>Reihenfolge (was kam zuerst)</th><th>Angaben</th></tr></thead><tbody id="bv_eList"></tbody></table></div>
-  <div class="hint">Reihenfolge: Puls = drei Schläge über der Ruhe 30 bis 12 s davor plus 8; Fuß und Brust = erste Bewegung über 25 mg nach 3 s Ruhe; Atem = Atemzug tiefer als das 2,5-Fache des üblichen, je im Fenster 12 s davor bis 15 s danach. Lagewechsel und Nachrücken aus der Ausrichtung der Brust vor und nach einer Bewegung (Nachrücken ab 5 Grad in derselben Lage). EKG gestört: schneller Anteil über 20 Hz zwischen den Schlägen ab 15 µV (ab Vitalspur 2.8). Zustand wach oder Schlaf ist eine Schätzung aus Atem, Puls, Bewegung und Nachtsperre, keine Schlafdiagnose. Antippen springt in die Großaufnahme.</div>
+<div class="card" id="bv_eCard">
+  <div class="row" id="bv_eRow"><b>Ereignisse</b> <select id="bv_eFilt"><option value="alle">alle</option><option value="offen">Prüfliste, ungeprüft</option><option value="pruef">Prüfliste, alle</option><option value="bew">Zuckungen und Bewegungen</option><option value="lage">Lagewechsel und Nachrücken</option><option value="pause">Pausen im Herzschlag</option><option value="atem">Atemmuster und Atem</option><option value="puls">Pulsanstiege</option><option value="ekg">EKG gestört</option><option value="prot">Marker, Notizen, Ansagen</option></select> <button id="bv_eCsv">als CSV</button> <span class="stat" id="bv_eCount"></span></div>
+  <div class="scroll" style="max-height:340px"><table><thead><tr><th>Uhrzeit</th><th>Art</th><th>Zustand</th><th>Reihenfolge (was kam zuerst)</th><th>Angaben</th><th>Stand</th></tr></thead><tbody id="bv_eList"></tbody></table></div>
+  <div class="row" id="bv_eAct" style="display:none"><b id="bv_eSelTxt"></b> <input id="bv_eGrund" type="text" placeholder="Grund (frei, sonst Art)" style="flex:1 1 120px;min-width:100px"> <button id="bv_eBad">Abschnitt ungültig</button> <button id="bv_eOk">In Ordnung</button> <button id="bv_eFalse">Deutung falsch</button></div>
+  <div class="stat" id="bv_eMsg"></div>
+  <details><summary class="hint">Erklärung</summary><div class="hint">Antippen springt in die Großaufnahme und markiert die Stelle violett. „Abschnitt ungültig“ schließt bei einem Eintrag der Prüfliste genau diese Stelle aus, sonst den Ausschnitt der Großaufnahme; „In Ordnung“ bestätigt; „Deutung falsch“ heißt, die Erkennung lag daneben (der Eintrag zählt dann nicht und steht grau). Alles landet im Ordner Langzeit (Ausschluss_ und Deutung_ mit Gerätenamen) und lässt sich mit „rückgängig“ zurücknehmen. Pausen: Abstand ab 900 ms und mindestens das 1,5-Fache des vorigen, der nächste höchstens drei Viertel davon, EKG sauber, keine Bewegung über 50 mg in 3 s Umkreis. Reihenfolge: Puls = drei Schläge über der Ruhe 30 bis 12 s davor plus 8; Fuß und Brust = erste Bewegung über 25 mg nach 3 s Ruhe; Atem = Atemzug tiefer als das 2,5-Fache des üblichen, je im Fenster 12 s davor bis 15 s danach. EKG gestört: Anteil über 20 Hz zwischen den Schlägen ab 15 µV (ab Vitalspur 2.8). Zustand wach oder Schlaf ist eine Schätzung aus Atem, Puls, Bewegung und Nachtsperre, keine Schlafdiagnose. Technische Auffälligkeiten sind bis zur Prüfung vorläufig ausgeschlossen, körperliche nur hervorgehoben (gelb umrandet, rot: möglicher Atemstillstand). Die Regeln der Prüfliste stehen im Nachtbericht.</div></details>
 </div>
 
 <div class="card" id="bv_detCard">
@@ -372,7 +390,7 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
     <label><input type="checkbox" id="bv_zoom" checked> Zoomen in der Großaufnahme (Mausrad oder zwei Finger, 10 s bis 2 min)</label>
     <label>Pulslinie im Überblick: <select id="bv_line"><option value="60">gleitender Schnitt 60 s</option><option value="10">gleitender Schnitt 10 s</option><option value="px">Mittel je Bildpunkt</option></select> (gestrichelt immer 300 s)</label>
   </div>
-  <div style="display:flex;align-items:flex-start;gap:6px"><div class="legend" id="bv_legDet" style="flex:1"></div><div style="display:flex;flex-direction:column;gap:4px"><button id="bv_foto" style="padding:2px 8px;font-size:0.85rem">Foto</button><button id="bv_ekgload" style="padding:2px 8px;font-size:0.85rem" title="EKG für diesen Ausschnitt aus dem Gerätespeicher holen">EKG laden</button></div></div>
+  <div style="display:flex;align-items:flex-start;gap:6px"><details class="legbox" style="flex:1"><summary>Legende</summary><div class="legend" id="bv_legDet"></div></details><div style="display:flex;flex-direction:column;gap:4px"><button id="bv_foto" style="padding:2px 8px;font-size:0.85rem">Foto</button><button id="bv_ekgload" style="padding:2px 8px;font-size:0.85rem" title="EKG für diesen Ausschnitt aus dem Gerätespeicher holen">EKG laden</button></div></div>
   <div id="bv_fpop" style="display:none;position:fixed;left:8px;right:8px;bottom:22%;background:#fff;border:1px solid #888;border-radius:10px;padding:10px;z-index:600;box-shadow:0 4px 16px rgba(0,0,0,.25)"><div style="margin-bottom:6px">Notiz zum Ausschnitt (frei)</div><input id="bv_fnote" style="width:100%;font-size:1rem" autocomplete="off"><div style="margin-top:8px"><button id="bv_fsave">Speichern</button> <button id="bv_fnone">Ohne Notiz</button> <button id="bv_fcancel">Abbrechen</button></div></div>
   <canvas id="bv_det" height="520"></canvas>
 </div>
@@ -416,7 +434,8 @@ fieldset h3.first { border-top: none; padding-top: 0; margin-top: 0.2rem; }
 
 <fieldset>
   <legend>Daten als ZIP</legend>
-  <button class="main" id="saveall">Aktuellen Abschnitt als ZIP (ohne Rohdaten)</button> <button id="ordnew">Speicherordner wählen</button>
+  <button id="fsend2" title="Alle neuen Ausschnitte der letzten 10 Tage in eine ZIP">Ausschnitte senden</button> <button class="main" id="saveall">Aktuellen Abschnitt als ZIP (ohne Rohdaten)</button> <button id="ordnew">Speicherordner wählen</button>
+  <div id="diagmsg"></div>
   <button id="diagbtn" title="Version, letzte Fehler, Rechenzeiten und Speicherstand in eine kleine Datei (Ordner Diagnose)">Diagnose</button>
   <button id="rohekg" title="Ganzes EKG aus dem Gerätespeicher (rund 36 h) als gepackte Datei in den Tagesordner, Unterordner RohEKG">Roh-EKG exportieren</button>
   <button class="main" id="shareall">Teilen</button>
@@ -1013,7 +1032,7 @@ setInterval(() => {
 /* Atmung und Bewegung grob aus der Brustbewegung */
 function movAvg(a, w) { const o = new Array(a.length); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= w) s -= a[i - w]; o[i] = s / Math.min(i + 1, w); } return o; }
 setInterval(() => {
-  if (breathBuf.length < 300) { if (pmdOn) $("breath").textContent = "sammle Daten …"; return; }
+  if (breathBuf.length < 300) return;
   const seg = breathBuf.slice(-600), dur = (seg[seg.length - 1][0] - seg[0][0]) / 1000;
   let best = null;
   for (let ax = 1; ax <= 3; ax++) {
@@ -1028,7 +1047,7 @@ setInterval(() => {
   const mag = seg.slice(-100).map(r => Math.hypot(r[1], r[2], r[3])), mm = mag.reduce((a, b) => a + b, 0) / mag.length;
   const msd = Math.sqrt(mag.reduce((a, b) => a + (b - mm) ** 2, 0) / mag.length);
   const mov = msd < 15 ? "ruhig" : msd < 60 ? "leichte Bewegung" : "starke Bewegung";
-  $("breath").textContent = (mov === "ruhig" ? `ca. ${rate.toFixed(1)} Atemzüge/min` : "bei Bewegung nicht schätzbar") + ` · ${mov} (grob, ${Math.round(dur)} s)`;
+  void rate; void mov; void dur; /* 2.9: Atmung nur noch aus dem Gurt, siehe unten */
 }, 5000);
 
 async function hrAttach() { await hrAttach0(); readBatt(hrDev, "Gurt"); }
@@ -1071,10 +1090,10 @@ async function onGattLost() {
       for (let i = 0; i < 40 && hrWanted; i++) {
         try { try { hrDev.gatt.disconnect(); } catch (e) {} await wait(300);
           await withTO(hrAttach(), 20000, "Gurt"); addEntry({ typ: "Gurt", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); reconnecting = false; if (vWanted) syncOpen("Gurt neu verbunden", true); return; }
-        catch (e) { addEntry({ typ: "Gurt", name: `Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); await new Promise(r => setTimeout(r, 3000)); }
+        catch (e) { addEntry({ typ: "Fehler", name: `H10: Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); await new Promise(r => setTimeout(r, 3000)); }
       }
       reconnecting = false;
-      hrStatus("Neu verbinden fehlgeschlagen. Bitte erneut „Gurt verbinden“ tippen.");
+      hrStatus("Neu verbinden fehlgeschlagen. Bitte erneut „H10 verbinden“ tippen.");
 }
 $("hrstop").addEventListener("click", async () => {
   hrWanted = false; pmdOn = false;
@@ -1084,7 +1103,7 @@ $("hrstop").addEventListener("click", async () => {
   if (burst) finishBurst(lastArr);
   addEntry({ typ: "Gurt", name: `Aufzeichnung beendet, ${nBeats} Herzschläge (davon ${nLate} nachgeliefert), ${Math.round(accN)} Beschleunigungswerte, ${ecgN} EKG-Werte`, start: Date.now(), session: hrRec });
   hrStatus("Beendet. Bitte „Alles speichern“ tippen."); pmdStatus("");
-  hrRec = null; $("hrstop").disabled = true; $("hrconnect").textContent = "Gurt verbinden";
+  hrRec = null; $("hrstop").disabled = true; $("hrconnect").textContent = "H10 verbinden";
   $("useacc").disabled = $("useecg").disabled = $("accrate").disabled = false;
   flush();
   if (tpDev) tpFetch(); if (tp2Dev) setTimeout(tp2Fetch, 20000);
@@ -1496,7 +1515,14 @@ function vSend1(bytes) {
     vCp.writeValueWithResponse(new Uint8Array(bytes)).then(() => { wrote = true; fin(); }).catch(() => { if (!done) { done = true; clearTimeout(to); vResp = null; res(-2); } });
   });
 }
-async function vAttach() { await vAttach0(); readBatt(vDev, "Sense"); }
+async function vAttach() {
+  /* 2.9: Code −2 heißt, das Schreiben an den Sense ist gescheitert (halb tote Verbindung): frisch trennen, warten, neu */
+  for (let k = 0; ; k++) { try { await vAttach0(); break; }
+    catch (e) { const m = (e && e.message) || String(e); if (!/Code -2/.test(m) || k >= 2) throw e;
+      addEntry({ typ: "Fehler", name: `Sense: Schreiben gescheitert (Code −2), trenne und verbinde frisch (${k + 1})`, start: Date.now(), session: vRec });
+      try { vDev.gatt.disconnect(); } catch (x) {} await wait(2000 * (k + 1)); } }
+  vAttT = Date.now(); readBatt(vDev, "Sense");
+}
 async function vAttach0() {
   const server = await vDev.gatt.connect(), svc = await server.getPrimaryService(PMD_SVC);
   vCp = await svc.getCharacteristic(PMD_CP); vData = await svc.getCharacteristic(PMD_DATA);
@@ -1562,7 +1588,7 @@ async function onVLost() {
   for (let i = 0; i < 40 && vWanted; i++) {
     try { try { vDev.gatt.disconnect(); } catch (e) {} await wait(300);
       await withTO(vAttach(), 40000, "Sense"); addEntry({ typ: "Sense", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now(), session: vRec }); vReconn = false; if (hrWanted) syncOpen("Sense neu verbunden", true); return; }
-    catch (e) { addEntry({ typ: "Sense", name: `Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now(), session: vRec }); await wait(3000); }
+    catch (e) { addEntry({ typ: "Fehler", name: `Sense: Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now(), session: vRec }); await wait(3000); }
   }
   vReconn = false; vStatus("Neu verbinden fehlgeschlagen. Bitte „Fußsensor verbinden“ tippen.");
 }
@@ -1580,12 +1606,12 @@ $("vconnect").addEventListener("click", async () => {
     await vAttach();
     if (!vWanted) addEntry({ typ: "Sense", name: "Aufzeichnung gestartet: " + (dev.name || "Verity Sense"), start: Date.now(), session: vRec });
     vWanted = true; markRec(); keepAwake();
-    if (hrWanted && !syncGate.open) syncOpen("Sense verbunden", false);
+    if (hrWanted && !syncGate.open) syncOpen("Sense verbunden", true); /* 2.9: zum Klopfen aufrufen */
     $("vstop").disabled = false; $("vconnect").textContent = "Neu verbinden";
     vStatus("Verbunden mit " + (dev.name || "Verity Sense") + ". Warte auf Daten …");
   } catch (e) {
     vStatus("Verbindung nicht möglich: " + (e && e.message ? e.message : e));
-    addEntry({ typ: "Sense", name: "Verbindung nicht möglich: " + (e && e.message ? e.message : e), start: Date.now(), session: vRec || "" });
+    addEntry({ typ: "Fehler", name: "Sense: Verbindung nicht möglich: " + (e && e.message ? e.message : e), start: Date.now(), session: vRec || "" });
   }
 });
 $("vstop").addEventListener("click", async () => {
@@ -3051,10 +3077,18 @@ async function buildSpar(D, stamp8) {
   /* 2.8: Störungsmaß je bestätigtem Schlag: Effektivwert des EKG über 20 Hz zwischen den Schlägen (R+120 ms bis nächste R−100 ms), Ruhe etwa 2 µV, Niesen 15 bis 30 */
   if (E && E.t && E.t.length > 100) { try { const hf = ekgHF(E), okB = B.filter(b => b.ok);
     for (let i = 0; i + 1 < okB.length; i++) { const a = okB[i].tt + 120, e = okB[i + 1].tt - 100; if (e - a < 100 || e - a > 2300) continue; let s2 = 0, n = 0; for (let k = lowerBound(E.t, a); k < E.t.length && E.t[k] < e; k++) { s2 += hf[k] * hf[k]; n++; } if (n >= 5) okB[i].stU = Math.round(Math.sqrt(s2 / n) * 10) / 10; } } catch (e) {} }
+  /* 2.9: ein Abstand mit starkem Störungsmaß (ab 40 µV, oder ab 15 µV und Abstand über 25 % neben dem üblichen) gilt nicht: der Schlag danach fällt aus Puls und Zuckungsstatistik */
+  { const okB = B.filter(b => b.ok); let nS = 0;
+    for (let i = 0; i + 1 < okB.length; i++) { const s0 = okB[i].stU; if (!Number.isFinite(s0) || s0 < 15) continue; const rr = okB[i + 1].tt - okB[i].tt; let bad = s0 >= 40;
+      if (!bad) { const w = []; for (let m = Math.max(1, i - 8); m <= Math.min(okB.length - 1, i + 9); m++) if (m !== i + 1) w.push(okB[m].tt - okB[m - 1].tt); w.sort((p, q) => p - q); const md = w[w.length >> 1]; if (md && Math.abs(rr - md) > 0.25 * md) bad = true; }
+      if (bad) { okB[i + 1].ok = false; okB[i + 1].art = "EKG gestört"; okB[i + 1].stAus = true; nS++; } }
+    if (nS) { for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round(b.tt - p.tt) : null; if (b.stAus) b.drop = true; }
+      addEntry({ typ: "Daten", name: `Schläge wegen gestörtem EKG nicht gewertet: ${nS}`, start: Date.now() }); } }
   const T0 = Math.min(...[B[0]?.tt, A?.t[0], F?.t[0], L.length ? Math.min(...L.map(r => r.start)) : undefined].filter(Number.isFinite));
   say2("Rechne: Schritte …"); await wait(20);
-  const steps = stepsDetect(F, G, A);
+  const steps = stepsNoKnock(stepsDetect(F, G, A), L); /* 2.9: Klopfen ist kein Schritt */
   say2("Rechne: Atemzüge …"); await wait(20);
+  window.lastGurtVersatz = null; try { if (D.rbF && A) window.lastGurtVersatz = beltLag(D.rbF, A); } catch (e) {} /* 2.9 */
   const bc = breathsChest(A);
   const goodB = B.filter(b => b.rr > 300 && b.rr < 2000);
   const bp = breathsPulse(Float64Array.from(goodB, b => b.tt), Float32Array.from(goodB, b => 60000 / b.rr));
@@ -3119,7 +3153,7 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.8"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.9"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
@@ -3164,7 +3198,7 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 2.8", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur 2.9", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
     abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
@@ -3505,7 +3539,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 2.8. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur 2.9. Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3596,7 +3630,7 @@ function testTables(ev, B, steps, klima, T1) {
     const rr = bb.map(x => x.rr), pu = 60000 / (rr.reduce((s, x) => s + x, 0) / rr.length);
     const D = []; for (let i = 1; i < bb.length; i++) { const d = bb[i].rr - bb[i - 1].rr; if (bb[i].tt - bb[i - 1].tt < 2500 && Math.abs(d) < 0.2 * bb[i - 1].rr) D.push(d); }
     const rmssd = D.length > 10 ? Math.sqrt(D.reduce((s, x) => s + x * x, 0) / D.length) : null;
-    const sp = steps.filter(s => s.t >= a && s.t < b).length / ((b - a) / 60000);
+    const sp = steps.filter(s => s.sicher && s.t >= a && s.t < b).length / ((b - a) / 60000); /* 2.9: nur sichere */
     const Q = H.filter(k => k.t >= a - 30000 && k.t < b + 30000); let up = 0, dn = 0; for (let i = 1; i < Q.length; i++) { const x = Q[i].hm - Q[i - 1].hm; if (x > 0) up += x; else dn -= x; }
     let band = null, peak = null;
     if (b - a >= 120000) {
@@ -3641,7 +3675,7 @@ function phasesCalc(B, steps, breaths, T0, T1) {
   for (let i = 0; i + 1 < cuts.length; i++) {
     const a = T0 + cuts[i] * BIN, b = Math.min(T1, T0 + cuts[i + 1] * BIN), min = (b - a) / 60000; if (min <= 0) continue;
     const ps = []; B.forEach(x => { if (x.ok && x.tt >= a && x.tt < b && x.rr > 300 && x.rr < 2500) ps.push(60000 / x.rr); });
-    const ns = steps.filter(s => s.t >= a && s.t < b).length, br = breaths.filter(c => c.t >= a && c.t < b && (c.quelle || "Gurt") === "Gurt");
+    const ns = steps.filter(s => s.sicher && s.t >= a && s.t < b).length, br = breaths.filter(c => c.t >= a && c.t < b && (c.quelle || "Gurt") === "Gurt");
     const tief = br.map(c => c.tiefe).filter(Number.isFinite), pct = br.map(c => c.prozent).filter(Number.isFinite), spm = ns / min;
     out.push({ a, b, min, art: spm >= 40 ? "Gehen" : spm >= 10 ? "wenig Schritte" : "ruhig", puls: med(ps), schritte: spm, atem: br.length / min, tiefe: med(tief), prozent: pct.length ? med(pct) : null }); }
   return out;
@@ -3743,12 +3777,15 @@ async function extras9(X) {
   /* 2.4: Phasen */
   let PH = []; try { PH = phasesCalc(B, steps, breaths, T0, T1); if (PH.length) sheets.splice(0, 0, { name: "Phasen", rows: phasesRows(PH) }); } catch (e) { X.err = X.err || e; }
   say2("Rechne: 10-Hz-Strom …"); await wait(20);
-  const strom = stream10(A, F, G, fhp, gmag, T0); window.lastStrom = { strom, T0 }; /* 1.7: für Kippen_Brust.csv */
+  const strom = stream10(A, F, G, fhp, gmag, T0); window.lastStrom = { strom, T0 };
+  const gvz = (window.lastGurtVersatz || []).map(g => Object.assign({}, g, { t: Math.round(g.t - T0) })), oxi = (window.lastOxi || []).filter(o => o.t >= T0 - 60000); /* 2.9 */ /* 1.7: für Kippen_Brust.csv */
   const rel = t => Math.round(t - T0);
   const json9 = {
+    gurt_versatz: gvz.length ? { hinweis: "je 5 min: Versatz des Atemgurts gegen das Kippen der Brust in ms (positiv: Gurt später), r = Übereinstimmung; nur festgehalten, nichts verschoben", liste: gvz } : null,
+    oxi: oxi.length ? { hinweis: "Pulsoxymeter PC-60FW, t in ms seit t0, spo2 in %, puls je min, pi in %", t: oxi.map(o => Math.round(o.t - T0)), spo2: oxi.map(o => o.s), puls: oxi.map(o => o.p), pi: oxi.map(o => o.pi) } : null,
     schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0), r_uV: B.map(b => b.rU ?? null), s_uV: B.map(b => b.sU ?? null), stoer_uV: B.map(b => b.stU ?? null), hinweis_stoer: "stoer_uV: Effektivwert des EKG über 20 Hz zwischen den Schlägen, Ruhe etwa 2 µV, ab 15 µV gestört (Muskeln, Niesen, Bewegung)", hinweis_rs: "r_uV, s_uV: Höhe der R-Zacke und Tiefe des S-Tals gegen die Grundlinie 120 bis 50 ms vor dem Schlag, nur bestätigte Schläge" },
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
-    schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher })),
+    schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
     protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
     taetigkeiten_auto: act.blocks.map(b => ({ start_ms: rel(b.a), ende_ms: rel(b.b), name: b.name, sicherheit: b.sicher, grund: b.grund })),
@@ -3796,7 +3833,7 @@ async function buildZip(opts) {
   const A0 = Number.isFinite(opts.a) ? opts.a : -Infinity, B0 = Number.isFinite(opts.b) ? opts.b : Infinity;
   $("savestatus").textContent = "Stelle Daten zusammen …";
   await flush();
-  const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb"];
+  const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb", "ox"];
   const RM = await readKinds(KINDS.filter(k => k !== "log"), A0, B0); const ALL = await Promise.all(KINDS.map(k => k === "log" ? readKind(k) : RM[k])); /* 2.7: ein Durchlauf über den Zeitbereich */
   const W = ALL.map((arr, i) => arr.filter(d => { const t = recTime(KINDS[i], d); return t >= A0 && t < B0; }));
   /* Trageorte gelten weiter: letzter Eintrag vor dem Fenster wird an den Anfang gelegt */
@@ -3806,7 +3843,7 @@ async function buildZip(opts) {
     if (ub && Number.isFinite(A0) && !W[0].some(r => r.typ === "Abgleich" && /erkannt/.test(r.name || ""))) { const ra = ub.ref - 8000, rz = Math.min(A0, ub.ref + 8000);
       if (rz > ra) { for (const [i, k] of [[4, "acc"], [9, "foot"], [12, "gyro"]]) { const x = (await readKind(k, ra, rz)).filter(d => { const t = recTime(k, d); return t >= ra && t < rz; }); W[i] = x.concat(W[i]); }
         const hh = ALL[0].find(r => r.typ === "Abgleich" && /erkannt/.test(r.name || "") && Math.abs(r.start - ub.ref) < 3000); if (hh) W[0].unshift(Object.assign({}, hh, { name: hh.name + " (Referenz, übernommen)" })); } } }
-  const [L, BT, SN, EV, AC, EC, SY, AT, TP, FT0, PP, VH, GY, RU, BA, RB] = W;
+  const [L, BT, SN, EV, AC, EC, SY, AT, TP, FT0, PP, VH, GY, RU, BA, RB, OX] = W; window.lastOxi = (OX || []).slice().sort((p, q) => p.t - q.t);
   const belt = RB.length ? rbBreaths(RB, calRefs(ALL[0])) : null;
   const files = [], big = $("bigdata").checked && !opts.noRaw && !opts.noBig;
   const pid = (typeof pidVal === "function" && pidVal()) || "ohneID", id = idstamp(new Date());
@@ -3840,6 +3877,7 @@ async function buildZip(opts) {
     if (SY.length) { const s = ["Sitzung;Block;Position;Durchgang;Stueck;Datum;Zeit;Epoch_ms;Abspielposition_s;Verzoegerung_ms"]; SY.forEach(r => s.push([r.s ?? "", r.b ?? "", r.p ?? "", r.r ?? "", r.n, ...tcols(r.t), num(r.c, 3), r.d].join(";"))); files.push({ name: "Musikposition.csv", text: s.join("\n") }); }
     if (AT.length) { const s = ["Sitzung;Phase;Datum;Zeit;Epoch_ms;Dauer_s;Optik;Toene"]; AT.forEach(r => s.push([r.s ?? "", r.p, ...tcols(r.t), num(r.d / 1000), r.o ? "an" : "aus", r.n ? "an" : "aus"].join(";"))); files.push({ name: "Atemhilfe.csv", text: s.join("\n") }); }
   }
+  if (OX && OX.length) { const s = ["Datum;Zeit;Epoch_ms;SpO2_Prozent;Puls_Oxy;PI_Prozent;Rahmen_hex"]; [...OX].sort((a, b) => a.t - b.t).forEach(r => s.push([...tcols(r.t), r.s ?? "", r.p ?? "", r.pi === null || r.pi === undefined ? "" : num(r.pi), (r.raw || []).map(b => b.toString(16).padStart(2, "0")).join(" ")].join(";"))); files.push({ name: "Oxymeter.csv", text: s.join("\n") }); }
   if (TP.length) { const s = ["Datum;Zeit;Epoch_ms;Temperatur_C;Luftfeuchte_Prozent;Thermometer;WBGT_geschaetzt_C"]; [...TP].sort((a, b) => a.t - b.t).forEach(r => s.push([...tcols(r.t), num(r.c), r.h, r.n || 1, num(wbgtEst(r.c, r.h))].join(";"))); files.push({ name: "Temperatur.csv", text: s.join("\n") }); }
   if (RU.length) { const s = ["Datum;Zeit;Epoch_ms;Temperatur_C;Luftfeuchte_Prozent;Luftdruck_hPa;x_mg;y_mg;z_mg;Batterie_V;Bewegungszaehler;Paket_Nr;WBGT_geschaetzt_C;Pakete_gemittelt"]; RU.forEach(r => s.push(vsRuRow(r))); files.push({ name: "Ruuvi.csv", text: s.join("\n") }); }
   if (RB.length && !opts.noRaw) { const s = [VS_HEAD.Atemgurt]; RB.forEach(r => r.v.forEach((v, k) => s.push([...tcols(r.ts[k]), num(v, 3)].join(";")))); files.push({ name: "Atemgurt.csv", text: s.join("\n") }); }
@@ -3909,34 +3947,68 @@ async function ordReady(neu) {
 async function ordWrite(h, sub, name, data) { const d = await h.getDirectoryHandle(sub, { create: true }); const f = await d.getFileHandle(name, { create: true }); const w = await f.createWritable(); await w.write(data); await w.close(); }
 /* ===== 2.7.1: Roh-EKG aus dem Gerätespeicher exportieren (alles, was noch da ist, rund 36 h) ===== */
 function vsDayOf(ms) { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+/* 2.9: eine Stunde EKG kodieren (Sitzungen je Stunde lokal, beim Zusammenpacken umgeschlüsselt) */
+function ekgHourEnc(pk) {
+  const n = pk.length; let m = 0; pk.forEach(p => m += p.v.length);
+  const sl = [], offs = {}, meta = new Float64Array(4 * n), cnt = new Uint32Array(n), val = new Int32Array(m); let j = 0, prev = 0, fit = true;
+  pk.forEach((p, i) => { let si = sl.indexOf(String(p.s)); if (si < 0) { sl.push(String(p.s)); si = sl.length - 1; }
+    meta[4 * i] = p.t; meta[4 * i + 1] = p.us; meta[4 * i + 2] = si; meta[4 * i + 3] = p.r || 130; cnt[i] = p.v.length;
+    const o = p.t - p.us / 1000, kk = String(p.s); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o;
+    for (const x of p.v) { const d = x - prev; val[j++] = d; prev = x; if (d > 32767 || d < -32767) fit = false; } });
+  const bits = fit ? 16 : 32;
+  return { head: new Uint32Array([0x32455356, n, m, bits]), meta, cnt, val: fit ? Int16Array.from(val) : val, sess: sl, offs, n, m, bits, von: pk[0].t, bis: pk[n - 1].t };
+}
+async function ekgHourBlob(E, sessAll) { const meta = Float64Array.from(E.meta);
+  for (let i = 0; i < E.n; i++) { const nm = E.sess[meta[4 * i + 2]]; let g = sessAll.indexOf(nm); if (g < 0) { sessAll.push(nm); g = sessAll.length - 1; } meta[4 * i + 2] = g; }
+  return new Uint8Array(await new Blob([E.head, meta, E.cnt, E.val]).arrayBuffer()); }
+/* Stundenzwischenspeicher im Speicherordner: RohEKG_Stunden/EKG_JJJJMMTT-HH.bin und .json, nur für abgeschlossene Stunden */
+async function ekgCacheDir(create) { const h = await vsRoot(false); if (!h) return null; try { return await vsSub(h, ["RohEKG_Stunden"]); } catch (e) { return null; } }
+async function ekgCacheGet(dir, a) {
+  try { const nm = `EKG_${idstamp(new Date(a)).slice(0, 11)}`; const jf = await (await dir.getFileHandle(nm + ".json")).getFile(), J = JSON.parse(await jf.text());
+    const buf = await (await (await dir.getFileHandle(nm + ".bin")).getFile()).arrayBuffer(), hd = new Uint32Array(buf, 0, 4); if (hd[0] !== 0x32455356) return null;
+    const n = hd[1], m = hd[2], bits = hd[3], meta = new Float64Array(buf.slice(16, 16 + 32 * n)), cnt = new Uint32Array(buf.slice(16 + 32 * n, 16 + 36 * n)), vb = buf.slice(16 + 36 * n);
+    return { head: hd.slice(), meta, cnt, val: bits === 16 ? new Int16Array(vb) : new Int32Array(vb), sess: J.sess, offs: J.offs, n, m, bits, von: J.von, bis: J.bis };
+  } catch (e) { return null; } }
+async function ekgCachePut(dir, a, E) { const nm = `EKG_${idstamp(new Date(a)).slice(0, 11)}`;
+  await vsPut(dir, nm + ".bin", new Blob([E.head, E.meta, E.cnt, E.val]));
+  await vsPut(dir, nm + ".json", new Blob([JSON.stringify({ sess: E.sess, offs: E.offs, von: E.von, bis: E.bis, n: E.n, m: E.m, bits: E.bits, erstellt: Date.now() })], { type: "application/json" })); }
+const EKGC = { busy: false };
+async function ekgCacheTick() {
+  /* fertige Stunden der letzten 30 h vorab kodieren, damit der Bericht am Morgen schnell ist */
+  if (EKGC.busy) return; EKGC.busy = true; const t0 = Date.now();
+  try { const dir = await ekgCacheDir(); if (!dir) return; const H = 3600000, now = Date.now(); let made = 0;
+    for (let a = Math.floor((now - 30 * H) / H) * H; a + H < now - 120000; a += H) {
+      if (await ekgCacheGet(dir, a)) continue;
+      const pk = ((await readKinds(["ecg"], a, a + H)).ecg || []).filter(p => p && p.v && p.v.length && p.t >= a && p.t < a + H).sort((p, q) => p.t - q.t);
+      if (!pk.length) continue; await ekgCachePut(dir, a, ekgHourEnc(pk)); made++; await wait(50); }
+    for await (const [n] of dir.entries()) { const m = n.match(/^EKG_(\d{4})(\d\d)(\d\d)-(\d\d)/); if (m && new Date(+m[1], m[2] - 1, +m[3], +m[4]).getTime() < now - 72 * H) { try { await dir.removeEntry(n); } catch (e) {} } }
+    if (made) diagT(`EKG-Stunden vorab (${made})`, Date.now() - t0);
+  } catch (e) {} finally { EKGC.busy = false; } }
+setInterval(() => { try { if (typeof anyActive === "function" && anyActive()) ekgCacheTick(); } catch (e) {} }, 10 * 60000);
 async function rohEkgExport(say, opt) {
-  /* 2.8: auch für einen Zeitbereich (volles EKG der Nacht); Werte als Differenzen in 16 Bit, nur wenn eine Stunde nicht passt in 32 Bit */
+  /* 2.8: Zeitbereich, 16 Bit; 2.9: abgeschlossene Stunden aus dem Stundenzwischenspeicher */
   opt = opt || {}; await flush();
   const now = Date.now(); let a0, b0;
   if (Number.isFinite(opt.a)) { a0 = opt.a; b0 = Number.isFinite(opt.b) ? opt.b : now; }
   else { const fl = await vsFirstLast(); if (fl.f == null) throw new Error("Gerätespeicher ist leer");
     const first = await vsRecAt(fl.f); a0 = first && Number.isFinite(first.t) ? first.t : now - 40 * 3600000; if (a0 < now - 48 * 3600000) a0 = now - 48 * 3600000; b0 = now; }
-  const H = 3600000, files = [], liste = [], sess = [], offs = {}; let tA = null, tB = null, nAll = 0;
+  const H = 3600000, files = [], liste = [], sess = [], offs = {}; let tA = null, tB = null, nAll = 0, ausC = 0;
+  const cdir = await ekgCacheDir();
   for (let a = Math.floor(a0 / H) * H; a < b0; a += H) {
     say(`Lese EKG ${pad(new Date(a).getHours())}:00 …`);
-    const pk = ((await readKinds(["ecg"], Math.max(a, a0), Math.min(a + H, b0))).ecg || []).filter(p => p && p.v && p.v.length).sort((p, q) => p.t - q.t);
-    if (!pk.length) continue;
-    const n = pk.length; let m = 0; pk.forEach(p => m += p.v.length);
-    const meta = new Float64Array(4 * n), cnt = new Uint32Array(n), val = new Int32Array(m); let j = 0, prev = 0, fit = true;
-    pk.forEach((p, i) => { let si = sess.indexOf(String(p.s)); if (si < 0) { sess.push(String(p.s)); si = sess.length - 1; }
-      meta[4 * i] = p.t; meta[4 * i + 1] = p.us; meta[4 * i + 2] = si; meta[4 * i + 3] = p.r || 130; cnt[i] = p.v.length;
-      const o = p.t - p.us / 1000, kk = String(p.s); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o;
-      for (const x of p.v) { const d = x - prev; val[j++] = d; prev = x; if (d > 32767 || d < -32767) fit = false; } });
-    const bits = fit ? 16 : 32, head = new Uint32Array([0x32455356, n, m, bits]);
-    const data = new Uint8Array(await new Blob([head, meta, cnt, fit ? Int16Array.from(val) : val]).arrayBuffer());
-    const name = `EKG_${idstamp(new Date(a)).slice(0, 11)}.bin`;
-    files.push({ name, data }); liste.push({ datei: name, von: stamp(new Date(pk[0].t)), bis: stamp(new Date(pk[n - 1].t)), pakete: n, werte: m, bit: bits });
-    if (tA === null) tA = pk[0].t; tB = pk[n - 1].t; nAll += m;
+    const whole = a >= a0 && a + H <= b0 && a + H < now - 120000; let E = null;
+    if (whole && cdir) { E = await ekgCacheGet(cdir, a); if (E) ausC++; }
+    if (!E) { const pk = ((await readKinds(["ecg"], Math.max(a, a0), Math.min(a + H, b0))).ecg || []).filter(p => p && p.v && p.v.length && p.t >= Math.max(a, a0) && p.t < Math.min(a + H, b0)).sort((p, q) => p.t - q.t);
+      if (!pk.length) continue; E = ekgHourEnc(pk); if (whole && cdir) { try { await ekgCachePut(cdir, a, E); } catch (e) {} } }
+    for (const k in E.offs) if (offs[k] === undefined || E.offs[k] < offs[k]) offs[k] = E.offs[k];
+    const data = await ekgHourBlob(E, sess), name = `EKG_${idstamp(new Date(a)).slice(0, 11)}.bin`;
+    files.push({ name, data }); liste.push({ datei: name, von: stamp(new Date(E.von)), bis: stamp(new Date(E.bis)), pakete: E.n, werte: E.m, bit: E.bits });
+    if (tA === null) tA = E.von; tB = E.bis; nAll += E.m;
     await new Promise(r => setTimeout(r, 0));
   }
   if (!files.length) throw new Error("kein EKG im Gerätespeicher");
-  const info = { format: "Vitalspur-RohEKG", version: 2, player: "Vitalspur 2.8", erstellt: new Date().toISOString(), von_epoch_ms: Math.round(tA), bis_epoch_ms: Math.round(tB),
-    werte: nAll, sitzungen: sess, offs_ms: offs,
+  const info = { format: "Vitalspur-RohEKG", version: 2, player: "Vitalspur 2.9", erstellt: new Date().toISOString(), von_epoch_ms: Math.round(tA), bis_epoch_ms: Math.round(tB),
+    werte: nAll, sitzungen: sess, offs_ms: offs, stunden_aus_zwischenspeicher: ausC,
     aufbau: "Je Stunde eine Datei EKG_JJJJMMTT-HH.bin, little endian: Uint32 Kennung 'VSE2', Uint32 n (Pakete), Uint32 m (Werte), Uint32 bit (16 oder 32); Float64[4n] je Paket: t_ms (Ankunft am Handy, Epoch), us (Zeitstempel des H10 in µs), Index in sitzungen, Rate in Hz; Uint32[n] Zahl der Werte je Paket; Int16[m] bzw. Int32[m] EKG in µV als Differenz zum vorigen Wert (erster Wert gegen 0, fortlaufend über alle Pakete der Datei).",
     zeit: "Zeit eines Werts wie im Player: letzter Wert eines Pakets bei us/1000 + offs_ms[Sitzung], davor im Abstand 1000/Rate (bzw. aus dem Abstand der Zeitstempel).",
     dateien: liste };
@@ -3946,7 +4018,7 @@ async function rohEkgExport(say, opt) {
   let ort = "Downloads"; const h = await vsRoot(false);
   if (h) { const dir = await vsSub(h, parts); await vsPut(dir, name, blob); ort = parts.join("/"); }
   else if (opt.parts) throw new Error("kein Speicherordner"); else vsDownload(blob, name);
-  addEntry({ typ: "Daten", name: `Roh-EKG gespeichert: ${name}, ${nAll} Werte, ${(blob.size / 1e6).toFixed(1).replace(".", ",")} MB, ${ort}`, start: Date.now() });
+  addEntry({ typ: "Daten", name: `Roh-EKG gespeichert: ${name}, ${nAll} Werte, ${(blob.size / 1e6).toFixed(1).replace(".", ",")} MB, ${ort}, ${ausC} Stunden vorab`, start: Date.now() });
   return `${(blob.size / 1e6).toFixed(1).replace(".", ",")} MB, ${files.length - 1} Stunden, in ${ort}`;
 }
 $("rohekg").addEventListener("click", async () => {
@@ -3982,10 +4054,10 @@ function liveSaveJob(sh) { return async () => { if (typeof window.vsLiveSave !==
 function liveFoto() {
   const t = Date.now(), sh = { a: t - 30000, b: t + 15000, t, note: "", label: "Foto" }; LIVESHOT.last = sh; LIVESHOT.pend.push(sh);
   addEntry({ typ: "Daten", name: "Foto festgehalten (Liveansicht)", start: t }); fotoBtnShow();
-  setTimeout(async () => { sh.png = await lvPng(); vsqAdd("Foto", liveSaveJob(sh)); }, 15000);
+  setTimeout(async () => { sh.png = await lvPng(); await wait(5000); vsqAdd("Foto", liveSaveJob(sh)); }, 15000); /* 2.9: 5 s mehr, bis alles im Speicher ist */
 }
 const REC = { on: null, timer: null };
-function recShow() { const b = $("barrec"); if (!b) return; if (!REC.on) { b.textContent = "● Aufnahme"; b.classList.remove("on"); return; } const s = Math.round((Date.now() - REC.on.a) / 1000); b.textContent = `■ ${Math.floor(s / 60)}:${pad(s % 60)}`; b.classList.add("on"); }
+function recShow() { const b = $("barrec"); if (!b) return; if (!REC.on) { b.textContent = "● Aufn."; b.classList.remove("on"); return; } const s = Math.round((Date.now() - REC.on.a) / 1000); b.textContent = `■ ${Math.floor(s / 60)}:${pad(s % 60)}`; b.classList.add("on"); }
 function recTick() { if (!REC.on) return; const s = (Date.now() - REC.on.a) / 1000; if (s >= 900) recStop("15 min erreicht"); else if (REC.on.act && !anyActive()) recStop("Aufzeichnung beendet"); else recShow(); }
 function recToggle() {
   if (REC.on) return recStop("Knopf");
@@ -3995,7 +4067,7 @@ function recStop(why) {
   const r = REC.on; if (!r) return; REC.on = null; clearInterval(REC.timer); recShow(); const b = Date.now();
   addEntry({ typ: "Daten", name: `Aufnahme beendet (${why}), ${Math.round((b - r.a) / 1000)} s`, start: b });
   const sh = { a: r.a - 5000, b: b + 5000, t: r.a, note: "", label: "Aufnahme" }; LIVESHOT.last = sh;
-  setTimeout(async () => { sh.png = await lvPng(); vsqAdd("Aufnahme", liveSaveJob(sh)); }, 5000);
+  setTimeout(async () => { sh.png = await lvPng(); await wait(5000); vsqAdd("Aufnahme", liveSaveJob(sh)); }, 5000);
 }
 /* ===== 2.8: Notizfeld in der Leiste, Zeit beim ersten Antippen ===== */
 let barNoteT = null;
@@ -4027,17 +4099,147 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.8", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
     const h = await vsRoot(true); let ort = "Downloads";
-    if (h) { await vsPut(await vsSub(h, ["Diagnose"]), name, blob); ort = "Diagnose"; } else vsDownload(blob, name);
-    btn.textContent = "Diagnose in " + ort; addEntry({ typ: "Daten", name: `Diagnose geschrieben: ${name} (${ort})`, start: Date.now() });
-  } catch (e) { btn.textContent = "Diagnose: Fehler " + (e.message || e); }
-  btn.disabled = false; setTimeout(() => { btn.textContent = lab; }, 10000);
+    if (h) { await vsPut(await vsSub(h, ["Diagnose"]), name, blob); ort = "Ordner Diagnose im Speicherordner"; } else vsDownload(blob, name);
+    addEntry({ typ: "Daten", name: `Diagnose geschrieben: ${name} (${ort})`, start: Date.now() });
+    const m = $("diagmsg"); m.innerHTML = `Diagnose gespeichert: ${name} im ${ort}. <button id="diagshare">Teilen</button>`;
+    $("diagshare").onclick = async () => { const fl = new File([blob], name, { type: "application/json" });
+      try { if (navigator.canShare && navigator.canShare({ files: [fl] })) await navigator.share({ files: [fl], title: name }); else vsDownload(blob, name); } catch (e) {} };
+    setTimeout(() => { if (m.textContent.includes(name)) m.textContent = ""; }, 120000);
+  } catch (e) { $("diagmsg").textContent = "Diagnose nicht geschrieben: " + (e.message || e); }
+  btn.disabled = false; btn.textContent = lab;
 }
 $("diagbtn").addEventListener("click", vsDiagnose);
+
+/* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
+const VS_VERSION = "2.9";
+function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
+  const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
+  if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
+if (window.visualViewport) { visualViewport.addEventListener("resize", barPin); visualViewport.addEventListener("scroll", barPin); }
+window.addEventListener("scroll", barPin, { passive: true }); window.addEventListener("resize", barPin); setInterval(barPin, 700);
+/* ===== 2.9: Versionsprüfung: liegt auf dem Server eine andere Fassung als die geladene? ===== */
+async function vsVerCheck() {
+  try { if (!/^https?:/.test(location.protocol)) return; const u = location.href.split("#")[0].split("?")[0] + "?vc=" + Date.now();
+    const r = await fetch(u, { cache: "no-store" }); if (!r.ok) return; const tx = await r.text(), m = tx.match(/<h1>Vitalspur ([\d.]+)<\/h1>/); if (!m) return;
+    const el = $("verbanner"); if (!el) return;
+    if (m[1] !== VS_VERSION) { el.innerHTML = `Geladen ist ${VS_VERSION}, auf dem Server liegt ${m[1]}. <button id="verreload">Neu laden</button>`; el.style.display = "block";
+      $("verreload").onclick = async () => { try { const rg = await navigator.serviceWorker?.getRegistration(); if (rg) await rg.update(); } catch (e) {} location.reload(); };
+      addEntry({ typ: "Hinweis", name: `Andere Fassung auf dem Server: ${m[1]} (geladen ${VS_VERSION})`, start: Date.now() }); }
+    else el.style.display = "none";
+  } catch (e) {}
+}
+setTimeout(vsVerCheck, 4000); setInterval(vsVerCheck, 30 * 60000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") setTimeout(vsVerCheck, 1500); });
+
+/* ===== 2.9: Atmung in der Liveanzeige nur aus dem Gurt ===== */
+setInterval(() => { const el = $("breath"); if (!el) return;
+  try { const now = Date.now(), b = rbHas() ? lvBelt(now) : null;
+    if (!rbHas()) { el.textContent = "– (Atemgurt nicht verbunden)"; return; }
+    if (!b) { el.textContent = "sammle Daten …"; return; }
+    const d = b.list.filter(x => x.te > now - 60000).map(x => x.dauer).sort((p, q) => p - q);
+    el.textContent = d.length >= 2 ? `${(60 / d[d.length >> 1]).toFixed(1).replace(".", ",")} Atemzüge/min (Gurt, letzte Minute)` : "–";
+  } catch (e) { el.textContent = "–"; } }, 5000);
+
+/* ===== 2.9: Sense-Wächter: nach dem Verbinden keine Daten, dann frisch verbinden ===== */
+let vAttT = 0, vFreshT = 0;
+async function vFresh(why) {
+  if (!vWanted || vReconn || !vDev) return; if (Date.now() - vFreshT < 30000) return; vFreshT = Date.now();
+  addEntry({ typ: "Fehler", name: "Sense: " + why + ", verbinde frisch", start: Date.now(), session: vRec });
+  vReconn = true; try { vDev.gatt.disconnect(); } catch (e) {} await wait(1500); vReconn = false; vLast = 0; onVLost();
+}
+setInterval(() => { if (!vWanted || vReconn || !vAttT) return; const now = Date.now();
+  if ((!vLast || vLast < vAttT) && now - vAttT > 12000) vFresh(`keine Daten ${Math.round((now - vAttT) / 1000)} s nach dem Verbinden`);
+  else if (vLast && vLast > vAttT && now - vLast > 20000) vFresh(`keine Daten seit ${Math.round((now - vLast) / 1000)} s`); }, 2000);
+
+/* ===== 2.9: Bluetooth wieder da: alle gewünschten Geräte neu verbinden ===== */
+let btOffAt = 0;
+if (navigator.bluetooth && navigator.bluetooth.addEventListener) navigator.bluetooth.addEventListener("availabilitychanged", e => {
+  if (!e.value) { btOffAt = Date.now(); addEntry({ typ: "Fehler", name: "Bluetooth ausgeschaltet oder nicht verfügbar", start: Date.now() }); return; }
+  addEntry({ typ: "Fehler", name: `Bluetooth wieder da${btOffAt ? " nach " + Math.round((Date.now() - btOffAt) / 1000) + " s" : ""}, verbinde die Geräte neu`, start: Date.now() });
+  setTimeout(() => { try { if (hrWanted && !reconnecting && hrDev && !hrDev.gatt.connected) onGattLost(); } catch (x) {}
+    try { if (vWanted && !vReconn && vDev) { vFreshT = 0; vFresh("Bluetooth war weg"); } } catch (x) {}
+    try { if (rbBle && rbLostWanted && !rbDev) rbConnect(rbBle); } catch (x) {} }, 3000);
+});
+
+/* ===== 2.9: Schritte ohne Klopfen, Schrittgröße ===== */
+function stepsNoKnock(steps, L) {
+  const K = (L || []).filter(r => r.typ === "Abgleich" && /Klopfen .*erkannt/.test(r.name || "")).map(r => [r.start - 3000, r.start + 10000]);
+  if (!K.length) return steps; const out = steps.filter(s => !K.some(([a, b]) => s.t >= a && s.t <= b));
+  if (out.length < steps.length) addEntry({ typ: "Daten", name: `Schritte beim Klopfen nicht gezählt: ${steps.length - out.length}`, start: Date.now() });
+  return out; }
+/* klein: Fuß unter etwa 1500 mg oder Drehrate unter 250 °/s; groß: über 4000 mg und über 330 °/s (aus den Gängen vom 22.11.) */
+function stepClass(s) { const sp = s.spitze, g = s.gyro; if (!Number.isFinite(sp) && !Number.isFinite(g)) return "";
+  if ((Number.isFinite(sp) && sp < 1500) || (Number.isFinite(g) && g < 250)) return "klein";
+  if (Number.isFinite(sp) && sp > 4000 && (!Number.isFinite(g) || g > 330)) return "groß"; return "mittel"; }
+
+/* ===== 2.9: Atemzüge nach einem Lagewechsel: am Sprung der Grundspannung (über 1 N) teilen, je Stück eigene Schwelle ===== */
+function rbCuts(t, f, a, i) {
+  const B = []; let s = a;
+  while (s < i) { let e = s; while (e < i && t[e] - t[s] < 5000) e++; if (e - s >= 10) { const w = []; for (let k = s; k < e; k++) w.push(f[k]); w.sort((p, q) => p - q); B.push([s, w[Math.floor(w.length * 0.1)]]); } if (e === s) e++; s = e; }
+  const cuts = [a]; for (let k = 1; k < B.length; k++) if (Math.abs(B[k][1] - B[k - 1][1]) > 1 && B[k][0] - cuts[cuts.length - 1] >= 60) cuts.push(B[k][0]);
+  if (i - cuts[cuts.length - 1] < 60 && cuts.length > 1) cuts.pop(); cuts.push(i); return cuts; }
+
+/* ===== 2.9: Versatz Atemgurt gegen das Kippen der Brust je 5 min (nur festhalten, nichts verschieben) ===== */
+function beltLag(rb, A) {
+  if (!rb || !A || !A.t || rb.t.length < 500 || A.t.length < 2000) return [];
+  const out = [], step = 100, nl = 30, t0 = Math.max(rb.t[0], A.t[0]), t1 = Math.min(rb.t[rb.t.length - 1], A.t[A.t.length - 1]);
+  const grid = (T, X, a, n) => { const o = new Float64Array(n); let k = lowerBound(T, a - step); for (let j = 0; j < n; j++) { const g = a + j * step; while (k + 1 < T.length && T[k + 1] <= g) k++; o[j] = X[k]; } return o; };
+  const det = x => { const n = x.length, w = 100, o = new Float64Array(n); let s = 0; const P = new Float64Array(n + 1); for (let j = 0; j < n; j++) P[j + 1] = P[j] + x[j]; for (let j = 0; j < n; j++) { const a = Math.max(0, j - w / 2), b = Math.min(n, j + w / 2); o[j] = x[j] - (P[b] - P[a]) / (b - a); } void s; return o; };
+  for (let w = t0; w + 300000 <= t1; w += 300000) {
+    const n = 3000, g = det(grid(rb.t, rb.f, w, n)); let best = null;
+    for (let ax = 0; ax < 3; ax++) { const c = det(grid(A.t, A.c[ax], w, n));
+      for (let l = -nl; l <= nl; l++) { let sxy = 0, sxx = 0, syy = 0; for (let j = nl; j < n - nl; j++) { const x = c[j], y = g[j + l]; sxy += x * y; sxx += x * x; syy += y * y; }
+        const r = sxy / Math.sqrt(sxx * syy || 1); if (!best || Math.abs(r) > Math.abs(best.r)) best = { r, l, ax }; } }
+    if (best && Math.abs(best.r) >= 0.4) out.push({ t: w + 150000, versatz_ms: best.l * step, r: Math.round(best.r * 100) / 100, achse: "xyz"[best.ax] }); }
+  for (let k = 1; k < out.length; k++) if (Math.abs(out[k].versatz_ms - out[k - 1].versatz_ms) > 500 && Math.abs(out[k].r) > 0.5 && Math.abs(out[k - 1].r) > 0.5)
+    addEntry({ typ: "Hinweis", name: `Versatz Atemgurt gegen Brust springt um ${stamp(new Date(out[k].t)).slice(0, 5)} Uhr von ${out[k - 1].versatz_ms} auf ${out[k].versatz_ms} ms`, start: out[k].t });
+  return out; }
+
+/* ===== 2.9: Pulsoxymeter Viatom PC-60FW (Nordic-UART), ohne Gerät nicht getestet ===== */
+const OX_SVC = "6e400001-b5a3-f393-e0a9-e50e24dcca9e", OX_RX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+let oxDev = null, oxWanted = false, oxBuf = [], oxN = 0, oxLast = null, oxLastT = 0, oxTypes = {}, oxRawLogged = 0, oxReconn = false;
+function oxStatus(t) { const el = $("oxstatus"); if (el) el.textContent = t; }
+function oxFrame(fr) {
+  const ty = fr[4]; oxTypes[ty] = (oxTypes[ty] || 0) + 1;
+  if (oxRawLogged < 12 && oxTypes[ty] <= 3) { oxRawLogged++; addEntry({ typ: "Oxymeter", name: `Rahmen Typ ${ty}: ${[...fr].map(b => b.toString(16).padStart(2, "0")).join(" ")}`, start: Date.now() }); }
+  if (ty !== 0x01 || fr.length < 9) return;
+  const sp = fr[5], pr = fr[6] | ((fr[7] & 0x01) << 8), pi = fr[8] / 10, now = Date.now();
+  const ok = sp >= 50 && sp <= 100 && pr >= 25 && pr <= 250;
+  put("ox", { t: now, s: ok ? sp : null, p: ok ? pr : null, pi: ok ? pi : null, raw: [...fr.slice(4, Math.min(fr.length, 12))] });
+  oxN++; if (ok) { oxLast = { sp, pr, pi }; oxLastT = now; markRec(); }
+  const v = $("oxval"); if (v) v.textContent = ok ? `${sp} % · Puls ${pr} · PI ${String(pi).replace(".", ",")}` : "kein gültiger Wert (Finger?)";
+}
+function oxData(ev) {
+  const dv = ev.target.value; for (let i = 0; i < dv.byteLength; i++) oxBuf.push(dv.getUint8(i));
+  for (let guard = 0; guard < 50; guard++) {
+    let k = 0; while (k + 1 < oxBuf.length && !(oxBuf[k] === 0xAA && oxBuf[k + 1] === 0x55)) k++; if (k) oxBuf.splice(0, k);
+    if (oxBuf.length < 5) return; const len = oxBuf[3], tot = 4 + len; if (len < 2 || len > 60) { oxBuf.splice(0, 2); continue; }
+    if (oxBuf.length < tot) return; const fr = Uint8Array.from(oxBuf.splice(0, tot)); if (fr[2] === 0x0F) oxFrame(fr); }
+  if (oxBuf.length > 400) oxBuf = [];
+}
+async function oxAttach() { const sv = await oxDev.gatt.connect(), s = await sv.getPrimaryService(OX_SVC), c = await s.getCharacteristic(OX_RX);
+  c.removeEventListener("characteristicvaluechanged", oxData); c.addEventListener("characteristicvaluechanged", oxData); await c.startNotifications(); }
+async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; addEntry({ typ: "Fehler", name: "Oxymeter: Verbindung verloren", start: Date.now() });
+  for (let i = 0; i < 20 && oxWanted; i++) { try { await wait(2000); await withTO(oxAttach(), 20000, "Oxymeter"); addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); oxReconn = false; return; }
+    catch (e) { addEntry({ typ: "Fehler", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); } }
+  oxReconn = false; oxStatus("Neu verbinden fehlgeschlagen. Bitte „Pulsoxymeter verbinden“ tippen."); }
+async function oxConnect() {
+  if (!navigator.bluetooth) { oxStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
+  try { const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "PC-60" }, { namePrefix: "PC60" }, { services: [OX_SVC] }], optionalServices: [OX_SVC, "battery_service"] });
+    if (oxDev !== d) d.addEventListener("gattserverdisconnected", oxLost); oxDev = d; oxStatus("Verbinde …"); await oxAttach(); oxWanted = true; keepAwake();
+    addEntry({ typ: "Oxymeter", name: "Verbunden: " + (d.name || "PC-60FW"), start: Date.now() }); oxStatus("Verbunden mit " + (d.name || "PC-60FW") + ". Warte auf Werte …"); $("oxstop").disabled = false;
+  } catch (e) { oxStatus("Nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Oxymeter: " + (e.message || e), start: Date.now() }); } }
+function oxStop() { oxWanted = false; try { oxDev?.gatt.disconnect(); } catch (e) {} addEntry({ typ: "Oxymeter", name: `Beendet, ${oxN} Werte`, start: Date.now() }); oxStatus("Beendet."); $("oxstop").disabled = true; flush(); }
+$("oxconnect").addEventListener("click", oxConnect); $("oxstop").addEventListener("click", oxStop);
+setInterval(() => { if (!oxWanted) return; const age = oxLastT ? Math.round((Date.now() - oxLastT) / 1000) : null; oxStatus((age === null ? "noch kein gültiger Wert" : age > 5 ? `kein gültiger Wert seit ${age} s` : "läuft") + ` · ${oxN} Werte · Rahmen ${Object.entries(oxTypes).map(([k, v]) => k + ":" + v).join(" ")}`); }, 2000);
+window.oxFrameTest = oxData;
+/* Ausschnitte auch von hier senden */
+$("fsend2").addEventListener("click", async () => { if (typeof window.vsAusSend !== "function") return; $("savestatus").textContent = "Packe Ausschnitte …"; await window.vsAusSend(); const s = document.getElementById("bv_fstat"); if (s) $("savestatus").textContent = s.textContent; });
 
 $("saveall").addEventListener("click", async () => {
   /* 2.7: Knopf grau mit Fortschritt, Ordner vor der Rechnung holen, Fehler anzeigen */
@@ -4157,7 +4359,7 @@ function nbProfile(Rc, t) {
   for (let i = 1; i < seg.length; i++) { const d = seg[i] - seg[i - 1]; if (d > 2500 || d < 300) return null; dd.push(d); }
   /* 1.9.3: verworfen wird nur das Muster einer übersehenen R-Zacke (Abstand springt auf über 170 % und danach unter 65 %) oder einer doppelten (unter 60 %, danach über 160 %).
      Die frühere Regel gegen den Median warf bei sehr langsamem Puls gerade die kräftigen Herzantworten heraus. */
-  for (let i = 1; i < dd.length - 1; i++) { const a = dd[i] / dd[i - 1], b = dd[i + 1] / dd[i]; if ((a > 1.7 && b < 0.65) || (a < 0.6 && b > 1.6)) return null; }
+  for (let i = 1; i < dd.length - 1; i++) { const a = dd[i] / dd[i - 1], b = dd[i + 1] / dd[i]; if (a > 1.85 && a < 2.2 && b < 0.6) return null; } /* 2.9: echte Pausen bleiben drin; gestörte Schläge sind schon vorher raus */
   const rel = [], rr = [];
   for (let j = -NB.vor; j <= NB.nach; j++) { if (j === 0) continue; const idx = j < 0 ? k + j : k + j - 1; rel.push(Math.round((Rc[idx] - t) * 10) / 10); rr.push(Rc[idx] - Rc[idx - 1]); }
   return { rel, rr };
@@ -4380,7 +4582,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.8"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.9"],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4448,7 +4650,7 @@ function nightPdf(rep, raw, pid, nacht, pulseMin, lageMin, tps) {
       const c = pdfChart(d, { x: L, y: 110, w: WD, h: 110 }, { title: "Raumtemperatur (°C)", xr: [T0, t1], yr: [lo, hi], xt, xf: hr, yt: [lo, Math.round((lo + hi) / 2), hi], yf: v => String(v) });
       d.lw(1.4).col(...orange, false).poly(T.map(p => [c.X(Math.max(T0, Math.min(t1, p.t))), c.Y(p.c)])); }
     else d.col(120, 120, 120, true).text(L, 160, "Keine Temperaturwerte in dieser Nacht.", 9); }
-  foot(`Vitalspur 2.8. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
+  foot(`Vitalspur 2.9. Uhrzeiten in Ortszeit. Seitenlage: ${SIDE.quelle}.`);
 
   /* gemeinsame Zeichnung: Puls Schlag für Schlag auf der Zeitachse ab T0 */
   const tz = rep.tz.map(v => v === null ? null : v / 1000), ix = rep.idx.map((j, i) => i).filter(i => rep.idx[i] >= -10 && rep.idx[i] <= 12);
@@ -4575,7 +4777,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 2.8", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur 2.9", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -4646,7 +4848,8 @@ const VS_LIVE = [
   ["sync", "Musikposition", r => [r.s ?? "", r.b ?? "", r.p ?? "", r.r ?? "", csvq(r.n), ...tcols(r.t), num(r.c, 3), r.d].join(";")],
   ["bat", "Akku", r => [...tcols(r.t), r.d, r.p ?? "", csvq(r.txt)].join(";")],
   ["vhr", "Sense_Puls", r => [r.s ?? "", ...tcols(r.t), r.b].join(";")],
-  ["rb", "Atemgurt", r => r.v.map((v, k) => [...tcols(r.ts[k]), num(v, 3)].join(";")).join("\n")]
+  ["rb", "Atemgurt", r => r.v.map((v, k) => [...tcols(r.ts[k]), num(v, 3)].join(";")).join("\n")],
+  ["ox", "Oxymeter", r => [...tcols(r.t), r.s ?? "", r.p ?? "", r.pi ?? ""].join(";")]
 ];
 /* Rohdaten: Werte je Paket auf die Uhr des Handys gelegt */
 const RAWDEF = {
@@ -4712,6 +4915,7 @@ async function ausReadAll(force) {
       fs.sort((x, y) => x[0].localeCompare(y[0]));
       for (const [n, e] of fs) ausParse(await (await e.getFile()).text(), map, n); } catch (e) {} }
   ausQ().forEach(e => map.set(e.id, Object.assign({ datei: "wartet" }, e)));
+  for (const [k, e] of map) if (e.aktion === "zurück") map.delete(k); /* 2.9: rückgängig */
   AUS_CACHE = { at: Date.now(), map }; return map;
 }
 function ausActive(map) { return [...map.values()].filter(e => e.aktion === "setzen" && e.b >= e.a); }
@@ -4791,6 +4995,20 @@ function vsAnom(J, rb) {
   { const A = (J.atem || []).filter(x => /Gurt/i.test(x.quelle || "")).map(x => x.t); if (A.length > 20) { const U = [];
       for (let a = A[0]; a < A[A.length - 1] - 120000; a += 60000) { const c = A.filter(x => x >= a && x < a + 120000).length / 2; if (c > 24 || c < 5) U.push([a, a + 120000, c]); }
       merge(U, 0).filter(r => r[1] - r[0] >= 180000).forEach(r => add("ATEMR", "Atmung sehr schnell oder langsam", "koerper", r[0], r[1], `${f1((A.filter(x => x >= r[0] && x < r[1]).length) / ((r[1] - r[0]) / 60000))} Atemzüge je Minute`)); } }
+  /* --- 2.9: Atemmuster: flache Atmung (Hub je 5 s unter 35 % des örtlichen 80. Perzentils), mindestens 10 s lang, die sich alle 30 bis 100 s wiederholt, mindestens viermal --- */
+  try { if (rb && rb.t && rb.t.length > 500) {
+      const Bk = []; let k = 0;
+      for (let a = rb.t[0]; a < rb.t[rb.t.length - 1]; a += 5000) { const w = []; while (k < rb.t.length && rb.t[k] < a + 5000) { if (rb.t[k] >= a) w.push(rb.f[k]); k++; }
+        if (w.length < 10) { Bk.push([a, NaN]); continue; } w.sort((p, q) => p - q); Bk.push([a, w[Math.floor(w.length * 0.95)] - w[Math.floor(w.length * 0.05)]]); }
+      const flat = []; for (let i = 0; i < Bk.length; i++) { if (!Number.isFinite(Bk[i][1])) continue; const w = []; for (let j = Math.max(0, i - 30); j <= Math.min(Bk.length - 1, i + 30); j++) if (Number.isFinite(Bk[j][1])) w.push(Bk[j][1]);
+        if (w.length < 20) continue; w.sort((p, q) => p - q); const ref = w[Math.floor(w.length * 0.8)]; if (ref > 0.05 && Bk[i][1] < 0.35 * ref) flat.push(Bk[i][0]); }
+      const tr = []; flat.forEach(t => { const l = tr[tr.length - 1]; if (l && t - l.b <= 10000) l.b = t; else tr.push({ a: t, b: t }); });
+      const T = tr.filter(x => x.b - x.a >= 5000 && x.b - x.a <= 60000), mid = T.map(x => (x.a + x.b + 5000) / 2); let s = 0;
+      for (let q = 1; q <= mid.length; q++) { const d = q < mid.length ? mid[q] - mid[q - 1] : 0;
+        if (q < mid.length && d >= 30000 && d <= 100000) continue;
+        if (q - s >= 4) { const g = []; for (let u = s + 1; u < q; u++) g.push(mid[u] - mid[u - 1]); g.sort((x, y) => x - y);
+          add("ATMU", "Atemmuster: flach im Wechsel", "koerper", T[s].a - 10000, T[q - 1].b + 15000, `${q - s} flache Abschnitte, etwa alle ${Math.round(g[g.length >> 1] / 1000)} s`); }
+        s = q; } } } catch (e) {}
   out.sort((x, y) => (y.top - x.top) || x.a - y.a);
   return out;
 }
@@ -5025,9 +5243,11 @@ async function vsReport0(a, b, night, dayParts, dayStart) {
   addEntry({ typ: "Daten", name: `${night ? "Nachtbericht" : "Tagesbericht"} geschrieben: ${dayParts.join("/")}/Berichte` + (from > -Infinity ? `, Tabellen ab ${hhmm(from)} Uhr ergänzt` : ""), start: Date.now() });
   $("savestatus").textContent = `${night ? "Nachtbericht" : "Tagesbericht"} gespeichert in ${dayParts.join("/")}/Berichte.`;
   /* 2.8: volles EKG der Nacht kompakt in RohEKG/ des Tagesordners (wächst mit, solange die Nacht weiterläuft) */
-  if (night) { const t1 = Date.now(); try { const r = await rohEkgExport(m => { $("savestatus").textContent = "Nachtbericht gespeichert. Volles EKG der Nacht: " + m; }, { a, b, parts: [...dayParts, "RohEKG"], name: `${P}EKG.zip` });
-      $("savestatus").textContent = `Nachtbericht gespeichert in ${dayParts.join("/")}/Berichte, volles EKG: ${r}.`; diagT("Volles EKG der Nacht", Date.now() - t1); }
-    catch (e) { addEntry({ typ: "Fehler", name: "Volles EKG der Nacht nicht gespeichert: " + (e.message || e), start: Date.now() }); } }
+  /* 2.9: volles EKG auch am Tag; fertige Stunden kommen aus dem Stundenzwischenspeicher */
+  { const t1 = Date.now(), wo = night ? "der Nacht" : "des Tages", wer = night ? "Nachtbericht" : "Tagesbericht";
+    try { const r = await rohEkgExport(m => { $("savestatus").textContent = `${wer} gespeichert. Volles EKG ${wo}: ` + m; }, { a, b, parts: [...dayParts, "RohEKG"], name: `${P}EKG.zip` });
+      $("savestatus").textContent = `${wer} gespeichert in ${dayParts.join("/")}/Berichte, volles EKG: ${r}.`; diagT("Volles EKG " + wo, Date.now() - t1); }
+    catch (e) { if (!/kein EKG/.test(e.message || "")) addEntry({ typ: "Fehler", name: `Volles EKG ${wo} nicht gespeichert: ` + (e.message || e), start: Date.now() }); } }
   return true;
 }
 /* 1.9.4: Rückfrage des Browsers vor dem Schließen oder Neuladen, solange aufgezeichnet oder ein Bericht geschrieben wird */
@@ -5263,6 +5483,8 @@ async function vsSenseRestart() {
   await vSdkOff();
   vOrt = vsNight() ? ($("nort")?.value || "Fuß rechts") : $("vplace").value; vPlace = vsNight() ? "Fuß" : vPlaceOf(vOrt);
   vRec = idstamp(new Date()); vN = 0; vP = 0; vG = 0; vFrameSeen = false; vPpgSeen = false; vGSeen = false;
+  /* 2.9: sauber trennen und frisch verbinden; nur umstellen ließ den Sense bei 0 Daten stehen */
+  vReconn = true; try { vDev.gatt.disconnect(); } catch (e) {} await wait(1500); vReconn = false;
   try { await vAttach(); addEntry({ typ: "Sense", name: `Neu gestartet für ${VS.phase}: ${vPlace}, ${vRateNom} Hz`, start: Date.now(), session: vRec }); }
   catch (e) { addEntry({ typ: "Fehler", name: "Sense nach dem Schalter nicht neu gestartet: " + (e.message || e), start: Date.now() }); }
 }
@@ -5374,17 +5596,24 @@ function rbValue(f) {
   rbLivePush(now, f); if (rbOn) { rbBuf.v.push(Math.round(f * 1000) / 1000); rbBuf.ts.push(now); markRec(); }
   if (rbN === 300) addEntry({ typ: "Atemgurt", name: `${(rbN / ((now - rbT0) / 1000)).toFixed(1)} Werte pro Sekunde`, start: now, session: rbRec });
 }
-async function rbConnect() {
+let rbBle = null, rbLostWanted = false;
+async function rbConnect(bleGiven) {
   try {
     rbStatus("Lade Vernier-Bibliothek …");
     const gd = await rbLoadLib();
     rbStatus("Gurt wählen …");
-    /* 2.7: Gerät einmal wählen, dann bis zu 10 Versuche zu öffnen, je 1 s Pause */
-    const ble = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
+    /* 2.9: Gerät einmal wählen und merken (für Bluetooth zurück); Versuche mit wachsenden Pausen 2, 4, 8 s */
+    const ble = bleGiven || await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
+    rbBle = ble; rbLostWanted = true;
+    if ((hrWanted || vWanted) && !bleGiven) addEntry({ typ: "Hinweis", name: "Atemgurt nach H10 oder Sense verbunden; klappt es nicht, den Atemgurt zuerst verbinden", start: Date.now() });
     let d = null, lastErr = null;
     for (let i = 1; i <= 10 && !d; i++) { rbStatus(`Verbinde, Versuch ${i} von 10 …`);
       try { d = await gd.createDevice(ble, { open: true }); addEntry({ typ: "Atemgurt", name: `Verbunden im Versuch ${i} von 10`, start: Date.now() }); }
-      catch (e) { lastErr = e; addEntry({ typ: "Atemgurt", name: `Verbindungsversuch ${i} von 10 fehlgeschlagen: ${e.message || e}`, start: Date.now() }); try { if (ble.gatt && ble.gatt.connected) ble.gatt.disconnect(); } catch (x) {} await new Promise(r => setTimeout(r, 1000)); } }
+      catch (e) { lastErr = e; const em = (e && e.message) || String(e); addEntry({ typ: "Fehler", name: `Atemgurt: Verbindungsversuch ${i} von 10 fehlgeschlagen: ${em}`, start: Date.now() });
+        try { if (ble.gatt && ble.gatt.connected) ble.gatt.disconnect(); } catch (x) {}
+        const pz = Math.min(8000, 2000 * 2 ** Math.min(2, i - 1)) + (/characteristics not found/i.test(em) ? 3000 : 0);
+        rbStatus(`Versuch ${i} gescheitert, warte ${Math.round(pz / 1000)} s` + ((hrWanted || vWanted) ? ". Tipp: Atemgurt zuerst verbinden, dann H10 und Sense." : ""));
+        await new Promise(r => setTimeout(r, pz)); } }
     if (!d) throw new Error("nach 10 Versuchen keine Verbindung. Bitte den Gurt aus- und wieder einschalten. (" + ((lastErr && lastErr.message) || lastErr) + ")");
     rbDev = d; rbWanted = true; rbOn = true; rbRec = idstamp(new Date()); rbN = 0; rbT0 = Date.now(); setTimeout(() => { try { rbBatt(); } catch (e) {} }, 5000);
     let sens = (d.sensors || []).filter(s => s.enabled);
@@ -5394,13 +5623,13 @@ async function rbConnect() {
     if (!force) throw new Error("kein Kraftkanal gefunden");
     force.on("value-changed", s => rbValue(+s.value));
     d.on("device-closed", () => { rbFlushBuf(); addEntry({ typ: "Atemgurt", name: `Getrennt nach ${rbN} Werten`, start: Date.now(), session: rbRec }); flush();
-      if (rbWanted) { rbStatus("Atemgurt getrennt. Bitte neu verbinden."); say("Atemgurt getrennt"); addEntry({ typ: "Ansage", name: "Atemgurt getrennt (Ansage)", start: Date.now() }); } rbDev = null; rbShow(); });
+      if (rbWanted) { rbStatus("Atemgurt getrennt. Bitte neu verbinden."); say("Atemgurt getrennt"); rbLostWanted = true; addEntry({ typ: "Ansage", name: "Atemgurt getrennt (Ansage)", start: Date.now() }); } rbDev = null; rbShow(); });
     addEntry({ typ: "Atemgurt", name: `Verbunden: ${d.name || "GDX-RB"}, Kanal ${force.name} (${force.unit || "N"})`, start: Date.now(), session: rbRec }); flush();
     rbShow(); rbVerbunden();
   } catch (e) { rbStatus("Atemgurt nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Atemgurt: " + (e.message || e), start: Date.now() }); }
 }
 function rbStop() {
-  rbWanted = false; rbFlushBuf();
+  rbWanted = false; rbLostWanted = false; rbFlushBuf();
   try { if (rbDev) rbDev.close(); } catch (e) {}
   rbDev = null; addEntry({ typ: "Atemgurt", name: `Beendet, ${rbN} Werte`, start: Date.now(), session: rbRec }); flush(); rbShow();
 }
@@ -5795,8 +6024,10 @@ function rbBreaths(RB, refs) {
     if (i < t.length && t[i] - t[i - 1] < 3000) continue;
     if (i - a >= 100) {
       cover.push([t[a], t[i - 1]]);
-      const thr = rbThr(t, f, a, i, refs.length ? (rbRefAt(refs, t[a]) + rbRefAt(refs, t[i - 1])) / 2 : null); thrs.push(thr);
-      rbSeg(t, f, a, i, thr).forEach(b => { const r = rbRefAt(refs, b.t); out.push({ t: b.t, ein: b.ein, aus: b.aus, dauer: b.dauer, tiefe: b.tiefe, prozent: r ? 100 * b.tiefe / r : null, quelle: "Gurt", sicher: true }); });
+      const cuts = rbCuts(t, f, a, i); /* 2.9: nach einem Sprung der Grundspannung (Lagewechsel) je Stück eigene Schwelle */
+      for (let ci = 0; ci + 1 < cuts.length; ci++) { const a1 = cuts[ci], i1 = cuts[ci + 1]; if (i1 - a1 < 60) continue;
+      const thr = rbThr(t, f, a1, i1, refs.length ? (rbRefAt(refs, t[a1]) + rbRefAt(refs, t[i1 - 1])) / 2 : null); thrs.push(thr);
+      rbSeg(t, f, a1, i1, thr).forEach(b => { const r = rbRefAt(refs, b.t); out.push({ t: b.t, ein: b.ein, aus: b.aus, dauer: b.dauer, tiefe: b.tiefe, prozent: r ? 100 * b.tiefe / r : null, quelle: "Gurt", sicher: true }); }); }
     }
     a = i;
   }
@@ -6113,14 +6344,46 @@ function parseAz(txt, t0, allGurt) {
   return rows.map(l => { const c = l.split(";"); return { a: +c[ie] - t0, ein: fnum(c[ii]), q: allGurt ? "Gurt" : (iq >= 0 ? c[iq] : ""), tiefe: it >= 0 ? fnum(c[it]) : NaN }; }).filter(x => x.q === "Gurt" && Number.isFinite(x.a) && Number.isFinite(x.ein));
 }
 const dedupT = o => { const k = o.t.map((x, i) => i).sort((p, q) => o.t[p] - o.t[q]), t = [], f = []; let last = -Infinity; k.forEach(i => { if (o.t[i] !== last) { t.push(o.t[i]); f.push(o.f[i]); last = o.t[i]; } }); return { t: Float64Array.from(t), f: Float32Array.from(f) }; };
+/* ===== 2.9: volles EKG im Betrachter (RohEKG-ZIP, je Stunde eine Datei, erst beim Ansehen entpackt) ===== */
+const EKGF = { src: [], cache: new Map(), pend: new Set(), maxSpan: 600000 };
+async function ekgFullOpen(files) { EKGF.src = []; EKGF.cache.clear(); EKGF.pend.clear();
+  for (const f of files) { try { const z = await unzip(f); if (!z.names.includes("info.json")) continue; const info = JSON.parse(new TextDecoder().decode(await z.get("info.json")));
+    if (info.format !== "Vitalspur-RohEKG") continue;
+    const hours = z.names.map(n => { const m = /^EKG_(\d{4})(\d\d)(\d\d)-(\d\d)\.bin$/.exec(n); return m ? { datei: n, a: new Date(+m[1], m[2] - 1, +m[3], +m[4]).getTime() } : null; }).filter(Boolean);
+    EKGF.src.push({ z, info, name: f.name, hours }); } catch (e) {} }
+  return EKGF.src.length; }
+function ekgIsZip(z) { return z.names.includes("info.json") && z.names.some(n => /^EKG_\d{8}-\d\d\.bin$/.test(n)); }
+async function ekgDecode(src, datei) {
+  const u8 = await src.z.get(datei), buf = u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength ? u8.buffer : u8.slice().buffer, hd = new Uint32Array(buf, 0, 4);
+  if (hd[0] !== 0x32455356) return null; const n = hd[1], m = hd[2], bits = hd[3], meta = new Float64Array(buf, 16, 4 * n), cnt = new Uint32Array(buf, 16 + 32 * n, n);
+  const val = bits === 16 ? new Int16Array(buf, 16 + 36 * n, m) : new Int32Array(buf, 16 + 36 * n, m), t = new Float64Array(m), v = new Float32Array(m), S = src.info.sitzungen || [], O = src.info.offs_ms || {};
+  let acc = 0, j = 0;
+  for (let i = 0; i < n; i++) { const c = cnt[i], r = meta[4 * i + 3] || 130, off = O[S[meta[4 * i + 2]]], last = meta[4 * i + 1] / 1000 + (Number.isFinite(off) ? off : meta[4 * i] - meta[4 * i + 1] / 1000), dt = 1000 / r;
+    for (let k = 0; k < c; k++) { acc += val[j]; v[j] = acc; t[j] = last - (c - 1 - k) * dt - T0; j++; } }
+  return { t, v }; }
+/* Ausschnitt a..b (ms seit T0): fertige Daten oder null; fehlende Stunden werden im Hintergrund entpackt, danach neu gezeichnet */
+function ekgFullGet(a, b, redraw) {
+  if (!EKGF.src.length || !Number.isFinite(T0)) return null; const A = a + T0, B = b + T0, H = 3600000, parts = []; let missing = false;
+  for (const s of EKGF.src) for (const h of s.hours) { if (h.a + H <= A || h.a >= B) continue; const key = s.name + "/" + h.datei, d = EKGF.cache.get(key);
+    if (d) { parts.push(d); continue; } missing = true;
+    if (!EKGF.pend.has(key)) { EKGF.pend.add(key); ekgDecode(s, h.datei).then(x => { EKGF.pend.delete(key); if (x) { EKGF.cache.set(key, x); if (EKGF.cache.size > 4) EKGF.cache.delete(EKGF.cache.keys().next().value); } if (redraw) redraw(); }).catch(() => EKGF.pend.delete(key)); } }
+  if (missing) return { lade: true };
+  if (!parts.length) return { leer: true };
+  const tt = [], vv = []; parts.sort((p, q) => p.t[0] - q.t[0]).forEach(d => { const i0 = lb(d.t, a), i1 = lb(d.t, b); for (let k = i0; k < i1; k++) { if (tt.length && d.t[k] <= tt[tt.length - 1]) continue; tt.push(d.t[k]); vv.push(d.v[k]); } });
+  return tt.length > 10 ? { t: Float64Array.from(tt), uV: Float32Array.from(vv) } : { leer: true }; }
+function ekgFullHas() { return EKGF.src.length > 0; }
 async function loadFiles(fs, srcName, dir) {
-  let edits = null, rbTxt = [], ahTxt = null, azTxt = [], kern = null;
+  let edits = null, rbTxt = [], ahTxt = null, azTxt = [], kern = null, ekgFs = [];
   try {
     $("info").textContent = "Lade " + (srcName || fs.map(f => f.name).join(", ")) + " …";
+    /* 2.9: nur ein EKG-ZIP gewählt: an die geladene Messung hängen */
+    if (J && fs.length && fs.every(f => /\.zip$/i.test(f.name))) { const only = []; for (const f of fs) { try { if (ekgIsZip(await unzip(f))) only.push(f); } catch (e) {} }
+      if (only.length === fs.length) { const n = await ekgFullOpen(only); $("info").textContent = n ? `Volles EKG geladen (${only.map(f => f.name).join(", ")}).` : "Im ZIP ist kein EKG."; try { drawDetail(); } catch (e) {} return; } }
     J = null; AV = { map: null, an: [], eff: [] };
     for (const f of fs) {
       if (/\.zip$/i.test(f.name)) {
         const z = await unzip(f), jn = z.names.find(n => /(^|_)Fenster\d*_.*\.json$/.test(n) || /(^|_)Fenster\.json$/.test(n)), tn = z.names.find(n => /^Taetigkeiten_.*\.json$/.test(n));
+        if (!jn && ekgIsZip(z)) { ekgFs.push(f); continue; }
         if (!jn) throw new Error("Im ZIP fehlt die Datei Fenster…json.");
         J = JSON.parse(new TextDecoder().decode(await z.get(jn))); fileId = jn.replace(/^(.*_)?Fenster\d*_|\.json$/g, "").replace(/_Fenster$/, "");
         if (tn) edits = JSON.parse(new TextDecoder().decode(await z.get(tn)));
@@ -6150,6 +6413,7 @@ async function loadFiles(fs, srcName, dir) {
       if (rb) { const i0 = rb.t.findIndex(x => x >= lo); let i1 = rb.t.length; while (i1 > 0 && rb.t[i1 - 1] > hi) i1--; rb = i0 < 0 || i1 <= i0 ? null : { t: rb.t.slice(i0, i1), f: rb.f.slice(i0, i1) }; }
       az = az.filter(x => x.a >= lo && x.a <= hi); }
     BX = { rb, ah: ahTxt ? parseAh(ahTxt, J.t0_epoch_ms) : null, az: az.length ? az : null, kern, src: srcName || fs.map(f => f.name).join(", "), dir: dir || null };
+    T0 = J.t0_epoch_ms; await ekgFullOpen(ekgFs);
     prepare(edits); ausLoadV();
   } catch (e) { $("info").textContent = "Fehler beim Laden: " + (e.message || e); }
 }
@@ -6211,7 +6475,7 @@ function drawOverview() {
   /* Tätigkeiten */
   acts.forEach(a => { c.fillStyle = acol(a.name); c.fillRect(X(a.a), 4, Math.max(2, X(a.b) - X(a.a)), 10); });
   lageBand(c, X, t0, t1, 15, 19, L, W, false); /* 1.9.4: Lage als schmales Band unter den Tätigkeiten */
-  stateBand(c, X, t0, t1, L, W); nrTicks(c, X, t0, t1); /* 2.8 */
+  stateStrip(c, X, t0, t1, L, W, 303, 313); nrTicks(c, X, t0, t1); /* 2.9: eigene Zeile unten, nicht mehr unter dem Prüfrand */
   /* Puls */
   const pv = []; for (let i = 0; i < S.bpm.length; i++) if (S.ok[i]) pv.push(S.bpm[i]);
   pv.sort((a, b) => a - b); const v0 = Math.floor((pv[Math.floor(pv.length * 0.005)] - 5) / 10) * 10, v1 = Math.ceil((pv[Math.floor(pv.length * 0.995)] + 5) / 10) * 10;
@@ -6256,8 +6520,8 @@ function drawOverview() {
   if (sel !== null) { const span2 = mode === "nacht" && nSel ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = mode === "nacht" && nSel ? nSel.t - (span2 === 50000 ? 15000 : 5000) : sel;
     c.fillStyle = "rgba(235,104,52,.25)"; c.fillRect(X(a), 16, Math.max(2, X(a + span2) - X(a)), 270); }
   c.restore();
-  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...(lageSeg().length ? [...new Set(lageSeg().map(g => g.l))].map(l => [LAGE_COL[l], "Lage " + l]) : []), ...(stateSeg().length ? [[ZST_COL.Schlaf, "Band ganz oben: Schlaf (geschätzt)"], [ZST_COL.wach, "Band ganz oben: wach (geschätzt)"], ["#111", "Strich am Lageband: Lagewechsel (lang), Nachrücken (kurz), sobald die Ereignisliste offen war"]] : []), ...(J && J.nacht ? [["#e0b000", "Strich gelb: gültige Zuckung"], ["#bbb", "Strich grau: Zuckung ungültig oder nicht gezählt, Umdrehen"], ["#7c3aed", "Strich violett: Pulsanstieg ohne Zuckung, dick: kleine Zuckung (Fuß 15 mg bis Schwelle)"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
-  if ($("eCard") && $("eCard").style.display !== "none" && EV.S !== S) setTimeout(renderEv, 0); /* 2.8 */
+  legend("legTop", [[bvLine() === "px" ? "#2a78d6" : "#1e3a8a", bvLine() === "px" ? "Puls, Mittel je Bildpunkt (Linie)" : `Puls, gleitender Schnitt ${bvLine()} s (Linie)`], ["#111", "gestrichelt: gleitender Schnitt 300 s"], ["rgba(42,120,214,.35)", "Spannweite: kleinster bis größter Schlag in 10 s (Fläche)"], ["#eb6834", "Temperatur (Linie) und WBGT geschätzt (gestrichelt)"], ...(hOn ? [["#1baa7a", "Höhe gegenüber dem Beginn aus dem Luftdruck, m"]] : []), ...(lageSeg().length ? [...new Set(lageSeg().map(g => g.l))].map(l => [LAGE_COL[l], "Lage " + l]) : []), ...(stateSeg().length ? [[ZST_COL.Schlaf, "Band ganz unten: Schlaf (geschätzt)"], [ZST_COL.wach, "Band ganz unten: wach (geschätzt)"], ["#111", "Strich am Lageband: Lagewechsel (lang), Nachrücken (kurz), sobald die Ereignisliste offen war"]] : []), ...(J && J.nacht ? [["#e0b000", "Strich gelb: gültige Zuckung"], ["#bbb", "Strich grau: Zuckung ungültig oder nicht gezählt, Umdrehen"], ["#7c3aed", "Strich violett: Pulsanstieg ohne Zuckung, dick: kleine Zuckung (Fuß 15 mg bis Schwelle)"]] : []), ...[...new Set(acts.map(a => a.name))].map(n => [acol(n), n])]);
+  if ($("eCard") && $("eCard").style.display !== "none" && EV.S2 !== S) setTimeout(renderEv, 0); /* 2.9 */
 }
 $("ov").addEventListener("click", ev => {
   if (ovDragged) { ovDragged = false; return; }
@@ -6305,11 +6569,11 @@ function lageBand(c, X, a, b, y0, y1, L, W, txt) {
 }
 function detLayout() {
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel;
-  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span), hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
+  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span) || (ekgFullHas() && span <= EKGF.maxSpan), hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
   let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
   P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 102];
-  return { P, kip, h: (showEkg ? P.ekg[1] : P.bew[1]) + 30 };
+  return { P, kip, h: (showEkg ? P.ekg[1] : P.bew[1]) + 30 + (stateSeg().length ? 12 : 0) };
 }
 function kipAll() {
   if (S.kipW !== undefined) return S.kipW; const B = S.st && S.st.b; if (!B || !B.t || B.t.length < 100) { S.kipW = null; return null; }
@@ -6324,7 +6588,7 @@ function drawDetail() {
   const cv = $("det"); const LY = S ? detLayout() : null; cv._h = LY ? LY.h : 520; const { c, w, h } = ctxOf(cv); c.clearRect(0, 0, w, h); if (!S || w < 80) return;
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN;
   const a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, R = 8, W = w - L - R, X = t => L + (t - a) / span * W;
-  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span);
+  const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span) || (ekgFullHas() && span <= EKGF.maxSpan);
   const hasRb = !!S.rb, P = LY.P, showKip = LY.kip;
   LAY = { P, a, b, span, L, W };
   /* 1.7: Stoß aus der Bewegung der Brust (grau), Einatmen nur aus den Atemzügen des Gurts (hellblau) */
@@ -6387,11 +6651,16 @@ function drawDetail() {
 
     stepDraw(c, X, a, b, P.bew[1] + 1, 4); }
   /* EKG */
-  if (showEkg) { const fw = (night && $("nEkg").checked && J.nacht ? ((J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t)) : null) || pfAt(a, b);
-    if (fw && fw.ekg) { const e = fw.ekg, i0 = lb(e.t, a), i1 = lb(e.t, b); let mn = Infinity, mx = -Infinity; for (let k = i0; k < i1; k++) { mn = Math.min(mn, e.uV[k]); mx = Math.max(mx, e.uV[k]); }
+  if (showEkg) { const FE = span <= EKGF.maxSpan ? ekgFullGet(a, b, () => { try { drawDetail(); } catch (e) {} }) : null, fw = (night && $("nEkg").checked && J.nacht ? ((J.nacht.fenster || []).find(f => f.nr === nSel.fenster) || (J.nacht.fenster || []).find(f => f.start_ms <= nSel.t && f.ende_ms >= nSel.t)) : null) || pfAt(a, b);
+    if (FE && FE.t) { ekgAxisDraw(c, FE.t, FE.uV, 0, FE.t.length, X, P.ekg[0], P.ekg[1], { xl: L, xr: L + W, col: "#444", lw: 0.8 });
+      for (let k = lb(S.bt, a); k < S.bt.length && S.bt[k] < b; k++) { c.fillStyle = S.ok[k] ? "#eb6834" : "#bbb"; c.fillRect(X(S.bt[k]) - 0.5, P.ekg[0] - 4, 1, 4); } c.fillStyle = "#555"; c.fillText("EKG (voll)", L, P.ekg[0] - 4); }
+    else if (fw && fw.ekg) { const e = fw.ekg, i0 = lb(e.t, a), i1 = lb(e.t, b); let mn = Infinity, mx = -Infinity; for (let k = i0; k < i1; k++) { mn = Math.min(mn, e.uV[k]); mx = Math.max(mx, e.uV[k]); }
       ekgAxisDraw(c, e.t, e.uV, i0, i1, X, P.ekg[0], P.ekg[1], { xl: L, xr: L + W, col: "#444", lw: 0.8 });
       (fw.r_zacken_ms || []).forEach(r => { if (r >= a && r < b) { c.fillStyle = "#eb6834"; c.fillRect(X(r) - 0.5, P.ekg[0] - 4, 1, 4); } }); c.fillStyle = "#555"; c.fillText("EKG", L, P.ekg[0] - 4); }
-    else { c.fillStyle = "#999"; c.fillText("kein EKG-Fenster an dieser Stelle", L, P.ekg[0] + 20); } }
+    else { c.fillStyle = "#999"; c.fillText(FE && FE.lade ? "EKG wird entpackt …" : ekgFullHas() && span > EKGF.maxSpan ? "volles EKG erst ab 10 min Ausschnitt und enger" : "kein EKG an dieser Stelle", L, P.ekg[0] + 20); } }
+  evSelDraw(c, X, a, b, L, W, h); /* 2.9 */
+  if (J.oxi && J.oxi.t && J.oxi.t.length) { const o = J.oxi, v = []; for (let k = lb(o.t, a); k < o.t.length && o.t[k] < b; k++) if (Number.isFinite(o.spo2[k])) v.push(o.spo2[k]);
+    if (v.length) { c.save(); c.font = "bold 11px system-ui, sans-serif"; c.fillStyle = Math.min(...v) < 90 ? "#c0392b" : "#1d3557"; c.textAlign = "right"; c.fillText(`SpO₂ ${Math.min(...v)}${Math.max(...v) !== Math.min(...v) ? "–" + Math.max(...v) : ""} %`, L + W - 4, 12); c.restore(); } }
   /* Zeitachse, T0 */
   c.fillStyle = "#666"; const st = [1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000].find(x => W / span * x >= 64) || 600000; /* 1.6: Abstand der Beschriftung nach Breite */
   for (let t = Math.ceil(a / st) * st; t <= b; t += st) { const x = X(t); c.fillRect(x, h - 22, 1, 4); c.textAlign = "center"; c.fillText(night ? ((t - nSel.t) / 1000 > 0 ? "+" : "") + Math.round((t - nSel.t) / 1000) + " s" : hms(t), x, h - 8); c.textAlign = "left"; }
@@ -6793,6 +7062,7 @@ async function bvListDays(night) {
       if (it.kern) fs.push(await (await it.ber.getFileHandle(it.kern)).getFile());
       if (it.act) fs.push(await (await it.ber.getFileHandle(it.act)).getFile());
       for await (const [n, e] of it.dd.entries()) if (e.kind === "file" && /_(Atemgurt|Atemzuege)\.csv$/.test(n)) fs.push(await e.getFile());
+      try { const rd = await it.dd.getDirectoryHandle("RohEKG"); for await (const [n, e] of rd.entries()) if (e.kind === "file" && /EKG\.zip$/.test(n)) fs.push(await e.getFile()); } catch (e) {} /* 2.9: volles EKG */
       await loadFiles(fs, `${it.d}, ${it.n}, ${bvMB(fs[0])}`, it.ber); });
   }
   const st = document.createElement("div"); st.className = "stat"; st.textContent = out.length ? `${out.length} ${night ? "Nächte" : "Tage"}, die neuesten oben.` : `Keine ${night ? "Nächte" : "Tage"} in den Tagesordnern gefunden.`; box.appendChild(st);
@@ -6888,6 +7158,7 @@ function ausEffCalc() {
 function ausRefresh() {
   if ((mode === "nacht" || mode === "serie") && J && J.nacht) { const s = nSel; buildEvents(); if (s) { const e = evList.find(v => v.t === s.t && v.art === s.art); nSel = e || null; } }
   renderPruef(); if (S) drawAll();
+  EV.ver = (EV.ver || 0) + 1; try { renderEv(); } catch (e) {} /* 2.9 */
 }
 function ausStand(x) { const e = AV.map && AV.map.get(x.id); if (!e) return x.aus ? "vorläufig ausgeschlossen" : "ungeprüft"; return e.aktion === "setzen" ? (e.quelle === "automatisch" ? "vorläufig ausgeschlossen" : "nicht werten") : "werten"; }
 function ausGeprueft(x) { const e = AV.map && AV.map.get(x.id); return !!e && e.quelle !== "automatisch"; }
@@ -6896,6 +7167,7 @@ async function ausSet(x, aktion, quelle) {
   const ok = await ausWrite([{ id: x.id, aktion, a: T0e + x.a, b: T0e + x.b, grund: x.grund || x.art, quelle, betrifft: x.betrifft || "alle", notiz: x.text || "" }], true);
   AV.map = await ausReadAll(true); ausEffCalc(); ausRefresh();
   if (!ok) $("pHint").textContent = "Kein Speicherordner freigegeben: die Bewertung wartet im Browser und wird beim nächsten Mal in Langzeit/Ausschluss_" + devName() + ".csv geschrieben.";
+  return ok;
 }
 function renderPruef() {
   const box = $("pList"); if (!box) return; if (!J || !S) { box.innerHTML = ""; $("pCount").textContent = ""; return; }
@@ -6939,8 +7211,8 @@ function bandDraw(cv, a, b, L, W, belt) {
 /* ---------- 2.1: Schritte, Atemkurve, Abschneiden, Namen beim Darüberfahren ---------- */
 window.vsUnzip = unzip;
 const STEP_R = "#8b5a2b", STEP_L = "#1f3a93";
-function stepInfo() { if (!S) return { t: [], sd: [] }; if (S.stepI) return S.stepI; const L = (J.schritte || []).filter(s => s.sicher).sort((p, q) => p.t - q.t); return S.stepI = { t: L.map(s => s.t), sd: L.map(s => s.seite === "L" ? "L" : "R") }; }
-function stepDraw(c, X, a, b, y, hgt) { const I = stepInfo(), T = I.t; for (let k = lb(T, a - 1500); k < T.length && T[k] < b; k++) { const e = k + 1 < T.length && T[k + 1] - T[k] < 1500 ? T[k + 1] : T[k] + 300; c.fillStyle = I.sd[k] === "L" ? STEP_L : STEP_R; const x0 = X(T[k]), x1 = X(e); c.fillRect(x0, y, Math.max(1, x1 - x0 - 0.5), hgt); } }
+function stepInfo() { if (!S) return { t: [], sd: [], gr: [] }; if (S.stepI) return S.stepI; const L = (J.schritte || []).filter(s => s.sicher).sort((p, q) => p.t - q.t); return S.stepI = { t: L.map(s => s.t), sd: L.map(s => s.seite === "L" ? "L" : "R"), gr: L.map(s => s.groesse || "") }; }
+function stepDraw(c, X, a, b, y, hgt) { const I = stepInfo(), T = I.t; for (let k = lb(T, a - 1500); k < T.length && T[k] < b; k++) { const e = k + 1 < T.length && T[k + 1] - T[k] < 1500 ? T[k + 1] : T[k] + 300; c.fillStyle = I.sd[k] === "L" ? STEP_L : STEP_R; const x0 = X(T[k]), x1 = X(e), hh = I.gr[k] === "klein" ? hgt * 0.45 : I.gr[k] === "mittel" ? hgt * 0.75 : hgt; c.fillRect(x0, y + hgt - hh, Math.max(1, x1 - x0 - 0.5), hh); } } /* 2.9: Höhe nach Schrittgröße */
 /* Atem: Kurve durch die höchsten und tiefsten Punkte je Atemzug (monoton kubisch, ohne Überschwingen); beim Gehen aus dem über 1 s geglätteten Signal */
 function brPoints(R, a, b) {
   const I = stepInfo(), walk = t => { const k = lb(I.t, t - 3000); return k < I.t.length && I.t[k] < t + 3000; }, pts = [];
@@ -7179,7 +7451,7 @@ async function fFoto() {
     const row = [name, ymd(d), fclk(A), fclk(B), csvq(notiz), csvq(O.quelle.datei), O.roh ? "ja" : "nein", O.geraet].join(";");
     let h = null; try { h = await vsRoot(true); } catch (e) {}
     if (h) { const dir = await vsSub(h, [...vsDayParts(ymd(new Date(T0))), "Ausschnitte"]), rd = await vsSub(dir, ["Rohdaten"]);
-      await vsPut(dir, name + ".png", png); await vsPut(dir, name + ".xlsx", xl); await vsPut(rd, name + ".json", new TextEncoder().encode(json)); await vsAppend(dir, "ausschnitte.csv", FCSV, [row]);
+      await vsPut(dir, name + ".png", png); await vsPut(dir, name + ".xlsx", xl); await ausZipAdd(rd, ymd(new Date(T0)), name, new TextEncoder().encode(json)); await vsAppend(dir, "ausschnitte.csv", FCSV, [row]);
       fstat(`Gespeichert in ${vsDayParts(ymd(new Date(T0))).join("/")}/Ausschnitte: ${name}` + (O.roh ? " (mit Rohdaten)" : " (ohne Rohdaten aus dem Gerätespeicher)")); }
     else { vsDownload(png, name + ".png"); vsDownload(new Blob([xl]), name + ".xlsx"); fstat(`Kein Speicherordner: Bild und Excel in den Downloads.`); }
     window.vsShots.push({ name, json, row, day: ymd(new Date(T0)) });
@@ -7211,6 +7483,19 @@ $("ekgload").addEventListener("click", fEkgLoad);
 /* „Ausschnitte senden“: alle noch nicht gesendeten JSON der letzten 10 Tage in eine ZIP, dazu ausschnitte.csv */
 async function fGet(h, parts) { let d = h; try { for (const p of parts) d = await d.getDirectoryHandle(p); return d; } catch (e) { return null; } }
 async function fText(dir, name) { try { return await (await (await dir.getFileHandle(name)).getFile()).text(); } catch (e) { return ""; } }
+/* 2.9: Ausschnitte als eine ZIP je Tag (Rohdaten/Ausschnitte_<Tag>.zip); lose JSON werden übernommen, geprüft und erst dann gelöscht */
+async function ausZipAdd(rd, day, name, u8) {
+  const zn = `Ausschnitte_${day}.zip`, entries = new Map(), loose = [];
+  try { const z = await unzip(await (await rd.getFileHandle(zn)).getFile()); for (const n of z.names) entries.set(n, await z.get(n)); } catch (e) {}
+  for await (const [n, fh] of rd.entries()) if (fh.kind === "file" && /\.json$/.test(n)) { entries.set(n, new Uint8Array(await (await fh.getFile()).arrayBuffer())); loose.push(n); }
+  if (name) entries.set(name + ".json", u8);
+  if (!name && !loose.length) return zn;
+  const blob = await zipBin([...entries].map(([n, d]) => ({ name: n, data: d }))), tmp = zn + ".neu";
+  await vsPut(rd, tmp, blob); const chk = await unzip(await (await rd.getFileHandle(tmp)).getFile());
+  for (const [n, d] of entries) if (chk.size(n) !== d.length) throw new Error("ZIP der Ausschnitte nicht in Ordnung (" + n + "), lose Dateien bleiben");
+  await vsPut(rd, zn, blob); try { await rd.removeEntry(tmp); } catch (e) {}
+  for (const n of loose) { try { await rd.removeEntry(n); } catch (e) {} }
+  return zn; }
 async function fSend() {
   const btn = $("fsend"); if (btn) btn.disabled = true;
   try {
@@ -7218,8 +7503,11 @@ async function fSend() {
     const pick = [], heads = FCSV;
     if (h) { for (let k = 0; k < 10; k++) { const day = ymd(new Date(Date.now() - k * 86400000)), dir = await fGet(h, [...vsDayParts(day), "Ausschnitte"]); if (!dir) continue; const rd = await fGet(dir, ["Rohdaten"]); if (!rd) continue;
         const sent = new Set((await fText(dir, "gesendet.txt")).split(/\r?\n/).filter(Boolean)), rows = (await fText(dir, "ausschnitte.csv")).replace(/^﻿/, "").split(/\r?\n/).slice(1).filter(Boolean);
-        for await (const [n, fh] of rd.entries()) { if (fh.kind !== "file" || !/\.json$/.test(n)) continue; const nm = n.replace(/\.json$/, "");
-          pick.push({ dir, nm, day, sent: sent.has(nm), row: rows.find(r => r.split(";")[0] === nm) || nm, get: async () => new Uint8Array(await (await fh.getFile()).arrayBuffer()) }); } } }
+        try { await ausZipAdd(rd, day, null); } catch (e) {} /* lose JSON übernehmen */
+        for await (const [n, fh] of rd.entries()) { if (fh.kind !== "file") continue;
+          if (/\.json$/.test(n)) { const nm = n.replace(/\.json$/, ""); pick.push({ dir, nm, day, sent: sent.has(nm), row: rows.find(r => r.split(";")[0] === nm) || nm, get: async () => new Uint8Array(await (await fh.getFile()).arrayBuffer()) }); continue; }
+          if (!/^Ausschnitte_.*\.zip$/.test(n)) continue; let z = null; try { z = await unzip(await fh.getFile()); } catch (e) { continue; }
+          for (const jn of z.names) { if (!/\.json$/.test(jn)) continue; const nm = jn.replace(/\.json$/, ""); pick.push({ dir, nm, day, sent: sent.has(nm), row: rows.find(r => r.split(";")[0] === nm) || nm, get: async () => await z.get(jn) }); } } } }
     else window.vsShots.forEach(s => pick.push({ dir: null, nm: s.name, day: s.day, sent: !!s.sent, row: s.row, get: async () => new TextEncoder().encode(s.json), ref: s }));
     let use = pick.filter(p => !p.sent);
     if (!use.length) { if (!pick.length) { fstat("Keine Ausschnitte gefunden (letzte 10 Tage)."); if (btn) btn.disabled = false; return; }
@@ -7278,7 +7566,7 @@ async function fLiveSave(sh) {
   let h = null; try { h = await vsRoot(false); } catch (e) {}
   let ort = "Downloads";
   if (h) { const dir = await vsSub(h, [...vsDayParts(day), "Ausschnitte"]), rd = await vsSub(dir, ["Rohdaten"]);
-    if (sh.png) await vsPut(dir, name + ".png", sh.png); await vsPut(dir, name + ".xlsx", xl); await vsPut(rd, name + ".json", new TextEncoder().encode(json)); await vsAppend(dir, "ausschnitte.csv", FCSV, [row]); ort = vsDayParts(day).join("/") + "/Ausschnitte"; }
+    if (sh.png) await vsPut(dir, name + ".png", sh.png); await vsPut(dir, name + ".xlsx", xl); await ausZipAdd(rd, day, name, new TextEncoder().encode(json)); await vsAppend(dir, "ausschnitte.csv", FCSV, [row]); ort = vsDayParts(day).join("/") + "/Ausschnitte"; }
   else { if (sh.png) vsDownload(sh.png, name + ".png"); vsDownload(new Blob([xl]), name + ".xlsx"); }
   window.vsShots.push({ name, json, row, day });
   addEntry({ typ: "Daten", name: `Ausschnitt gespeichert: ${name}` + (sh.note ? ` (${sh.note})` : "") + `, ${ort}`, start: Date.now() });
@@ -7296,7 +7584,7 @@ function stateSeg() {
   const Bs = S.st && S.st.b, Fs = S.st && S.st.f;
   const A = (J.atem || []).filter(a => (a.quelle || "Gurt") === "Gurt" && Number.isFinite(a.dauer)), at = A.map(a => a.t), ad = A.map(a => a.dauer);
   const scr = (J.protokoll || []).filter(r => r.typ === "Bildschirm" && /^Schwarzsperre (an|aus)$/.test(r.name || "")).map(r => [r.t, /aus$/.test(r.name)]).sort((p, q) => p[0] - q[0]);
-  const vis = t => { let v = false; for (const [x, a] of scr) { if (x <= t) v = a; else break; } return v; };
+  const vis = t => { let v = scr.length ? !scr[0][1] : false; for (const [x, a] of scr) { if (x <= t) v = a; else break; } return v; };
   const cnt = (T, X, a, b) => { if (!T || !X) return 0; let n = 0; for (let k = lb(T, a); k < T.length && T[k] < b; k++) if (X[k] > 25) n++; return n; };
   const W = 150000, rows = [];
   for (let c = 60000; c < S.tEnd; c += 60000) {
@@ -7315,7 +7603,7 @@ function stateSeg() {
   return S.zst = seg.filter(g => g.x >= 0).map(g => ({ a: g.a - 30000, b: g.b + 30000, s: g.x ? "Schlaf" : "wach" }));
 }
 function stateAt(t) { const g = stateSeg().find(g => t >= g.a && t < g.b); return g ? g.s : ""; }
-function stateBand(c, X, a, b, L, W) { stateSeg().forEach(g => { if (g.b < a || g.a > b) return; const x0 = Math.max(L, X(g.a)), x1 = Math.min(L + W, X(g.b)); c.fillStyle = ZST_COL[g.s]; c.fillRect(x0, 0, Math.max(1, x1 - x0), 3); }); }
+function stateBand0(c, X, a, b, L, W) { stateSeg().forEach(g => { if (g.b < a || g.a > b) return; const x0 = Math.max(L, X(g.a)), x1 = Math.min(L + W, X(g.b)); c.fillStyle = ZST_COL[g.s]; c.fillRect(x0, 0, Math.max(1, x1 - x0), 3); }); }
 
 /* ===== 2.8: gemeinsame Ereignisliste mit Reihenfolge (was kam zuerst) und Zustand ===== */
 const EV = { S: null, list: [] }, LIEG = new Set(["Rücken", "Bauch", "linke Seite", "rechte Seite"]);
@@ -7332,7 +7620,7 @@ function evOrder(t) { const Bs = S.st && S.st.b, Fs = S.st && S.st.f, o = { Puls
   const it = Object.entries(o).filter(([, v]) => v !== null).sort((p, q) => p[1] - q[1]); if (!it.length) return { o, txt: "", first: "" };
   const f = it[0][1], s = x => (x >= 0 ? "+" : "") + (x / 1000).toFixed(1).replace(".", ",");
   return { o, first: it[0][0], txt: it[0][0] + (it.length > 1 ? ", dann " + it.slice(1).map(([k, v]) => `${k} ${s(v - f)} s`).join(", ") : "") }; }
-function evBuild() {
+function evBase() {
   if (EV.S === S) return EV.list; EV.S = S; const L = []; if (!S || !J) return EV.list = L;
   ((J.nacht && J.nacht.ereignisse) || []).forEach(e => L.push({ t: e.t_ms, art: e.art === "Zuckung" ? (e.form === "Bewegung" ? "Bewegung Fuß" : "Zuckung") : "Bewegung Brust", grp: "bew",
     info: [Number.isFinite(e.fuss_mg) ? "Fuß " + Math.round(e.fuss_mg) + " mg" : "", Number.isFinite(e.brust_mg) ? "Brust " + Math.round(e.brust_mg) + " mg" : "", e.ausgenommen ? "nicht gezählt: " + e.ausgenommen : ""].filter(Boolean).join(", "), ord: true }));
@@ -7349,25 +7637,101 @@ function evBuild() {
   return EV.list = L;
 }
 function nrTicks(c, X, a, b) { if (EV.S !== S) return; EV.list.forEach(x => { if (!x.tick || x.t < a || x.t > b) return; c.fillStyle = x.tick === 1 ? "#111" : "#555"; c.fillRect(X(x.t), 13, 1, x.tick === 1 ? 8 : 6); }); }
+/* ===== 2.9: eine Ereignisliste für alles: Zuckungen, Lage, Pausen, Prüfliste, Atemmuster, Puls, EKG, Marker ===== */
+const DEUT = { map: new Map() }, DEUT_HEAD = "ID;Aktion;Epoch_ms;Zeit;Art;Grund;Quelle";
+let EVSEL = null, EVUNDO = null;
+function deutQ() { try { return JSON.parse(localStorage.getItem("vs_deutq") || "[]"); } catch (e) { return []; } }
+async function deutWrite(rows, gesture) {
+  const q = deutQ().concat(rows); let h = null; try { h = await vsRoot(!!gesture); } catch (e) {}
+  const keep = () => { try { localStorage.setItem("vs_deutq", JSON.stringify(q)); } catch (e) {} };
+  if (!h) { keep(); return false; }
+  try { await vsAppend(await vsSub(h, ["Langzeit"]), `Deutung_${devName()}.csv`, DEUT_HEAD, q.map(r => [r.id, r.aktion, Math.round(r.t), ausDT(r.t), ausCl(r.art), ausCl(r.grund), ausCl(r.quelle || "Betrachter")].join(";"))); localStorage.removeItem("vs_deutq"); return true; }
+  catch (e) { keep(); return false; } }
+async function deutRead() {
+  const map = new Map(); let h = null; try { h = await vsRoot(false); } catch (e) {}
+  if (h) { try { const d = await h.getDirectoryHandle("Langzeit"), fs = []; for await (const [n, e] of d.entries()) if (e.kind === "file" && /^Deutung.*\.csv$/i.test(n)) fs.push([n, e]);
+    fs.sort((x, y) => x[0].localeCompare(y[0]));
+    for (const [, e] of fs) (await (await e.getFile()).text()).replace(/^﻿/, "").split(/\r?\n/).forEach((ln, i) => { if (!i || !ln.trim()) return; const c = ln.split(";"); if (c.length >= 3 && c[0]) map.set(c[0], { id: c[0], aktion: c[1], t: +c[2], art: c[4], grund: c[5] }); }); } catch (e) {} }
+  deutQ().forEach(r => map.set(r.id, r)); for (const [k, e] of map) if (e.aktion === "zurück") map.delete(k);
+  DEUT.map = map; EV.ver = (EV.ver || 0) + 1; return map; }
+/* Pausen: Abstand ab 900 ms, mindestens das 1,5-Fache des vorigen, der nächste höchstens 75 % davon, bis 3 s; EKG sauber (unter 15 µV), keine Bewegung über 50 mg in ±3 s */
+function pauseList() {
+  if (!S || !S.bt || !J) return []; const out = [], su = (J.schlaege || {}).stoer_uV || [], Bs = S.st && S.st.b, Fs = S.st && S.st.f;
+  const mv = (T, X, a, b) => { if (!T || !X) return false; for (let k = lb(T, a); k < T.length && T[k] < b; k++) if (X[k] > 50) return true; return false; };
+  for (let i = 2; i + 1 < S.bt.length; i++) { if (!S.ok[i] || !S.ok[i - 1] || !S.ok[i - 2] || !S.ok[i + 1]) continue;
+    const r = S.bt[i] - S.bt[i - 1], p = S.bt[i - 1] - S.bt[i - 2], q = S.bt[i + 1] - S.bt[i];
+    if (r < 900 || r > 3000 || r < 1.5 * p || q > 0.75 * r) continue;
+    if ([i - 2, i - 1, i, i + 1].some(k => su[k] !== null && su[k] !== undefined && su[k] >= 15)) continue;
+    const a = S.bt[i - 1] - 3000, b = S.bt[i] + 3000; if (mv(Bs && Bs.t, Bs && Bs.md, a, b) || mv(Fs && Fs.t, Fs && Fs.aus, a, b)) continue;
+    out.push({ t: S.bt[i - 1], a: S.bt[i - 1], b: S.bt[i], art: "Pause", grp: "pause", info: `${(r / 1000).toFixed(2).replace(".", ",")} s, davor ${Math.round(p)} ms, danach ${Math.round(q)} ms` }); }
+  return out; }
+function evId(x) { return x.pr ? x.pr.id : `D-${x.art}-${Math.round((J ? J.t0_epoch_ms : 0) + x.t)}`; }
+function evBuild() {
+  if (EV.S2 === S && EV.v2 === EV.ver && EV.all) return EV.all; const L = evBase().slice();
+  pauseList().forEach(x => L.push(x));
+  const T0e = J.t0_epoch_ms, ids = new Set((AV.an || []).map(x => x.id));
+  (AV.an || []).forEach(x => L.push({ t: x.a, a: x.a, b: x.b, art: x.art, grp: "pruef", pr: x, info: x.text || "" }));
+  ausActive(AV.map || new Map()).filter(e => !ids.has(e.id) && e.b - T0e > 0 && e.a - T0e < S.tEnd).forEach(e => { const pr = { id: e.id, art: "Ausschluss " + (e.quelle || ""), grund: e.grund, a: e.a - T0e, b: e.b - T0e, text: e.grund + (e.notiz ? ", " + e.notiz : ""), betrifft: e.betrifft, klasse: "hand" };
+    L.push({ t: pr.a, a: pr.a, b: pr.b, art: pr.art, grp: "pruef", pr, info: pr.text }); });
+  L.forEach(x => { if (x.st === undefined) x.st = stateAt(x.t); x.id = evId(x); const d = DEUT.map.get(x.id); x.deut = d ? d.aktion : ""; });
+  L.sort((p, q) => p.t - q.t); EV.S2 = S; EV.v2 = EV.ver; return EV.all = L; }
+const EFILT = { alle: () => true, offen: x => x.pr && x.pr.klasse !== "hand" && !ausGeprueft(x.pr), pruef: x => !!x.pr, bew: x => x.grp === "bew", lage: x => x.grp === "lage", pause: x => x.grp === "pause",
+  atem: x => !!(x.pr && /^(ATMU|APNO|ATEMR)$/.test(x.pr.code)), puls: x => x.grp === "puls", ekg: x => x.grp === "ekg", prot: x => x.grp === "prot" };
+function evStand(x) { if (x.deut === "falsch") return "nicht gewertet"; if (x.deut === "ok") return "in Ordnung"; if (x.pr) return x.pr.klasse === "hand" ? "ausgeschlossen" : ausStand(x.pr);
+  return (AV.eff || []).some(e => e.betrifft !== "Atemgurt" && x.t >= e.a && x.t <= e.b) ? "im ungültigen Abschnitt" : ""; }
 function renderEv() {
   const box = $("eList"); if (!box) return; if (!S || !J) { box.innerHTML = ""; $("eCount").textContent = ""; return; }
-  const all = evBuild(), f = $("eFilt").value, L = all.filter(x => f === "alle" || x.grp === f), shown = L.slice(0, 800);
-  const stat = st => { const m = all.filter(x => x.st === st && (x.grp === "bew" || x.grp === "lage") && x.first); return m.length ? `${st}: Puls zuerst bei ${m.filter(x => x.first === "Puls").length} von ${m.length}` : ""; };
+  const all = evBuild(), fk = $("eFilt").value, L = all.filter(EFILT[fk] || EFILT.alle), shown = L.slice(0, 1200);
+  const bm = all.filter(x => x.first && (x.grp === "bew" || x.grp === "lage") && x.deut !== "falsch");
+  const stat = st => { const m = bm.filter(x => x.st === st); return m.length ? `${st}: Puls zuerst bei ${m.filter(x => x.first === "Puls").length} von ${m.length}` : ""; };
   $("eCount").textContent = `${L.length} Einträge` + (L.length > shown.length ? ` (die ersten ${shown.length} gezeigt)` : "") + ". " + [stat("Schlaf"), stat("wach")].filter(Boolean).join(", ");
-  box.innerHTML = shown.map((x, i) => `<tr data-i="${i}"><td>${hms(x.t)}</td><td>${bvEsc(x.art)}</td><td>${x.st || ""}</td><td>${bvEsc(x.rf || "")}</td><td>${bvEsc(x.info || "")}</td></tr>`).join("") || `<tr><td colspan="5">Keine Einträge.</td></tr>`;
-  box.querySelectorAll("tr[data-i]").forEach(tr => tr.addEventListener("click", () => { const x = shown[+tr.dataset.i];
-    nSel = null; SPAN = 40000; sel = Math.max(0, x.t - 15000); if (mode === "nacht") renderEvents(); drawAll(); $("detCard").scrollIntoView({ block: "start" }); }));
-}
+  box.innerHTML = shown.map((x, i) => { const sd = evStand(x), grau = x.deut === "falsch" || /ausgeschlossen|nicht werten|ungültig/.test(sd), cls = [EVSEL && EVSEL.id === x.id ? "eSel" : "", grau ? "eGrau" : "", x.pr && x.pr.top ? "pTop" : x.pr && x.pr.klasse === "koerper" ? "pKoe" : ""].filter(Boolean).join(" ");
+    return `<tr data-i="${i}" class="${cls}"><td>${hms(x.t)}</td><td>${bvEsc(x.art)}</td><td>${x.st || ""}</td><td>${bvEsc(x.rf || "")}</td><td>${bvEsc(x.info || "")}</td><td>${bvEsc(sd)}</td></tr>`; }).join("") || `<tr><td colspan="6">Keine Einträge.</td></tr>`;
+  box.querySelectorAll("tr[data-i]").forEach(tr => tr.addEventListener("click", () => evPick(shown[+tr.dataset.i])));
+  evActShow(); }
+function evPick(x) {
+  EVSEL = x; EVUNDO = null; $("eMsg").innerHTML = "";
+  if (x.grp === "bew" && mode === "nacht" && typeof evList !== "undefined" && evList) { const e = evList.find(v => v.art !== "Vergleich" && Math.abs(v.t - x.t) < 600); if (e) { try { selectEvent(e); } catch (er) {} renderEv(); $("detCard").scrollIntoView({ block: "start" }); return; } }
+  nSel = null; if (x.pr) { SPAN = Math.min(900000, Math.max(20000, x.b - x.a + 20000)); sel = Math.max(0, x.a - 10000); } else { SPAN = 40000; sel = Math.max(0, x.t - 15000); }
+  if (mode === "nacht") renderEvents(); drawAll(); renderEv(); $("detCard").scrollIntoView({ block: "start" }); }
+function evActShow() { const b = $("eAct"); if (!b) return; b.style.display = EVSEL ? "" : "none"; if (EVSEL) $("eSelTxt").textContent = `${hms(EVSEL.t)} ${EVSEL.art}`; }
+async function evAfter(msg, undo) { EVUNDO = undo; EV.ver = (EV.ver || 0) + 1;
+  $("eMsg").innerHTML = bvEsc(msg) + (undo ? ' <button id="bv_eUndo">rückgängig</button>' : "");
+  if (undo) $("eUndo").onclick = async () => { const u = EVUNDO; EVUNDO = null; if (!u) return; await u(); EV.ver++; $("eMsg").textContent = "Zurückgenommen."; renderEv(); try { drawAll(); } catch (e) {} };
+  renderEv(); try { drawAll(); } catch (e) {} }
+$("eBad").addEventListener("click", async () => { const x = EVSEL; if (!x || !J) return; const g = ($("eGrund").value || "").trim();
+  let pr, src = "Betrachter";
+  if (x.pr && x.pr.klasse !== "hand") { pr = Object.assign({}, x.pr, { grund: g || x.pr.art }); src = "Prüfung"; }
+  else { const a = LAY ? LAY.a : x.t - 10000, b = LAY ? LAY.b : x.t + 10000; pr = { id: `B-${devName()}-${Date.now()}`, art: g || "von Hand", grund: g || "von Hand", a, b, betrifft: "alle", text: `bei ${x.art} ${hms(x.t)}` }; }
+  const ok = await ausSet(pr, "setzen", src); $("eGrund").value = "";
+  evAfter(`Ungültig: ${hms(pr.a)} bis ${hms(pr.b)} Uhr (${pr.grund}).` + (ok === false ? " Kein Ordner frei, die Angabe wartet im Browser." : ""), () => ausSet(pr, "zurück", "automatisch")); });
+$("eOk").addEventListener("click", async () => { const x = EVSEL; if (!x || !J) return; const g = ($("eGrund").value || "").trim(); $("eGrund").value = "";
+  if (x.pr && x.pr.klasse !== "hand") { const ok = await ausSet(x.pr, "geprüft ok", "Prüfung"); return evAfter(`In Ordnung: ${x.art} ${hms(x.t)}.` + (ok === false ? " Wartet im Browser." : ""), () => ausSet(x.pr, "zurück", "automatisch")); }
+  const r = { id: x.id, aktion: "ok", t: J.t0_epoch_ms + x.t, art: x.art, grund: g }; const ok = await deutWrite([r], true); await deutRead();
+  evAfter(`In Ordnung: ${x.art} ${hms(x.t)}.` + (ok ? "" : " Wartet im Browser."), async () => { await deutWrite([Object.assign({}, r, { aktion: "zurück" })], true); await deutRead(); }); });
+$("eFalse").addEventListener("click", async () => { const x = EVSEL; if (!x || !J) return; const g = ($("eGrund").value || "").trim(); $("eGrund").value = "";
+  const r = { id: x.id, aktion: "falsch", t: J.t0_epoch_ms + x.t, art: x.art, grund: g || "Deutung falsch" }; const ok = await deutWrite([r], true); await deutRead();
+  evAfter(`Nicht gewertet: ${x.art} ${hms(x.t)} (${r.grund}).` + (ok ? "" : " Kein Ordner frei, die Angabe wartet im Browser."), async () => { await deutWrite([Object.assign({}, r, { aktion: "zurück" })], true); await deutRead(); }); });
+/* Steuerung der Zuckungen in die Ereigniskarte holen */
+try { const row = $("eRow"); row.appendChild($("nSpan")); row.appendChild($("nEkg").parentElement); } catch (e) {}
+/* gewähltes Ereignis in der Großaufnahme markieren, Band wach/Schlaf unten */
+function evSelDraw(c, X, a, b, L, W, h) {
+  if (EVSEL && J) { const ea = EVSEL.a ?? EVSEL.t, eb = EVSEL.b ?? EVSEL.t; if (eb >= a && ea <= b) { const x0 = Math.max(L, X(ea) - 2), x1 = Math.min(L + W, X(eb) + 2); c.fillStyle = "rgba(124,58,237,.10)"; c.fillRect(x0, 0, Math.max(4, x1 - x0), h - 14); c.fillStyle = "#7c3aed"; c.fillRect(Math.max(L, Math.min(L + W, X(EVSEL.t))) - 1, 0, 2, 12); } }
+  stateStrip(c, X, a, b, L, W, h - 11, h - 3, true); }
+function stateStrip(c, X, a, b, L, W, y0, y1, lab) { const sg = stateSeg(); if (!sg.length) return; c.save(); c.font = "9px system-ui, sans-serif"; c.fillStyle = "#777"; if (lab) c.fillText("Zustand", 2, y1 - 1);
+  sg.forEach(g => { if (g.b < a || g.a > b) return; const x0 = Math.max(L, X(g.a)), x1 = Math.min(L + W, X(g.b)); c.fillStyle = ZST_COL[g.s]; c.fillRect(x0, y0, Math.max(1, x1 - x0), y1 - y0);
+    if (x1 - x0 > 34) { c.fillStyle = g.s === "Schlaf" ? "#fff" : "#5a3000"; c.fillText(g.s, x0 + 3, y1 - 1); } }); c.restore(); }
+deutRead().catch(() => {});
 async function evCsv() {
   if (!S || !J) return; const L = evBuild(), s = v => v === null || v === undefined ? "" : ((v / 1000).toFixed(1).replace(".", ","));
-  const rows = ["Uhrzeit;Epoch_ms;Art;Zustand;zuerst;Puls_s;Fuss_s;Brust_s;Atem_s;Reihenfolge;Angaben", ...L.map(x => { const o = x.o || {}, r = k => o[k] === null || o[k] === undefined ? "" : s(o[k] - x.t);
-    return [hms(x.t), Math.round(T0 + x.t), x.art, x.st || "", x.first || "", r("Puls"), r("Fuß"), r("Brust"), r("Atem"), csvq(x.rf || ""), csvq(x.info || "")].join(";"); })];
+  const rows = ["Uhrzeit;Epoch_ms;Art;Zustand;zuerst;Puls_s;Fuss_s;Brust_s;Atem_s;Reihenfolge;Angaben;Stand", ...L.map(x => { const o = x.o || {}, r = k => o[k] === null || o[k] === undefined ? "" : s(o[k] - x.t);
+    return [hms(x.t), Math.round(T0 + x.t), x.art, x.st || "", x.first || "", r("Puls"), r("Fuß"), r("Brust"), r("Atem"), csvq(x.rf || ""), csvq(x.info || ""), csvq(evStand(x))].join(";"); })];
   const blob = new Blob(["﻿" + rows.join("\n") + "\n"], { type: "text/csv" }), d = new Date(T0), name = `Ereignisse_${ymd(d)}_${fhms(T0)}.csv`;
   let h = null; try { h = await vsRoot(true); } catch (e) {}
   if (h) { await vsPut(await vsSub(h, [...vsDayParts(ymd(d)), "Berichte"]), name, blob); $("eCount").textContent = `Gespeichert in ${vsDayParts(ymd(d)).join("/")}/Berichte: ${name}`; }
   else { vsDownload(blob, name); $("eCount").textContent = `${name} in den Downloads.`; }
 }
-$("mEreig").addEventListener("click", () => { const c = $("eCard"), on = c.style.display === "none"; c.style.display = on ? "" : "none"; $("mEreig").classList.toggle("on", on); if (on) { renderEv(); drawOverview(); } });
+$("mEreig").addEventListener("click", () => { const c = $("eCard"), on = c.style.display === "none"; /* 2.9: Liste ist von Anfang an sichtbar */ c.style.display = on ? "" : "none"; $("mEreig").classList.toggle("on", on); if (on) { renderEv(); drawOverview(); } });
 $("eFilt").addEventListener("change", renderEv);
 $("eCsv").addEventListener("click", evCsv);
 
