@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.5</h1>
+<h1>Vitalspur 2.9.6</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -493,6 +493,7 @@ function openDb() {
 }
 function put(k, d) { queue.push({ k, d }); counts[k] = (counts[k] || 0) + 1; }
 function flush() {
+  try { if (typeof bPhFlush === "function") bPhFlush(); } catch (e) {} /* 2.9.6 */
   if (!db || !queue.length) return Promise.resolve();
   const batch = queue; queue = [];
   return new Promise(res => {
@@ -989,7 +990,7 @@ function onPmd(ev) {
     const out = [];
     if (ft === 0) for (let o = 10; o + 2 < v.byteLength; o += 3) out.push(i24(v, o));
     else { if (!pmdWarned["e" + ft]) { pmdWarned["e" + ft] = 1; addEntry({ typ: "Gurt", name: "Unbekanntes EKG-Format " + ft, start: now }); } return; }
-    put("ecg", { t: now, us: tsUs, r: 130, s: hrRec, v: out }); ecgN += out.length; lvEcg(now, tsUs, out);
+    put("ecg", { t: now, us: tsUs, r: 130, s: hrRec, v: out }); ecgN += out.length; lvEcg(now, tsUs, out); try { loadRec("ekg", now - tsUs / 1000); } catch (e) {}
   }
 }
 function onPmdCp(ev) {
@@ -1628,6 +1629,22 @@ setInterval(() => {
   vStatus((age > 5 ? `Keine Daten seit ${age} s · ` : `Sense läuft (${vOrt}) · `) + `${Math.round(vN)} Werte` + (vPlace === "Arm" ? `, ${Math.round(vP)} PPG` : vG ? `, ${Math.round(vG)} Drehraten` : ""));
 }, 2000);
 
+/* ===== 2.9.6: Last messen. Verspätung der EKG-Pakete (Ankunft am Handy minus Gerätezeit, gegen den kleinsten Wert der letzten 5 min)
+   und Hänger der Seite (ein Zeitgeber alle 250 ms kommt zu spät). Je Minute eine Zeile, 24 h im Browser, in der Diagnose. ===== */
+var LOADM = (() => { let m = []; try { m = JSON.parse(localStorage.getItem("vs_last") || "[]"); } catch (e) {} return { cur: null, min: m, base: [] }; })();
+function loadRec(kind, v) { const m = Math.floor(Date.now() / 60000) * 60000; let c = LOADM.cur;
+  if (!c || c.m !== m) { if (c) loadClose(c); c = LOADM.cur = { m, ekg: [], lag: 0, ah: false, remark: 0 }; }
+  if (kind === "ekg") c.ekg.push(v); else if (kind === "lag") { if (v > c.lag) c.lag = v; } else if (kind === "remark") c.remark++;
+  if (typeof breath !== "undefined" && breath) c.ah = true; }
+function loadClose(c) { const o = { um: new Date(c.m).toISOString(), haenger_ms: Math.round(c.lag), atemhilfe: c.ah, toene_neu_geplant: c.remark };
+  if (c.ekg.length) { const mn = Math.min(...c.ekg); LOADM.base.push([c.m, mn]); LOADM.base = LOADM.base.filter(x => x[0] > c.m - 300000); const base = Math.min(...LOADM.base.map(x => x[1]));
+    const d = c.ekg.map(x => x - base).sort((p, q) => p - q); o.ekg_pakete = d.length; o.ekg_verzug_median_ms = Math.round(d[d.length >> 1]); o.ekg_verzug_99_ms = Math.round(d[Math.min(d.length - 1, Math.floor(0.99 * d.length))]); o.ekg_verzug_max_ms = Math.round(d[d.length - 1]); }
+  LOADM.min.push(o); if (LOADM.min.length > 1440) LOADM.min.splice(0, LOADM.min.length - 1440);
+  try { localStorage.setItem("vs_last", JSON.stringify(LOADM.min)); } catch (e) {} }
+{ let lt = performance.now(); setInterval(() => { const t = performance.now(), lag = t - lt - 250; lt = t; if (lag > 30) loadRec("lag", lag); else loadRec("tick", 0); }, 250); }
+function loadSummary(min) { const L = LOADM.min.filter(o => Date.parse(o.um) > Date.now() - min * 60000); if (!L.length) return "noch keine Werte";
+  const mx = (k) => Math.max(0, ...L.map(o => o[k] || 0)), ah = L.filter(o => o.atemhilfe).length;
+  return `letzte ${L.length} min: EKG-Verzug höchstens ${mx("ekg_verzug_max_ms")} ms, Hänger der Seite bis ${mx("haenger_ms")} ms` + (ah ? `, davon ${ah} min mit Atemhilfe` : ""); }
 /* ================= Atemhilfe ================= */
 const BP = ["Einatmen", "Pause", "Ausatmen", "Pause 2"];
 const BMARK = [[[620, 900], 1], [[1050], 0.45], [[900, 620], 1], [[420], 0.45]];
@@ -1652,7 +1669,7 @@ function bTone(f, at, dur, level) {
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(level, at + 0.012);
   g.gain.setValueAtTime(level, at + dur - 0.04); g.gain.linearRampToValueAtTime(0, at + dur);
   o.connect(g); g.connect(bGain); o.start(at); o.stop(at + dur + 0.02);
-  bNodes.add(o); o.onended = () => { bNodes.delete(o); g.disconnect(); };
+  bNodes.add(o); o._at = at; o.onended = () => { bNodes.delete(o); g.disconnect(); };
 }
 function bMark(ev) {
   const at = ctx.currentTime + (ev.t - Date.now()) / 1000;
@@ -1660,7 +1677,7 @@ function bMark(ev) {
   const [fs, level] = BMARK[ev.i];
   fs.forEach((f, k) => bTone(f, at + k * 0.19, 0.14, level));
 }
-function bCancel() { bNodes.forEach(o => { try { o.stop(); } catch (e) {} }); bNodes.clear(); }
+function bCancel(after) { bNodes.forEach(o => { if (after !== undefined && o._at < after) return; try { o.stop(); } catch (e) {} bNodes.delete(o); }); } /* 2.9.6: nur Töne nach „after“ (Audio-Uhr) zurücknehmen */
 function bFill() {
   const b = breath, end = Date.now() + 70000;
   while (b.cur.t < end) {
@@ -1675,7 +1692,9 @@ function bBegin(T) {
   if (bTon) { bOutput(); breath.off = Date.now() / 1000 - ctx.currentTime; }
   bFill();
 }
-function bRemark() { const now = Date.now(); bCancel(); if (bTon) { bOutput(); breath.off = now / 1000 - ctx.currentTime; breath.ev.filter(e => e.t > now).forEach(bMark); } }
+function bRemark() { const now = Date.now(); if (!bTon || !ctx) { bCancel(); return; }
+  /* 2.9.6: was in den nächsten 0,4 s schon klingt, bleibt; nur danach neu einplanen */
+  bCancel(ctx.currentTime + 0.4); bOutput(); breath.off = now / 1000 - ctx.currentTime; breath.ev.filter(e => e.t > now + 400).forEach(bMark); try { loadRec("remark"); } catch (e) {} }
 function bShow() {
   $("bvis").style.display = bOpt ? "block" : "none";
   $("bopt").classList.toggle("on", bOpt); $("bopt").textContent = "Optik: " + (bOpt ? "an" : "aus");
@@ -1702,11 +1721,15 @@ $("bvol").addEventListener("change", () => { if (breath && bTon) addEntry({ typ:
   const T = bTimes(); if (!T) return;
   bCancel(); bWrite(); bBegin(T); bLogState("Zeiten geändert");
 }));
+var bPhQ = [], bPhLast = Date.now();
+function bPhFlush() { if (!bPhQ.length) return; const q = bPhQ.splice(0); bPhLast = Date.now();
+  q.forEach(r => { r.session = sessionId || hrRec || vRec || micRec || ""; log.push(r); put("log", r); }); }
+setInterval(() => { if (bPhQ.length && (!breath || Date.now() - bPhLast > 30000)) bPhFlush(); }, 5000);
 function bWrite() {
   const b = breath, now = Date.now(); if (!b) return;
   while (b.ev.length && b.ev[0].t <= now) { const e = b.ev.shift(); put("atem", { t: e.t, p: BP[e.i], d: e.d, o: bOpt, n: bTon, s: sessionId || hrRec || micRec || "" });
     /* 1.5: Wechsel als Eintrag im Protokoll (Pausen nur, wenn länger als 0 s; bFill legt Phasen mit 0 s gar nicht an) */
-    addEntry({ typ: "Atemphase", name: ["ein", "Pause nach ein", "aus", "Pause nach aus"][e.i], start: e.t, end: e.t + e.d }); }
+    bPhQ.push({ typ: "Atemphase", name: ["ein", "Pause nach ein", "aus", "Pause nach aus"][e.i], start: e.t, end: e.t + e.d }); } /* 2.9.6: gesammelt, alle 30 s ins Protokoll */
 }
 setInterval(() => {
   if (!breath) return;
@@ -1714,7 +1737,7 @@ setInterval(() => {
   if (bTon && ctx) {
     if (ctx.state !== "running") ctx.resume().catch(() => {});
     const off = Date.now() / 1000 - ctx.currentTime;
-    if (breath.off === null || Math.abs(off - breath.off) > 0.25) bRemark();
+    if (breath.off === null || Math.abs(off - breath.off) > 1.0) bRemark(); /* 2.9.6: erst ab 1 s Abweichung neu einplanen (vorher 0,25 s, gingen dabei Töne verloren) */
   }
 }, 1000);
 function bDraw() {
@@ -4194,14 +4217,14 @@ async function vsDiagnose() {
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9.5", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: VS_VERSION, geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
-      warteschlange: VSQ.n, zeiten: DIAG, fehler };
+      warteschlange: VSQ.n, zeiten: DIAG, last_je_minute: LOADM.min.slice(-1440), last_kurz: loadSummary(60), fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
     const h = await hP; let ort = "Downloads";
     if (h) { await vsPut(await vsSub(h, ["Diagnose"]), name, blob); ort = "Ordner Diagnose im Speicherordner"; } else { vsDownload(blob, name); ort = "Downloads (Speicherordner nicht freigegeben)"; }
     addEntry({ typ: "Daten", name: `Diagnose geschrieben: ${name} (${ort})`, start: Date.now() });
-    const m = $("diagmsg"); m.innerHTML = `Diagnose gespeichert: ${name} im ${ort}. <button id="diagshare">Teilen</button>`;
+    const m = $("diagmsg"); m.innerHTML = `Diagnose gespeichert: ${name} im ${ort}. Last ${loadSummary(60)}. <button id="diagshare">Teilen</button>`;
     $("diagshare").onclick = async () => { const fl = new File([blob], name, { type: "application/json" });
       try { if (navigator.canShare && navigator.canShare({ files: [fl] })) await navigator.share({ files: [fl], title: name }); else vsDownload(blob, name); } catch (e) {} };
     setTimeout(() => { if (m.textContent.includes(name)) m.textContent = ""; }, 120000);
@@ -4211,7 +4234,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.5";
+const VS_VERSION = "2.9.6";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4326,7 +4349,7 @@ async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; ad
   oxReconn = false; oxStatus("Neu verbinden fehlgeschlagen. Bitte „Pulsoxymeter verbinden“ tippen."); }
 async function oxConnect() {
   if (!navigator.bluetooth) { oxStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
-  try { const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "PC-60" }, { namePrefix: "PC60" }, { services: [OX_SVC] }], optionalServices: [OX_SVC, "battery_service"] });
+  try { const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "PC-60" }, { namePrefix: "PC60" }, { namePrefix: "OxySmart" }] /* 2.9.6: nur nach Namen, sonst bot das Fenster auch die Bangle an */, optionalServices: [OX_SVC, "battery_service"] });
     if (oxDev !== d) d.addEventListener("gattserverdisconnected", oxLost); oxDev = d; oxStatus("Verbinde …"); await oxAttach(); oxWanted = true; keepAwake();
     addEntry({ typ: "Oxymeter", name: "Verbunden: " + (d.name || "PC-60FW"), start: Date.now() }); oxStatus("Verbunden mit " + (d.name || "PC-60FW") + ". Warte auf Werte …"); $("oxstop").disabled = false;
   } catch (e) { oxStatus("Nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Oxymeter: " + (e.message || e), start: Date.now() }); } }
@@ -5092,7 +5115,16 @@ function vsAnom(J, rb) {
   (J.akku || []).forEach(k => { const v = parseInt(k.wert, 10); if (v <= 15) add("AKKU", "Akku knapp", "technik", k.t, k.t, `${k.geraet} ${k.wert}`); });
   P.filter(r => r.typ === "Einstellen").forEach(r => add("EIN", "Einstellen", "technik", r.t, r.ende || r.t, r.name));
   P.filter(r => r.typ === "Störung" && (r.ende || !P.some(q => q.typ === "Störung" && q.ende && Math.abs(q.t - r.t) < 2000))).forEach(r => add("STOE", "Störung gemeldet", "technik", r.t, r.ende || r.t, r.name + (r.ende ? "" : ", einzelner Zeitpunkt, Bereich von Hand setzen"), { aus: !!r.ende }));
-  { const e = P.find(r => /Abgleich offen: Ende|Ende-Ablauf begonnen|Alles beendet/.test(r.name || "")); if (e) add("ENDE", "Ende-Ablauf", "technik", e.t, Math.max(e.t, tEnd), "ab dem Ende-Ablauf"); }
+  { /* 2.9.6: jeder Ende-Ablauf endet beim nächsten Start (wie nightExclude seit 1.9.4); mehrere je Datei */
+    const Ps = P.slice().sort((x, y) => x.t - y.t), iv = []; let open = null;
+    Ps.forEach(r => { const nm = r.name || "";
+      const isEnd = (r.typ === "Abgleich" && /^Abgleich offen: Ende/.test(nm)) || (r.typ === "Aufzeichnung" && /^(Ende-Ablauf begonnen|Alles beendet)/.test(nm));
+      const isGo = (r.typ === "Aufzeichnung" && /^(Alles gestartet|Ende-Ablauf abgebrochen)/.test(nm)) || ((r.typ === "Gurt" || r.typ === "Sense") && /^(Aufzeichnung gestartet|Von Hand neu verbunden)/.test(nm));
+      if (isEnd && open === null) open = r.t; else if (isGo && open !== null) { iv.push([open, r.t]); open = null; } });
+    if (open !== null) iv.push([open, Infinity]);
+    iv.forEach(v => { for (let i = 1; i < n; i++) if (sc.t[i] > v[0] && sc.t[i] - sc.t[i - 1] > 60000 && sc.t[i - 1] >= v[0] - 60000) { if (sc.t[i] < v[1]) v[1] = sc.t[i]; break; }
+      const offen = !Number.isFinite(v[1]); if (offen) v[1] = Math.max(v[0], tEnd);
+      add("ENDE", "Ende-Ablauf", "technik", v[0], v[1], offen ? "ab dem Ende-Ablauf" : `Ende-Ablauf bis zum nächsten Start, ${Math.max(1, Math.round((v[1] - v[0]) / 60000))} min`); }); }
   ((J.nacht && J.nacht.ereignisse) || []).forEach(e => { if (e.fuss_mg > 6000) add("STOSS", "sehr großer Ausschlag", "technik", e.t_ms - 5000, e.t_ms + 10000, `Fuß ${Math.round(e.fuss_mg)} mg, eher Klopfen oder Stoß`); });
   /* --- Atemgurt --- */
   const pulsIn = (a, b) => { let s = 0, c = 0; for (let i = lbA(sc.t, a); i < n && sc.t[i] < b; i++) if (sc.ok[i] && sc.rr[i] > 300 && sc.rr[i] < 2500) { s += 60000 / sc.rr[i]; c++; } return c ? s / c : NaN; };
@@ -5214,6 +5246,8 @@ function pruefFenster(an, raw) {
 /* automatische Ausschlüsse der technischen Auffälligkeiten schreiben, nur neue IDs */
 async function ausAuto(an, T0, gesture) {
   const map = await ausReadAll(true), neu = an.filter(x => x.aus && x.b > x.a && x.code !== "EIN" && x.code !== "STOE" && !map.has(x.id)).map(x => ({ id: x.id, aktion: "setzen", a: T0 + x.a, b: T0 + x.b, grund: x.art, quelle: "automatisch", betrifft: x.betrifft, notiz: x.text }));
+  /* 2.9.6: ein früher automatisch geschriebener Ende-Ausschluss (alte Regel bis Dateiende) wird auf die neue Länge gesetzt, solange niemand ihn bewertet hat */
+  an.filter(x => x.code === "ENDE" && x.aus && map.has(x.id)).forEach(x => { const e = map.get(x.id); if (e && e.quelle === "automatisch" && e.aktion === "setzen" && Math.abs(e.b - (T0 + x.b)) > 1000) neu.push({ id: x.id, aktion: "setzen", a: T0 + x.a, b: T0 + x.b, grund: x.art, quelle: "automatisch", betrifft: x.betrifft, notiz: x.text + " (Regel 2.9.6)" }); });
   if (neu.length) await ausWrite(neu, gesture); return neu.length;
 }
 /* 2.0: Warnung „Gurt locker“ ohne Ton: nur Anzeige und Protokoll */
@@ -5251,7 +5285,10 @@ function stoeMsg(o, t) {
 }
 
 /* ---------- Speicherordner ---------- */
-async function vsRoot(gesture) {
+/* 2.9.6: Anfragen mit Geste teilen sich ein Versprechen, damit Tippen auf der Seite und Knopf nicht gegeneinander fragen */
+let vsRootP = null;
+function vsRoot(gesture) { if (!gesture) return vsRoot0(false); if (vsRootP) return vsRootP; vsRootP = vsRoot0(true).finally(() => setTimeout(() => { vsRootP = null; }, 0)); return vsRootP; }
+async function vsRoot0(gesture) {
   if (!("showDirectoryPicker" in window)) return null;
   const tryH = async h => { if (!h) return false; try { let p = await h.queryPermission({ mode: "readwrite" }); if (p !== "granted" && gesture) p = await h.requestPermission({ mode: "readwrite" }); return p === "granted"; } catch (e) { return false; } };
   if (vsDir && await tryH(vsDir)) { vsDirName = vsDir.name; return vsDir; }
@@ -6028,6 +6065,12 @@ function vsGrantTap() {
   if (vsDirOk === true) return;
   vsRoot(true).then(h => { if (h) { vsDirOk = true; dirWarnShow(); vsShow(); vsFlush("Freigabe"); vsMusikLaden(); } else { vsDirOk = false; dirWarnShow(); } }).catch(() => {});
 }
+/* 2.9.6: Freigabe beim ersten Tippen irgendwo auf der Seite; jeder Knopf holt den Ordner sofort beim Tippen (Fangphase, vor dem eigenen Ablauf des Knopfs) */
+var vsDirOk; let vsGrantLast = 0;
+document.addEventListener("click", ev => { try { const bt = ev.target && ev.target.closest ? ev.target.closest("button") : null;
+  if (bt && (bt.id === "vsord" || bt.id === "ordnew")) return; /* diese wählen den Ordner selbst */
+  if (vsDirOk === true) { if (bt) vsRoot(true).catch(() => {}); return; }
+  if (!bt && Date.now() - vsGrantLast < 120000) return; vsGrantLast = Date.now(); vsGrantTap(); } catch (e) {} }, true);
 function dirGrant() { $("vsord").click(); setTimeout(vsDirCheck, 1500); setTimeout(vsDirCheck, 5000); }
 
 /* ---------- Liveansicht: Puffer (immer, klein) ---------- */
@@ -6268,7 +6311,7 @@ function lvDraw(force) {
   if (!anyActive() && !lv.frozen) { g.fillStyle = C.fg; g.textAlign = "center"; g.font = "bold 15px system-ui, sans-serif"; g.fillText(lvStopT ? `Aufzeichnung beendet um ${hhmm(lvStopT)} Uhr` : "Keine Aufzeichnung aktiv", W / 2, H / 2); g.font = "11px system-ui, sans-serif"; g.textAlign = "left";
     $("lvnum").innerHTML = `<span><b>–</b> Puls</span><span><b>–</b> Spannweite</span><span><b>–</b> ms RMSSD (1 min)</span><span><b>–</b> Atemzüge/min</span>`; return; }
   const oxOn = typeof oxLive !== "undefined" && oxLive.t.length > 0 && Date.now() - oxLive.t[oxLive.t.length - 1] < 30000; /* 2.9.3 */
-  const L = 40, R = oxOn ? 74 : 44, T = 4, B = 18, pw = W - L - R;
+  const L = 40, R = oxOn ? 74 : 44, T = 14, B = 18, pw = W - L - R; /* 2.9.6: oben Platz für das Lageband */
   if (!lv.spanSet) { lv.span = lvAutoSpan(pw); lv.spanSet = true; document.querySelectorAll("#lvspan button").forEach(b => b.classList.toggle("on", +b.dataset.s === lv.span)); }
   const S = lv.span * 1000, t1 = now, t0 = now - S;
   const X = t => L + (t - t0) / S * pw;
@@ -6391,11 +6434,29 @@ function lvDraw(force) {
   g.strokeStyle = "#e0b000"; g.lineWidth = 1.5; zuck.forEach(t => { if (t < t0) return; const x = X(t); g.beginPath(); g.moveTo(x, PA.y); g.lineTo(x, PB.y + PB.h); g.stroke(); }); g.lineWidth = 1;
 
   /* 1.5: Atemhilfe, Linie bei jedem Wechsel über Atem und Puls */
-  for (let i = log.length - 1; i >= 0; i--) { const r = log[i]; if (r.start < t0 - 600000) break; if (r.typ !== "Atemphase" || r.start < t0 || r.start > t1) continue;
+  for (let i = log.length - 1 + bPhQ.length; i >= 0; i--) { const r = i >= log.length ? bPhQ[i - log.length] : log[i]; if (r.start < t0 - 600000) break; if (r.typ !== "Atemphase" || r.start < t0 || r.start > t1) continue; /* 2.9.6: auch noch nicht geschriebene Phasen */
     const x = X(r.start), ein = r.name === "ein", aus = r.name === "aus";
     g.strokeStyle = ein ? C.belt : aus ? C.beat : C.ev; g.lineWidth = 1; g.setLineDash(ein ? [] : aus ? [4, 3] : [1, 3]);
     g.beginPath(); g.moveTo(x + 0.5, PA.y); g.lineTo(x + 0.5, PH.y + PH.h); g.stroke(); g.setLineDash([]);
     g.font = "bold 11px system-ui, sans-serif"; lvLabel(g, ein ? "ein" : aus ? "aus" : "Pause", x + 3, PA.y + 28, g.strokeStyle, C.bg); g.font = "11px system-ui, sans-serif"; }
+  /* 2.9.6: Lage oben, wie im Betrachter (aus der Brust des H10, je 5 s) */
+  { const LC = { "Rücken": "#8ecae6", "Bauch": "#ffb703", "linke Seite": "#90be6d", "rechte Seite": "#f28482", "dazwischen": "#d0d0d0", "aufrecht": "#6c757d", "gehen": "#5a189a" };
+    let k = lvLo(memAcc.t, Math.floor(t0 / 5000) * 5000), drew = false;
+    for (let s = Math.floor(t0 / 5000) * 5000; s < t1; s += 5000) { let sx = 0, sy = 0, sz = 0, nn = 0; while (k < memAcc.t.length && memAcc.t[k] < s + 5000) { if (memAcc.t[k] >= s) { sx += memAcc.x[k]; sy += memAcc.y[k]; sz += memAcc.z[k]; nn++; } k++; }
+      if (nn < 5) continue; let l = null; try { l = lageOf(sx / nn, sy / nn, sz / nn); } catch (e) {} if (!l) continue;
+      const xa = Math.max(L, X(s)), xb = Math.min(L + pw, X(s + 5000)); g.fillStyle = LC[l] || "#ccc"; g.fillRect(xa, 3, Math.max(1, xb - xa), 8); drew = true;
+      if (xb - xa > 46) { g.fillStyle = l === "aufrecht" || l === "gehen" ? "#fff" : "#222"; g.font = "9px system-ui, sans-serif"; g.textAlign = "left"; g.fillText(l, xa + 2, 10); g.font = "11px system-ui, sans-serif"; } }
+    g.fillStyle = C.fg; g.font = "9px system-ui, sans-serif"; g.textAlign = "right"; g.fillText("Lage", L - 3, 10); g.font = "11px system-ui, sans-serif"; g.textAlign = "left"; }
+  /* 2.9.6: Störung von der Uhr: offen schraffiert bis jetzt, geschlossen von Beginn bis Ende, einzelner Druck gestrichelt */
+  { const y0 = PA.y, y1 = PB.y + PB.h, col = night ? "rgba(201,209,217," : "rgba(90,90,90,";
+    const hatch = (x0, x1, lab) => { if (x1 - x0 < 1) return; g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip(); g.fillStyle = col + ".10)"; g.fill(); g.strokeStyle = col + ".45)"; g.lineWidth = 1; g.beginPath();
+      for (let x = x0 - (y1 - y0); x < x1; x += 8) { g.moveTo(x, y1); g.lineTo(x + (y1 - y0), y0); } g.stroke(); g.restore(); lvLabel(g, lab, x0 + 3, PB.y + 24, night ? "#c9d1d9" : "#444", C.bg); };
+    const open = new Set(Object.values(typeof STOE !== "undefined" ? STOE : {}).map(Number)), SL = [];
+    for (let i = log.length - 1; i >= 0; i--) { const r = log[i]; if (r.start < t0 - 86400000) break; if (r.typ === "Störung") SL.push(r); }
+    SL.forEach(r => { const a = r.start;
+      if (r.end) { if (r.end < t0 || a > t1) return; hatch(Math.max(L, X(a)), Math.min(L + pw, X(r.end)), "Störung"); }
+      else if (open.has(a)) { if (a > t1) return; hatch(Math.max(L, X(a)), L + pw, "Störung offen"); }
+      else if (!SL.some(q => q.end && q.start === a)) { if (a < t0 || a > t1) return; const x = X(a); g.strokeStyle = col + ".8)"; g.lineWidth = 1.5; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(x + 0.5, y0); g.lineTo(x + 0.5, y1); g.stroke(); g.setLineDash([]); g.lineWidth = 1; lvLabel(g, "Störung", x + 3, PB.y + 24, night ? "#c9d1d9" : "#444", C.bg); } }); }
   /* Ereignisse */
   const evs = log.filter(r => r.start >= t0 && r.start <= t1 && /^(Marker|Abgleich|Session|Kalibrierung|Tätigkeit|Atemhilfe|Notiz|Schalter)$/.test(r.typ));
   const rows = [];
@@ -6745,7 +6806,7 @@ function lageBand(c, X, a, b, y0, y1, L, W, txt) {
 function detLayout() {
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN, a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel;
   const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span) || (ekgFullHas() && span <= EKGF.maxSpan), hasRb = !!S.rb, kip = $("kip").checked, ah = aidPhases().ph.some(p => p.b > a && p.a < a + span), P = {};
-  let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb ? 100 : 18)]; y = P.atem[1] + (ah ? 22 : 4) + 18;
+  let y = 10; P.lage = [y, y + 10]; y += 18; /* 1.9.4: Band Lage */ P.atem = [y, y + (hasRb || (J.oxi && J.oxi.t && J.oxi.t.length) ? 100 : 18)]; /* 2.9.6: Platz für PI auch ohne Gurt */ y = P.atem[1] + (ah ? 22 : 4) + 18;
   if (kip) { P.kip = [y, y + 80]; y = P.kip[1] + 18; }
   P.puls = [y, y + 230]; y = P.puls[1] + 20; P.bew = [y, y + (showEkg ? 50 : 100)]; P.ekg = [P.bew[1] + 12, P.bew[1] + 102];
   if (showEkg && oxwHas() && span <= EKGF.maxSpan) P.pw = [P.ekg[1] + 14, P.ekg[1] + 54]; /* 2.9.3: Pulswelle unter dem EKG */
@@ -6763,7 +6824,7 @@ function kipAll() {
 function drawDetail() {
   const cv = $("det"); const LY = S ? detLayout() : null; cv._h = LY ? LY.h : 520; const { c, w, h } = ctxOf(cv); c.clearRect(0, 0, w, h); if (!S || w < 80) return;
   const night = mode === "nacht" && nSel, span = night ? (+$("nSpan").value === 50 ? 50000 : 20000) : SPAN;
-  const a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, R = 8, W = w - L - R, X = t => L + (t - a) / span * W;
+  const a = night ? nSel.t - (span === 50000 ? 15000 : 5000) : sel, b = a + span, L = 40, R = (S.rb || (J.oxi && J.oxi.t && J.oxi.t.length)) ? 74 : 8, W = w - L - R /* 2.9.6: rechte Skalen wie in der Liveansicht */, X = t => L + (t - a) / span * W;
   const showEkg = (night && $("nEkg").checked) || !!pfAt(a, a + span) || (ekgFullHas() && span <= EKGF.maxSpan);
   const hasRb = !!S.rb, P = LY.P, showKip = LY.kip;
   LAY = { P, a, b, span, L, W };
@@ -6784,7 +6845,13 @@ function drawDetail() {
       if (!S.rbS) S.rbS = smoothWin(R.t, R.f, 0, R.t.length, 500, 500); /* 1.8: Mittel über 1 s, zentriert */
       if (!S.rbD) { S.rbD = new Float32Array(R.t.length); S.rbSD = new Float32Array(R.t.length); for (let k = 0; k < R.t.length; k++) { S.rbD[k] = R.f[k] - S.rbB[k]; S.rbSD[k] = S.rbS[k] - S.rbB[k]; } }
       const pl = (F, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); let on = false; for (let k = i0; k < i1; k++) { if (!Number.isFinite(F[k])) { on = false; continue; } const x = X(R.t[k]), y = Y(F[k]); if (on && R.t[k] - R.t[k - 1] > 1000) on = false; on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; } c.stroke(); };
-      pl(S.rbD, "rgba(45,106,79,.3)", 1); pl(S.rbSD, "#2d6a4f", 2.2); br21(c, X, Y, R, i0, i1, a, b, P);
+      pl(S.rbD, "rgba(45,106,79,.3)", 1); pl(S.rbSD, "#2d6a4f", 2.2); c.save(); c.beginPath(); c.rect(L, P.atem[0] - 14, W, P.atem[1] - P.atem[0] + 14); c.clip(); br21(c, X, Y, R, i0, i1, a, b, P); c.restore(); /* 2.9.6: rechts liegen jetzt Skalen */
+      /* 2.9.6: wie live, rechts innen die echte Zugkraft in N (gestrichelt grau) */
+      { let lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { const cc = (lo + hi) / 2; lo = Math.floor(cc - 1); hi = lo + 2; }
+        const YA = v => P.atem[1] - (v - lo) / (hi - lo) * (P.atem[1] - g0), stp = Math.max(1, Math.floor((i1 - i0) / (W * 2)));
+        c.save(); c.beginPath(); c.rect(L, P.atem[0], W, P.atem[1] - P.atem[0]); c.clip(); c.strokeStyle = "#666"; c.globalAlpha = 0.8; c.lineWidth = 1; c.setLineDash([3, 2]); c.beginPath(); let on = false;
+        for (let k = i0; k < i1; k += stp) { const x = X(R.t[k]), y = YA(R.f[k]); if (on && R.t[k] - R.t[Math.max(i0, k - stp)] > 1000) on = false; on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; }
+        c.stroke(); c.restore(); c.font = "10px system-ui, sans-serif"; c.fillStyle = "#666"; c.textAlign = "left"; c.fillText(hi + " N", L + W + 3, P.atem[0] + 12); c.fillText(lo + " N", L + W + 3, P.atem[1] - 2); c.font = "11px system-ui, sans-serif"; }
       /* 1.9.4: Lagewechsel als senkrechte Linie im Atem */
       lageSeg().forEach((g, i) => { if (!i || g.a < a || g.a > b) return; const x = X(g.a); c.strokeStyle = "rgba(0,0,0,.45)"; c.lineWidth = 1; c.setLineDash([3, 2]); c.beginPath(); c.moveTo(x, P.atem[0] - 14); c.lineTo(x, P.atem[1]); c.stroke(); c.setLineDash([]); }); }
     else { c.fillStyle = "#999"; c.fillText("kein Atemgurt an dieser Stelle", L + 80, P.atem[0] + 50); } }
@@ -6809,6 +6876,18 @@ function drawDetail() {
         c.fillText(Math.round(S.rr[k]) + " ms", x, up ? y - 18 : y + 16); c.fillText("(" + Math.round(S.bpm[k]) + ")", x, up ? y - 7 : y + 27); c.textAlign = "left"; c.font = "11px system-ui, sans-serif"; }
       if (night && r0 !== null) { const rel = k - r0 + (k >= r0 ? 1 : 0); c.fillStyle = "#999"; c.font = "9px system-ui, sans-serif"; c.textAlign = "center"; if (Math.abs(rel) <= 25 && (!crowded || rel % 2 === 0 || Math.abs(rel) <= 3)) c.fillText((rel > 0 ? "+" : "") + rel, x, P.puls[1] + 11); c.textAlign = "left"; c.font = "11px system-ui, sans-serif"; } } }
   c.fillStyle = "#555"; c.fillText("Puls je Herzschlag (Schläge pro Minute)", L, P.puls[0] - 4);
+  /* 2.9.6: wie live, Pulszahlen auch rechts, Oxymeter: SpO2 blau 70 bis 100 % im Pulsfeld, PI rot 0 bis 20 % im Atemfeld */
+  if (LAY.Yp) { c.font = "10px system-ui, sans-serif"; c.fillStyle = "#666"; c.textAlign = "left"; [40, 60, 80, 100, 120, 140, 160, 180].forEach(v => c.fillText(String(v), L + W + 3, LAY.Yp(v) + 4)); c.font = "11px system-ui, sans-serif"; }
+  if (J.oxi && J.oxi.t && J.oxi.t.length) { const o = J.oxi, k0 = lb(o.t, a - 3000), k1 = lb(o.t, b + 3000), red = "#d32f2f", blue = "#1565c0";
+    const curve = (arr, Yf, col, lw, low) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); let on = false;
+      for (let k = k0; k < k1; k++) { const v = arr[k]; if (v === null || !Number.isFinite(v)) { on = false; continue; } const x = X(o.t[k]), y = Yf(v); if (low && v < 70) low.push([x, v]); if (on && o.t[k] - o.t[k - 1] > 3000) on = false; on ? c.lineTo(x, y) : c.moveTo(x, y); on = true; } c.stroke(); c.lineWidth = 1; };
+    if (o.pi) { const y0 = P.atem[0] + 8, y1 = P.atem[1], YP = v => y1 - Math.max(0, Math.min(20, v)) / 20 * (y1 - y0);
+      c.save(); c.beginPath(); c.rect(L, P.atem[0], W, y1 - P.atem[0]); c.clip(); curve(o.pi, YP, red, 1.6); c.restore();
+      c.font = "10px system-ui, sans-serif"; c.fillStyle = red; c.textAlign = "left"; [[20, y0 + 4], [10, YP(10) + 4], [0, y1 - 2]].forEach(([v, yy]) => c.fillText(v + " %", L + W + 36, yy)); c.font = "11px system-ui, sans-serif"; }
+    if (o.spo2) { const y0 = P.puls[0], y1 = P.puls[1], YS = v => y1 - (Math.max(70, Math.min(100, v)) - 70) / 30 * (y1 - y0), low = [];
+      c.save(); c.beginPath(); c.rect(L, y0, W, y1 - y0); c.clip(); c.strokeStyle = blue; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(L, Math.round(YS(90)) + 0.5); c.lineTo(L + W, Math.round(YS(90)) + 0.5); c.stroke(); c.setLineDash([]);
+      curve(o.spo2, YS, blue, 2, low); c.fillStyle = blue; low.filter((p, i) => !i || p[0] - low[i - 1][0] > 40).forEach(([x, v]) => { c.beginPath(); c.moveTo(x - 5, y1 - 9); c.lineTo(x + 5, y1 - 9); c.lineTo(x, y1 - 1); c.fill(); c.font = "10px system-ui, sans-serif"; c.textAlign = "center"; c.fillText(v + " %", x, y1 - 12); });
+      c.restore(); c.font = "10px system-ui, sans-serif"; c.fillStyle = blue; c.textAlign = "left"; [100, 90, 80, 70].forEach(v => c.fillText(v + (v === 100 ? " %" : ""), L + W + 36, Math.min(y1 - 3, Math.max(y0 + 9, YS(v) + 4)))); c.font = "11px system-ui, sans-serif"; } }
   /* Bewegung */
   const F = S.st.f, B = S.st.b; c.fillStyle = "#555"; c.fillText("Bewegung in mg, logarithmisch: Fuß (grün), Brust Stoß (grau)", L, P.bew[0] - 2);
   { const f0 = lb(F.t, a), f1 = lb(F.t, b), g0 = lb(B.t, a), g1 = lb(B.t, b);
