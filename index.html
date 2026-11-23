@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.1</h1>
+<h1>Vitalspur 2.9.2</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -1072,7 +1072,7 @@ $("hrconnect").addEventListener("click", async () => {
     const wasWanted = hrWanted;
     await hrAttach();
     hrWanted = true; markRec(); keepAwake();
-    if (vWanted && !syncGate.open) syncOpen("Gurt verbunden", false);
+    if (vWanted) syncPair("Gurt verbunden");
     if (!wasWanted) addEntry({ typ: "Gurt", name: "Aufzeichnung gestartet: " + (hrDev.name || "Gurt"), start: Date.now(), session: hrRec });
     else addEntry({ typ: "Gurt", name: "Von Hand neu verbunden", start: Date.now(), session: hrRec });
     $("hrstop").disabled = false; $("hrconnect").textContent = "Neu verbinden";
@@ -1606,7 +1606,7 @@ $("vconnect").addEventListener("click", async () => {
     await vAttach();
     if (!vWanted) addEntry({ typ: "Sense", name: "Aufzeichnung gestartet: " + (dev.name || "Verity Sense"), start: Date.now(), session: vRec });
     vWanted = true; markRec(); keepAwake();
-    if (hrWanted && !syncGate.open) syncOpen("Sense verbunden", true); /* 2.9: zum Klopfen aufrufen */
+    if (hrWanted) syncPair("Sense verbunden"); /* 2.9.2 */
     $("vstop").disabled = false; $("vconnect").textContent = "Neu verbinden";
     vStatus("Verbunden mit " + (dev.name || "Verity Sense") + ". Warte auf Daten …");
   } catch (e) {
@@ -1838,6 +1838,8 @@ setInterval(() => { if (hrWanted) readBatt(hrDev, "Gurt"); if (vWanted) readBatt
 /* Klopfabgleich nur zu Beginn, nach einem Neuverbinden und am Ende (erster Druck auf den Hauptknopf) */
 const syncGate = { open: true, why: "Beginn", at: 0, last: null };
 const SYNC_REUSE = new Set(["Session-Beginn", "Session-Ende", "Ende"]);
+/* 2.9.2: kommt H10 oder Sense zum anderen dazu: immer Aufruf zum Klopfen, auch wenn der Abgleich schon offen ist */
+function syncPair(why) { if (!syncGate.open) syncOpen(why, true); else say("Bitte zum Abgleich klopfen"); }
 function syncOpen(why, announce) {
   /* 2.1: Abgleich der letzten Stunde übernehmen (nicht nach Neuladen oder Neuverbinden) */
   if (SYNC_REUSE.has(why) && syncGate.last && Date.now() - syncGate.last < 3600000) { syncGate.open = false; syncGate.at = 0;
@@ -2104,6 +2106,7 @@ async function stopAll() {
   if (micOn) $("micstop").click();
   if (hrWanted) $("hrstop").click();
   if (vWanted) $("vstop").click();
+  try { if (oxWanted) oxStop(); } catch (e) {} /* 2.9.2 */
   rbOn = false; rbFlushBuf(); lvStopT = Date.now(); hrContact = null; hrContactLog = null;
   addEntry({ typ: "Aufzeichnung", name: "Alles beendet (Hauptknopf)", start: Date.now() });
   /* 2.3: Alles beenden beendet auch die laufende Session und speichert sie */
@@ -3787,7 +3790,7 @@ async function extras9(X) {
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
-    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
+    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter", "Oxymeter", "Sense"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
     taetigkeiten_auto: act.blocks.map(b => ({ start_ms: rel(b.a), ende_ms: rel(b.b), name: b.name, sicherheit: b.sicher, grund: b.grund })),
     akku: BA.map(b => ({ t: rel(b.t), geraet: b.d, wert: b.txt })),
     phasen: PH.map(p => ({ start_ms: rel(p.a), ende_ms: rel(p.b), art: p.art, puls: p.puls, schritte_min: p.schritte, atem_min: p.atem, tiefe_n: p.tiefe, tiefe_prozent: p.prozent })),
@@ -4094,17 +4097,18 @@ function ekgHF(E) {
 }
 /* ===== 2.8: Diagnose in eine kleine Datei ===== */
 async function vsDiagnose() {
+  const hP = vsRoot(true).catch(() => null); /* 2.9.2: Ordner sofort beim Antippen, solange die Geste gilt */
   const btn = $("diagbtn"), lab = btn.textContent; btn.disabled = true; btn.textContent = "Sammle …";
   try { await flush(); const cnt = {}; for (const k of Object.keys(counts)) { try { cnt[k] = await countKind(k); } catch (e) {} }
     let est = null; try { est = await navigator.storage.estimate(); } catch (e) {}
     let fehler = []; try { fehler = (await readKind("log")).filter(r => r.typ === "Fehler" && r.start > Date.now() - 3 * 86400000).slice(-300).map(r => ({ um: stamp(new Date(r.start)), name: r.name })); } catch (e) {}
     let von = null; try { const fl = await vsFirstLast(); const r = fl.f != null ? await vsRecAt(fl.f) : null; von = r && Number.isFinite(r.t) ? new Date(r.t).toISOString() : null; } catch (e) {}
-    const O = { format: "Vitalspur-Diagnose", version: "2.9.1", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
+    const O = { format: "Vitalspur-Diagnose", version: "2.9.2", geraet: devName(), erstellt: new Date().toISOString(), browser: navigator.userAgent, bildschirm: `${screen.width}x${screen.height}`,
       speicher_browser: est, eintraege_geraetespeicher: cnt, geraetespeicher_ab: von, speicherordner: vsDirName || null, phase: VS ? { tag: VS.day, phase: VS.phase, seit: new Date(VS.phaseStart).toISOString() } : null,
       warteschlange: VSQ.n, zeiten: DIAG, fehler };
     const blob = new Blob([JSON.stringify(O, null, 1)], { type: "application/json" }), name = `Diagnose_${devName()}_${idstamp(new Date())}.json`;
-    const h = await vsRoot(true); let ort = "Downloads";
-    if (h) { await vsPut(await vsSub(h, ["Diagnose"]), name, blob); ort = "Ordner Diagnose im Speicherordner"; } else vsDownload(blob, name);
+    const h = await hP; let ort = "Downloads";
+    if (h) { await vsPut(await vsSub(h, ["Diagnose"]), name, blob); ort = "Ordner Diagnose im Speicherordner"; } else { vsDownload(blob, name); ort = "Downloads (Speicherordner nicht freigegeben)"; }
     addEntry({ typ: "Daten", name: `Diagnose geschrieben: ${name} (${ort})`, start: Date.now() });
     const m = $("diagmsg"); m.innerHTML = `Diagnose gespeichert: ${name} im ${ort}. <button id="diagshare">Teilen</button>`;
     $("diagshare").onclick = async () => { const fl = new File([blob], name, { type: "application/json" });
@@ -4116,7 +4120,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.1";
+const VS_VERSION = "2.9.2";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4224,9 +4228,9 @@ function oxData(ev) {
 }
 async function oxAttach() { const sv = await oxDev.gatt.connect(), s = await sv.getPrimaryService(OX_SVC), c = await s.getCharacteristic(OX_RX);
   c.removeEventListener("characteristicvaluechanged", oxData); c.addEventListener("characteristicvaluechanged", oxData); await c.startNotifications(); }
-async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; addEntry({ typ: "Fehler", name: "Oxymeter: Verbindung verloren", start: Date.now() });
+async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; addEntry({ typ: "Oxymeter", name: "Verbindung verloren (Finger heraus oder Gerät aus?)", start: Date.now() });
   for (let i = 0; i < 20 && oxWanted; i++) { try { await wait(2000); await withTO(oxAttach(), 20000, "Oxymeter"); addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); oxReconn = false; return; }
-    catch (e) { addEntry({ typ: "Fehler", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); } }
+    catch (e) { if (i === 0 || i === 19) addEntry({ typ: i ? "Fehler" : "Oxymeter", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}` + (i ? "" : " (ohne Finger schaltet es sich ab, versuche weiter)"), start: Date.now() }); } }
   oxReconn = false; oxStatus("Neu verbinden fehlgeschlagen. Bitte „Pulsoxymeter verbinden“ tippen."); }
 async function oxConnect() {
   if (!navigator.bluetooth) { oxStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
@@ -7369,10 +7373,10 @@ async function fRaw(A, B) {
   if (typeof db === "undefined" || !db || typeof readKind !== "function") return null;
   try { await flush(); } catch (e) {}
   const rd = async k => { try { return await readKind(k, A - 5000, B + 5000); } catch (e) { return []; } };
-  fstat("Lese Rohdaten …"); const RK = await readKinds(["ecg", "acc", "foot", "gyro", "rb", "beat"], A - 5000, B + 5000);
+  fstat("Lese Rohdaten …"); const RK = await readKinds(["ecg", "acc", "foot", "gyro", "rb", "beat", "ox"], A - 5000, B + 5000);
   const EC = RK.ecg, AC = RK.acc, FT = RK.foot.filter(c => (c.w || "Fuß") === "Fuß"), GY = RK.gyro, RB = RK.rb, BT = RK.beat;
   let LG = []; try { LG = (await readKind("log")).filter(r => r.start < B && (r.end || r.start) >= A); } catch (e) {}
-  if (!EC.length && !AC.length && !FT.length && !RB.length) return null;
+  if (!EC.length && !AC.length && !FT.length && !RB.length && !(RK.ox || []).length) return null;
   const offs = {}; [["a", AC], ["e", EC], ["f", FT.concat(GY)]].forEach(([k, arr]) => arr.forEach(c => { const o = c.t - c.us / 1000, kk = k + (c.s ?? ""); if (offs[kk] === undefined || o < offs[kk]) offs[kk] = o; }));
   const cut = (X, ch) => { if (!X) return null; const t = [], c = []; for (let j = 0; j < ch; j++) c.push([]); for (let i = 0; i < X.t.length; i++) if (X.t[i] >= A && X.t[i] < B) { t.push(X.t[i]); for (let j = 0; j < ch; j++) c[j].push(X.c[j][i]); } return t.length ? { t, c } : null; };
   const E = EC.length ? cut(expand(EC, offs, "e", 1), 1) : null, Ac = AC.length ? cut(expand(AC, offs, "a", 3), 3) : null;
@@ -7380,7 +7384,7 @@ async function fRaw(A, B) {
   const rb = { t: [], f: [] }; RB.forEach(r => (r.v || []).forEach((v, k) => { const t = r.ts[k]; if (t >= A && t < B) { rb.t.push(t); rb.f.push(v); } }));
   let R = []; if (E && E.t.length >= 600) { try { R = rPeaks({ t: Float64Array.from(E.t), c: [Float32Array.from(E.c[0])] }); } catch (e) {} }
   const RS = R.map(r => rsAmp(E.t, E.c[0], r));
-  return { E, R, RS, A: Ac, F, G, rb: rb.t.length ? rb : null, B: BT.filter(b => b[0] >= A && b[0] < B).sort((p, q) => p[0] - q[0]), L: LG.sort((p, q) => p.start - q.start) };
+  return { E, R, RS, A: Ac, F, G, rb: rb.t.length ? rb : null, B: BT.filter(b => b[0] >= A && b[0] < B).sort((p, q) => p[0] - q[0]), L: LG.sort((p, q) => p.start - q.start), OX: (RK.ox || []).filter(o => o.t >= A && o.t < B).sort((p, q) => p.t - q.t) };
 }
 
 /* alles für einen Ausschnitt zusammenstellen: JSON-Objekt und Excel-Blätter */
@@ -7538,12 +7542,14 @@ function fRawObj(raw, A0) {
       brust_mg: ch(raw.A, ["x", "y", "z"]), fuss_mg: ch(raw.F, ["x", "y", "z"]), drehrate_dps: ch(raw.G, ["x", "y", "z"]),
       atemgurt: raw.rb ? { t: raw.rb.t.map(T), kraft_N: raw.rb.f.map(v => Math.round(v * 1000) / 1000) } : null,
       schlaege_gurt: { t: raw.B.map(b => T(b[0])), rr: raw.B.map(b => b[1]) },
+      oxymeter: raw.OX && raw.OX.length ? { t: raw.OX.map(o => T(o.t)), spo2: raw.OX.map(o => o.s), puls: raw.OX.map(o => o.p), pi: raw.OX.map(o => o.pi) } : null,
       protokoll: raw.L.map(r => ({ typ: r.typ, name: r.name, t: T(r.start), ende: r.end ? T(r.end) : null })) };
 }
 function fRawSheets(RO, A0, name, sh) {
   const ep = t => Math.round(A0 + t), clk = t => stamp(new Date(A0 + t)), Sh = [], big = (sh.b - sh.a) > 120000, MAXR = 60000;
   Sh.push({ name: "Info", rows: [["Feld", "Wert"], ["Name", name], ["Art", sh.label + " (Liveansicht)"], ["Gedrückt", fclk(sh.t)], ["Daten von", fclk(A0)], ["Daten bis", fclk(sh.b)], ["Notiz", sh.note || ""], ["Quelle", "Gerätespeicher in voller Auflösung"], ["Hinweis", RO.hinweis + (big ? " Lange Aufnahme: Tabellen über 60.000 Zeilen nur in der JSON-Datei unter Rohdaten." : "")]] });
   { const s = RO.schlaege_gurt, r = [["Uhrzeit", "Epoch_ms", "t_ms", "RR_ms", "Puls"]]; s.t.forEach((t, i) => r.push([clk(t), ep(t), t, s.rr[i], Math.round(600000 / s.rr[i]) / 10])); Sh.push({ name: "Herzschlaege", rows: r }); }
+  if (RO.oxymeter) { const o = RO.oxymeter, r = [["Uhrzeit", "Epoch_ms", "t_ms", "SpO2_Prozent", "Puls_Oxy", "PI_Prozent"]]; o.t.forEach((t, i) => r.push([clk(t), ep(t), t, o.spo2[i], o.puls[i], o.pi[i]])); Sh.push({ name: "Oxymeter", rows: r }); } /* 2.9.2 */
   const ek = RO.ekg; if (ek && ek.t.length <= MAXR) { const r = [["Uhrzeit", "Epoch_ms", "t_ms", "EKG_uV"]]; ek.t.forEach((t, i) => r.push([clk(t), ep(t), t, ek.uV[i]])); Sh.push({ name: "EKG", rows: r }); }
   if (ek) { const q = [["Uhrzeit", "Epoch_ms", "t_ms", "R_Hoehe_uV", "S_Tiefe_uV"]]; ek.r_zacken.forEach((t, i) => q.push([clk(t), ep(t), t, ek.r_uV[i], ek.s_uV[i]])); Sh.push({ name: "R_Zacken", rows: q }); }
   const tri = (nm, X, unit) => { if (!X || X.t.length > MAXR) return; const r = [["Uhrzeit", "Epoch_ms", "t_ms", "x_" + unit, "y_" + unit, "z_" + unit]]; X.t.forEach((t, i) => r.push([clk(t), ep(t), t, X.x[i], X.y[i], X.z[i]])); Sh.push({ name: nm, rows: r }); };
