@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.6</h1>
+<h1>Vitalspur 2.9.7</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -2579,13 +2579,32 @@ function realDtG(arr, i, n, nominal, ch) {
   const d = (arr[i].us - p.us) / 1000 / n;
   return d > nominal * 0.75 && d < nominal * 1.25 ? d : nominal;
 }
+/* 2.9.7: Gang der Gurtuhr gegen die Handyuhr. Je Paket ist o = Ankunft am Handy minus Gerätezeit; der untere Rand von o über die Zeit ist eine Gerade,
+   ihre Neigung ist der Gang (H10 am 25.11.2026: 77 ms je Stunde zu schnell). Je Minute der kleinste Wert, Neigung als Median über Paare mit halbem Abstand
+   (unempfindlich gegen Minuten mit Stau). Gilt erst ab 10 min Dauer und nur bis 200 Millionstel, sonst 0. offs[key] wird so gesetzt, dass die Gerade
+   den unteren Rand berührt; ohne Gang bleibt alles wie bisher. */
+function gangFit(arrs, offs) {
+  const byK = new Map();
+  arrs.forEach(([kind, arr]) => arr.forEach(c => { if (!Number.isFinite(c.us) || !Number.isFinite(c.t)) return; const key = kind + (c.s ?? ""), x = c.us / 1000, o = c.t - x; let g = byK.get(key); if (!g) byK.set(key, g = { kind, s: String(c.s ?? ""), x: [], o: [] }); g.x.push(x); g.o.push(o); }));
+  const slope = g => { const m = new Map(); for (let i = 0; i < g.x.length; i++) { const b = Math.floor(g.x[i] / 60000), e = m.get(b); if (!e || g.o[i] < e[1]) m.set(b, [g.x[i], g.o[i]]); }
+    const P = [...m.values()].sort((p, q) => p[0] - q[0]); if (P.length < 10 || P[P.length - 1][0] - P[0][0] < 600000) return null;
+    const h = P.length >> 1, sl = []; for (let i = 0; i + h < P.length; i++) sl.push((P[i + h][1] - P[i][1]) / (P[i + h][0] - P[i][0])); sl.sort((p, q) => p - q);
+    const k = sl[sl.length >> 1]; return Number.isFinite(k) && Math.abs(k) <= 2e-4 ? { k, span: P[P.length - 1][0] - P[0][0] } : null; };
+  /* dieselbe Uhr für EKG und Beschleunigung des Gurts: Neigung aus dem längsten EKG-Abschnitt, sonst aus der Beschleunigung */
+  let best = null; for (const g of byK.values()) { const f = slope(g); if (!f) continue; const w = f.span * (g.kind === "e" ? 4 : 1); if (!best || w > best.w) best = { k: f.k, w, span: f.span }; }
+  const k = best ? best.k : 0; offs.gang = { k, ms_pro_h: best ? Math.round(-k * 36000000) / 10 : null, dauer_min: best ? Math.round(best.span / 60000) : null, x0: {} };
+  if (!k) return offs.gang;
+  for (const [key, g] of byK) { const x0 = g.x[0]; let c = Infinity; for (let i = 0; i < g.x.length; i++) { const v = g.o[i] - k * (g.x[i] - x0); if (v < c) c = v; } offs[key] = c; offs.gang.x0[key] = x0; }
+  return offs.gang;
+}
+function gangAt(offs, key, x) { const g = offs && offs.gang; return g && g.k && g.x0[key] !== undefined ? g.k * (x - g.x0[key]) : 0; }
 function expand(arr, offs, key, ch, scale) {
   let n = 0; arr.forEach(c => n += Math.floor(c.v.length / ch));
   const t = new Float64Array(n), c = []; for (let k = 0; k < ch; k++) c.push(new Float32Array(n));
   let j = 0;
   arr.forEach((p, idx) => {
     const m = Math.floor(p.v.length / ch), dt = realDtG(arr, idx, m, 1000 / p.r, ch);
-    const base = p.us / 1000 + offs[key + (p.s ?? "")], sc = scale ? scale(p) : 1;
+    const base = p.us / 1000 + offs[key + (p.s ?? "")] + gangAt(offs, key + (p.s ?? ""), p.us / 1000), sc = scale ? scale(p) : 1;
     for (let i = 0; i < m; i++, j++) { t[j] = base - (m - 1 - i) * dt; for (let k = 0; k < ch; k++) c[k][j] = p.v[ch * i + k] * sc; }
   });
   let sorted = true; for (let i = 1; i < n; i++) if (t[i] < t[i - 1]) { sorted = false; break; }
@@ -3274,7 +3293,7 @@ async function buildSpar(D, stamp8) {
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
-    ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
+    ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Gang Gurtuhr gegen Handy ms pro Stunde", D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
     ["Drehrate Fuß", gyInfo], ["Trageort Sense", (L.filter(r => r.typ === "Trageort Sense").pop() || {}).name || null], ["PPG", (L.filter(r => r.typ === "Sense" && /^PPG (gestartet|tatsächliche)/.test(r.name || "")).map(r => r.name).join(" | ")) || null], ["PPG Stufen", L.filter(r => r.typ === "PPG Stufe").length || null], ["Schritte rechts sicher", nR], ["Schritte links sicher", nL],
     ["Atemzüge aus dem Atemgurt", breaths.length], ["Atem", "nur aus dem Atemgurt (ab 1.9); ohne Gurt keine Atemzüge"],
     ["Schwelle Zuckung mg", Number.isFinite(zthr) ? Math.round(zthr) : null], ["Zuckungen (Ereignisse, mindestens 1 s Abstand)", nZ],
@@ -3317,7 +3336,7 @@ async function buildSpar(D, stamp8) {
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
   const json = JSON.stringify({ version: "Vitalspur 2.9", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
-    abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift },
+    abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift, gurtuhr_gang_ms_pro_h: D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null, hinweis_gang: "Gang der Uhr des Brustgurts gegen die Uhr des Handys aus Ankunft und Zeitstempel der EKG-Pakete (unterer Rand), positiv = Gurtuhr schneller; in den Zeiten von EKG, R-Zacken und Brustbeschleunigung berücksichtigt (ab 10 min Dauer)" },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
     nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg; ab 1.9.3 kompakt: t0 und dt in 0,1 ms, Werte mal f als x0 plus Summe der dx).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), spitze_ms: Math.round(p.tPk - T0), puls: p.puls, ruhe: p.ruhe, fuss_mg: p.fuss ?? null, klein: !!p.klein })), ruhegrenze_mg: NE.fa ? Math.round(NE.fa.calm) : null, roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, form: e.form || null, dauer_s: e.dauer ?? null, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
@@ -3900,7 +3919,7 @@ async function extras9(X) {
   const json9 = {
     gurt_versatz: gvz.length ? { hinweis: "je 5 min: Versatz des Atemgurts gegen das Kippen der Brust in ms (positiv: Gurt später), r = Übereinstimmung; nur festgehalten, nichts verschoben", liste: gvz } : null,
     oxi: oxi.length ? { hinweis: "Pulsoxymeter PC-60FW, t in ms seit t0, spo2 in %, puls je min, pi in %", t: oxi.map(o => Math.round(o.t - T0)), spo2: oxi.map(o => o.s), puls: oxi.map(o => o.p), pi: oxi.map(o => o.pi) } : null,
-    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0), r_uV: B.map(b => b.rU ?? null), s_uV: B.map(b => b.sU ?? null), stoer_uV: B.map(b => b.stU ?? null), spo2: B.map(b => b.spo2 ?? null), pi: B.map(b => b.pi ?? null), pulsankunft_ms: B.map(b => b.pat ?? null), pulshoehe_rel: B.map(b => b.ph ?? null), hinweis_oxy: "spo2, pi: letzter Wert des Oxymeters bis 3 s vor dem Schlag; pulsankunft_ms: steilster Anstieg der Pulswelle im Finger nach der R-Zacke (Zeiten nach Ankunft am Handy, enthält die Verzögerung des Geräts; nur Verläufe vergleichen); pulshoehe_rel: Ausschlag der Pulswelle bis zum nächsten Schlag geteilt durch den Median der 2 min davor", hinweis_stoer: "stoer_uV: Effektivwert des EKG über 20 Hz zwischen den Schlägen, Ruhe etwa 2 µV, ab 15 µV gestört (Muskeln, Niesen, Bewegung)", hinweis_rs: "r_uV, s_uV: Höhe der R-Zacke und Tiefe des S-Tals gegen die Grundlinie 120 bis 50 ms vor dem Schlag, nur bestätigte Schläge" },
+    schlaege: { hinweis: "t in ms seit t0 (R-Zacke, wenn EKG bestätigt), rr in ms, ok = im EKG bestätigt", t: B.map(b => rel(b.tt)), rr: B.map(b => b.rr), ok: B.map(b => b.ok ? 1 : 0), ekg_da: B.map(b => b.ekgDa ? 1 : 0), r_uV: B.map(b => b.rU ?? null), s_uV: B.map(b => b.sU ?? null), stoer_uV: B.map(b => b.stU ?? null), spo2: B.map(b => b.spo2 ?? null), pi: B.map(b => b.pi ?? null), pulsankunft_ms: B.map(b => b.pat ?? null), pulshoehe_rel: B.map(b => b.ph ?? null), hinweis_oxy: "spo2, pi: letzter Wert des Oxymeters bis 3 s vor dem Schlag; pulsankunft_ms: R-Zacke bis halbe Höhe des Anstiegs der Pulswelle im Finger (ab 2.9.7: Zeit der Welle aus gezählten Werten, Gang der Gurtuhr abgezogen; enthält feste Verzögerungen der Geräte, nur Verläufe vergleichen); pulshoehe_rel: Ausschlag der Pulswelle bis zum nächsten Schlag geteilt durch den Median der 2 min davor", hinweis_stoer: "stoer_uV: Effektivwert des EKG über 20 Hz zwischen den Schlägen, Ruhe etwa 2 µV, ab 15 µV gestört (Muskeln, Niesen, Bewegung)", hinweis_rs: "r_uV, s_uV: Höhe der R-Zacke und Tiefe des S-Tals gegen die Grundlinie 120 bis 50 ms vor dem Schlag, nur bestätigte Schläge" },
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
@@ -3982,6 +4001,7 @@ async function buildZip(opts) {
   }
   const offs = {};
   [["a", AC], ["e", EC], ["f", FT0.concat(PP, GY)]].forEach(([kind, arr]) => arr.forEach(c => { const o = c.t - c.us / 1000; const k = kind + (c.s ?? ""); if (offs[k] === undefined || o < offs[k]) offs[k] = o; }));
+  try { const g = gangFit([["e", EC], ["a", AC]], offs); if (g.k) addEntry({ typ: "Abgleich", name: `Gang der Gurtuhr gegen das Handy: ${String(g.ms_pro_h).replace(".", ",")} ms je Stunde (positiv = Gurtuhr schneller), aus ${g.dauer_min} min, in den Zeiten berücksichtigt`, start: Date.now() }); } catch (e) { addEntry({ typ: "Fehler", name: "Gang der Gurtuhr: " + (e.message || e), start: Date.now() }); }
   if (big) {
     const add = (name, rows) => { if (rows.length > 1) files.push({ name, text: rows.join("\n") }); };
     add("Beschleunigung.csv", vsRawRows("acc", AC, offs).rows);
@@ -4000,6 +4020,8 @@ async function buildZip(opts) {
   if (RB.length && !opts.noRaw) { const s = [VS_HEAD.Atemgurt]; RB.forEach(r => r.v.forEach((v, k) => s.push([...tcols(r.ts[k]), num(v, 3)].join(";")))); files.push({ name: "Atemgurt.csv", text: s.join("\n") }); }
   const enc = new TextEncoder();
   const out = files.map(f => ({ name: P + f.name, data: enc.encode("﻿" + f.text) }));
+  /* 2.9.7: Rohwelle des Oxymeters auch im Sessionpaket (gleicher Aufbau wie PW_*.bin im Pulswelle-Paket) */
+  if (OXW && OXW.length && !opts.noRaw) try { const d = oxwBin(OXW); if (d) out.push({ name: P + "Pulswelle.bin", data: d }); } catch (e) { addEntry({ typ: "Fehler", name: "Pulswelle im Paket: " + (e.message || e), start: Date.now() }); }
   let sp = null, kern = null; window.lastKern = null; window.lastStrom = null;
   const beltCsv = () => { if (belt && belt.list.length && !opts.noRaw) { const s = ["Datum;Zeit;Epoch_ms;Einatmen_s;Ausatmen_s;Dauer_s;Atemzuege_pro_min;Tiefe_N;Tiefe_Prozent"]; belt.list.forEach(c => s.push([...tcols(c.t), num(c.ein, 2), num(c.aus, 2), num(c.dauer, 2), num(60 / c.dauer), num(c.tiefe, 2), Number.isFinite(c.prozent) ? num(c.prozent) : ""].join(";"))); out.push({ name: P + "Atemzuege_Gurt.csv", data: enc.encode("\ufeff" + s.join("\n")) }); } };
   const nacht = opts.nacht !== undefined ? !!opts.nacht : $("nacht").checked;
@@ -4234,7 +4256,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.6";
+const VS_VERSION = "2.9.7";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4362,10 +4384,44 @@ function oxWave(fr) { const t = Date.now(), vals = []; for (let k = 5; k < fr.le
 function oxwFlush() { if (!oxwBuf.ft.length) return; put("oxw", { t: oxwBuf.ft[oxwBuf.ft.length - 1], ft: oxwBuf.ft, n: oxwBuf.n, v: oxwBuf.v }); oxwBuf = { ft: [], v: [], n: [] }; }
 setInterval(oxwFlush, 1000);
 /* Werte mit Zeit: letzter Wert eines Rahmens bei der Ankunft, davor je 20 ms (50 je Sekunde) */
-function oxwExpand(RECS) { const t = [], v = [], m = [];
-  for (const r of RECS) { let j = 0; for (let f = 0; f < r.ft.length; f++) { const nv = r.n[f]; for (let k = 0; k < nv; k++) { const x = r.v[j++]; t.push(r.ft[f] - (nv - 1 - k) * 20); v.push(x & 0x7f); m.push(x & 0x80 ? 1 : 0); } } }
-  const o = t.map((x, i) => i).sort((p, q) => t[p] - t[q]); return { t: Float64Array.from(o, i => t[i]), v: Float32Array.from(o, i => v[i]), m: Uint8Array.from(o, i => m[i]) }; }
-/* je Herzschlag: SpO2 und PI (letzter gültiger Wert bis 3 s davor), Pulsankunft (steilster Anstieg der Welle nach der R-Zacke) und Pulshöhe (Ausschlag bis zum nächsten Schlag, geteilt durch den Median der 2 min davor) */
+/* 2.9.7: Zeit der Pulswelle aus gezählten Werten statt aus der Ankunft jedes Rahmens. Das Oxymeter misst gleichmäßig (20 ms je Wert), die Rahmen kommen
+   aber 0 bis 230 ms verspätet am Handy an. Die Werte werden in Empfangsreihenfolge gezählt; die Kette hängt je 20 s an der frühesten Ankunft
+   (unterer Rand, gleicht auch den Gang der Oxymeter-Uhr aus). Neuer Abschnitt bei einer Lücke über 400 ms oder wenn die früheste Ankunft von 3 s auf die nächsten 3 s
+   um mehr als 60 ms nach hinten springt (verlorene Rahmen). seg = Nummer des Abschnitts je Wert. */
+function oxwExpand(RECS) { const FT = [], FN = [], V = [];
+  for (const r of [...RECS].sort((p, q) => p.t - q.t)) { let j = 0; for (let f = 0; f < r.ft.length; f++) { const nv = r.n[f]; if (!nv) continue; FT.push(r.ft[f]); FN.push(nv); for (let k = 0; k < nv; k++) V.push(r.v[j++]); } }
+  const nF = FT.length, n = V.length, t = new Float64Array(n), v = new Float32Array(n), m = new Uint8Array(n), seg = new Uint32Array(n), DT = 20, BL = 20000;
+  let f0 = 0, i0 = 0, sg = 0;
+  while (f0 < nF) {
+    /* Abschnitt f0 bis f1: cum = Zahl der Werte bis einschließlich Rahmen f, d = Ankunft minus gezählte Zeit */
+    let f1 = f0 + 1, cum = FN[f0], dmin = FT[f0] - cum * DT; const C = [cum], WN = 30; let wPrev = Infinity, wCur = dmin, wc = 1;
+    while (f1 < nF) { if (FT[f1] - FT[f1 - 1] > 400) break; const c2 = cum + FN[f1], d = FT[f1] - c2 * DT;
+      if (wc === WN) { if (Number.isFinite(wPrev) && wCur - wPrev > 60) { f1 -= WN; C.length -= WN; break; } wPrev = wCur; wCur = Infinity; wc = 0; }
+      if (d < wCur) wCur = d; wc++; if (d < dmin) dmin = d; cum = c2; C.push(cum); f1++; }
+    /* Anker je 20 s: kleinstes d; kurze Blöcke (unter 5 s) nehmen den Anker des Nachbarn */
+    const nb = Math.max(1, Math.ceil((FT[f1 - 1] - FT[f0] + 1) / BL)), an = new Float64Array(nb).fill(Infinity), cnt = new Uint32Array(nb);
+    for (let f = f0; f < f1; f++) { const b = Math.min(nb - 1, Math.floor((FT[f] - FT[f0]) / BL)), d = FT[f] - C[f - f0] * DT; if (d < an[b]) an[b] = d; cnt[b]++; }
+    for (let b = 0; b < nb; b++) if (cnt[b] < 25 || !Number.isFinite(an[b])) { let q = -1; for (let e = 1; e < nb && q < 0; e++) { if (b - e >= 0 && cnt[b - e] >= 25) q = b - e; else if (b + e < nb && cnt[b + e] >= 25) q = b + e; } if (q >= 0) an[b] = an[q]; else if (!Number.isFinite(an[b])) an[b] = dmin; }
+    /* Zeit je Wert; zwischen den Blockmitten wird der Anker linear geführt, damit an Blockgrenzen kein Sprung entsteht */
+    let i = i0, prev = 0;
+    for (let f = f0; f < f1; f++) { const pos = (FT[f] - FT[f0]) / BL - 0.5, b0 = Math.max(0, Math.min(nb - 1, Math.floor(pos))), b1 = Math.min(nb - 1, b0 + 1), w = Math.max(0, Math.min(1, pos - b0)), a = an[b0] * (1 - w) + an[b1] * w, c = C[f - f0];
+      for (let k = prev; k < c; k++, i++) { const x = V[i]; t[i] = a + (k + 1) * DT; v[i] = x & 0x7f; m[i] = x & 0x80 ? 1 : 0; seg[i] = sg; } prev = c; }
+    i0 = i; f0 = f1; sg++; }
+  /* Zeiten müssen steigen (für die Suche); an Abschnittsgrenzen notfalls nachziehen */
+  for (let k = 1; k < n; k++) if (t[k] <= t[k - 1]) t[k] = t[k - 1] + 0.001;
+  return { t, v, m, seg, abschnitte: sg }; }
+/* je Herzschlag: SpO2 und PI (letzter gültiger Wert bis 3 s davor), Pulsankunft und Pulshöhe (Ausschlag bis zum nächsten Schlag, geteilt durch den Median der 2 min davor).
+   2.9.7: Pulsankunft = Zeit von der R-Zacke bis zur halben Höhe des Anstiegs der Welle (zwischen Fuß und Gipfel um den steilsten Anstieg, linear zwischen zwei Werten),
+   gesucht 60 bis 800 ms nach der R-Zacke, Anstieg mindestens 8 Einheiten, nicht am Anschlag, alles in einem Abschnitt der Welle. Angabe auf 0,1 ms. */
+function oxPat(W, tt, rr) {
+  const t = W.t, v = W.v, N = t.length, a0 = lowerBound(t, tt + 60), a1 = lowerBound(t, tt + Math.min(800, rr + 100)); if (a1 - a0 < 6) return null;
+  let best = 0, bi = -1; for (let k = Math.max(1, a0); k < a1 && k + 1 < N; k++) { const s = v[k + 1] - v[k - 1]; if (s > best) { best = s; bi = k; } } if (bi < 0) return null;
+  let f = bi; while (f > 0 && v[f - 1] <= v[f] && t[bi] - t[f - 1] <= 400) f--;
+  let g = bi; while (g + 1 < N && v[g + 1] >= v[g] && t[g + 1] - t[bi] <= 400) g++;
+  if (v[g] - v[f] < 8 || v[g] >= 127 || v[f] <= 0) return null;
+  if (W.seg && W.seg[f] !== W.seg[g]) return null; if (t[g] - t[f] > (g - f) * 20 + 30) return null;
+  const hf = (v[f] + v[g]) / 2; for (let k = f; k < g; k++) if (v[k] <= hf && v[k + 1] > hf) { const x = t[k] + (hf - v[k]) / (v[k + 1] - v[k]) * (t[k + 1] - t[k]) - tt; return x >= 40 && x <= 900 ? Math.round(x * 10) / 10 : null; }
+  return null; }
 function oxBeats(B, OX, OXW) {
   const oxs = (OX || []).filter(o => o && Number.isFinite(o.s)).sort((p, q) => p.t - q.t), ot = oxs.map(o => o.t);
   let n1 = 0, n2 = 0;
@@ -4375,11 +4431,16 @@ function oxBeats(B, OX, OXW) {
       const a0 = lowerBound(W.t, b.tt), a1 = lowerBound(W.t, b.tt + rr); if (a1 - a0 < 8 || W.t[a1 - 1] - W.t[a0] > rr + 200) continue;
       let lo = Infinity, hi = -Infinity, best = -Infinity, bi = -1;
       for (let k = a0; k < a1; k++) { const v = W.v[k]; if (v < lo) lo = v; if (v > hi) hi = v; if (k >= a0 + 1 && k + 1 < a1) { const s = W.v[k + 1] - W.v[k - 1]; if (s > best) { best = s; bi = k; } } }
-      if (bi < 0 || hi - lo < 2) continue; b.pat = Math.round(W.t[bi] - b.tt); b.pamp = hi - lo; amps.push([b.tt, hi - lo]); n2++; }
+      if (bi < 0 || hi - lo < 2) continue; b.pamp = hi - lo; amps.push([b.tt, hi - lo]);
+      const pa = oxPat(W, b.tt, rr); if (pa !== null) { b.pat = pa; n2++; } }
     for (const b of okB) { if (!Number.isFinite(b.pamp)) continue; const w = amps.filter(([t]) => t < b.tt && t >= b.tt - 120000).map(x => x[1]).sort((p, q) => p - q); if (w.length >= 20) b.ph = Math.round(100 * b.pamp / w[w.length >> 1]) / 100; } }
   if (n1 || n2) addEntry({ typ: "Daten", name: `Oxymeter je Herzschlag: SpO2 bei ${n1}, Pulsankunft bei ${n2} Schlägen`, start: Date.now() });
 }
 /* Pulswelle als Datei: je Stunde PW_JJJJMMTT-HH.bin, Uint32 'VSP1', n Rahmen, m Werte, 0; Float64[n] Ankunft; Uint8[n] Werte je Rahmen; Uint8[m] Werte (Bit 7 = Pulsmarkierung) */
+/* 2.9.7: Pulswelle als ein Block: Uint32 'VSP1', n Rahmen, m Werte, 0; Float64[n] Ankunft am Handy; Uint8[n] Werte je Rahmen; Uint8[m] Werte (Bit 7 = Pulsmarkierung) */
+function oxwBin(RECS) { const ft = [], n = [], v = []; [...RECS].sort((p, q) => p.t - q.t).forEach(r => { r.ft.forEach((x, i) => { ft.push(x); n.push(r.n[i]); }); r.v.forEach(x => v.push(x)); }); if (!ft.length) return null;
+  const buf = new ArrayBuffer(16 + 8 * ft.length + n.length + v.length), dv = new DataView(buf); dv.setUint32(0, 0x31505356, true); dv.setUint32(4, ft.length, true); dv.setUint32(8, v.length, true); dv.setUint32(12, 0, true);
+  ft.forEach((x, i) => dv.setFloat64(16 + 8 * i, x, true)); const u = new Uint8Array(buf); u.set(n, 16 + 8 * ft.length); u.set(v, 16 + 8 * ft.length + n.length); return u; }
 async function oxwExport(a, b, parts, name) {
   const H = 3600000, files = [], liste = []; let m0 = 0;
   for (let h = Math.floor(a / H) * H; h < b; h += H) {
@@ -5022,7 +5083,7 @@ function vsRawRows(kind, arr, offs, hourly) {
   const D = RAWDEF[kind], rows = hourly ? null : [D.head], byHour = hourly ? new Map() : null;
   arr.forEach((c, idx) => {
     const CH = kind === "ppg" ? (c.ch || 4) : D.ch, n = Math.floor(c.v.length / CH); if (!n) return;
-    const dt = realDtG(arr, idx, n, 1000 / c.r, CH), o = offs[D.key + (c.s ?? "")], base = c.us / 1000 + (o ?? (c.t - c.us / 1000));
+    const dt = realDtG(arr, idx, n, 1000 / c.r, CH), o = offs[D.key + (c.s ?? "")], base = c.us / 1000 + (o ?? (c.t - c.us / 1000)) + gangAt(offs, D.key + (c.s ?? ""), c.us / 1000);
     const sc = kind === "foot" && c.r === 52 ? 4.096 : 1, f = kind === "gyro" ? (c.f || 1) : 1;
     for (let i = 0; i < n; i++) {
       const off = (n - 1 - i) * dt, ep = base - off, us = Math.round(c.us - off * 1000); let r;
