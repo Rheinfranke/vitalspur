@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.7</h1>
+<h1>Vitalspur 2.9.8</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -3289,11 +3289,11 @@ async function buildSpar(D, stamp8) {
   const nR = steps.filter(s => s.side === "R" && s.sicher).length, nL = steps.filter(s => s.side === "L" && s.sicher).length;
   const gyInfo = GY.length ? `${GY.length} Pakete, Format ${GY[0].ft}, Faktor ${GY[0].fo ?? "keiner"}` : "keine";
   const KG = L.filter(r => r.typ === "Gewicht").map(r => parseFloat(r.name.replace(",", "."))).filter(Number.isFinite), KGv = KG.length ? KG[KG.length - 1] : null;
-  const KR = [["Feld", "Wert"], ["Version", "Vitalspur 2.9"], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
+  const KR = [["Feld", "Wert"], ["Version", "Vitalspur " + VS_VERSION], ["Gewicht_kg", KGv], ["Datei", stamp8], ["Beginn", dstamp(new Date(T0)) + " " + tx(T0)], ["T0_Epoch_ms", Math.round(T0)],
     ["BigData", $("bigdata").checked ? "an" : "aus"], ["Herzschläge", B.length], ["davon im EKG bestätigt", R.length ? al.ok : "kein EKG"],
     ["Versatz Herzschlag-Zeit zu EKG ms", al.lag], ["Klopfgruppen Brust", sync.gc.length], ["Klopfgruppen Sense", sync.gf.length],
     ["Abgleich Sense zu Brust ms", sync.pairs.length ? sync.pairs.map(p => `${tx(p.t)}: ${Math.round(p.off)} (${p.n === "live" ? "Stelle aus der Live-Erkennung" : p.n + " Klopfer"}, Ähnlichkeit ${Math.round(p.r * 100) / 100})`).join(" | ") : "kein Abgleich gefunden"],
-    ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Gang Gurtuhr gegen Handy ms pro Stunde", D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
+    ["Drift ms pro Stunde", sync.drift === null ? null : Math.round(sync.drift)], ["Gang Uhr des Brustgurts (H10) gegen Handy ms pro Stunde", D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null], ["Sense-Zeiten korrigiert", sync.pairs.length ? "ja" : "nein"],
     ["Drehrate Fuß", gyInfo], ["Trageort Sense", (L.filter(r => r.typ === "Trageort Sense").pop() || {}).name || null], ["PPG", (L.filter(r => r.typ === "Sense" && /^PPG (gestartet|tatsächliche)/.test(r.name || "")).map(r => r.name).join(" | ")) || null], ["PPG Stufen", L.filter(r => r.typ === "PPG Stufe").length || null], ["Schritte rechts sicher", nR], ["Schritte links sicher", nL],
     ["Atemzüge aus dem Atemgurt", breaths.length], ["Atem", "nur aus dem Atemgurt (ab 1.9); ohne Gurt keine Atemzüge"],
     ["Schwelle Zuckung mg", Number.isFinite(zthr) ? Math.round(zthr) : null], ["Zuckungen (Ereignisse, mindestens 1 s Abstand)", nZ],
@@ -3334,9 +3334,9 @@ async function buildSpar(D, stamp8) {
   /* 9.3: Rohfenster nach jeder Aufforderung zum Klopfen (60 s), auch ohne Erkennung, damit Fehlschläge prüfbar sind */
   L.filter(r => r.typ === "Abgleich" && /offen/.test(r.name)).forEach(r => { const a2 = r.start, b2 = r.start + 60000;
     fen.push({ art: "Klopfaufforderung " + r.name.replace("Abgleich offen: ", ""), start_ms: Math.round(a2 - T0), ende_ms: Math.round(b2 - T0), spitzen_ms: [], brust: cut(A, a2, b2, 3), fuss: cut(SA, a2, b2, 3) }); });
-  const json = JSON.stringify({ version: "Vitalspur 2.9", gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
+  const json = JSON.stringify({ version: "Vitalspur " + VS_VERSION, gewicht_kg: KGv, t0_epoch_ms: Math.round(T0), beginn: dstamp(new Date(T0)) + " " + tx(T0), zeit: "Millisekunden seit t0, Fuß und Drehrate auf Brustuhr korrigiert",
     einheiten: { brust: "mg", fuss: "mg", drehrate: "Grad pro Sekunde", ekg: "Mikrovolt" },
-    abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift, gurtuhr_gang_ms_pro_h: D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null, hinweis_gang: "Gang der Uhr des Brustgurts gegen die Uhr des Handys aus Ankunft und Zeitstempel der EKG-Pakete (unterer Rand), positiv = Gurtuhr schneller; in den Zeiten von EKG, R-Zacken und Brustbeschleunigung berücksichtigt (ab 10 min Dauer)" },
+    abgleich: { methode: "Korrelation der Klopfspuren, Fuß plus Versatz = Brust", paare: sync.pairs.map(p => ({ t_ms: Math.round(p.t - T0), versatz_ms: p.off, aehnlichkeit: Math.round(p.r * 100) / 100, klopfer: p.n, verfahren: p.art || "Korrelation", streuung_ms: p.streu ?? null, treffer: p.treffer ?? null })), drift_ms_pro_h: sync.drift, gurtuhr_gang_ms_pro_h: D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null, uhr_brustgurt_h10_gang_ms_pro_h: D.offs && D.offs.gang ? D.offs.gang.ms_pro_h : null, hinweis_gang: "Gang der Uhr des Brustgurts gegen die Uhr des Handys aus Ankunft und Zeitstempel der EKG-Pakete (unterer Rand), positiv = Gurtuhr schneller; in den Zeiten von EKG, R-Zacken und Brustbeschleunigung berücksichtigt (ab 10 min Dauer)" },
     herzschlag_ekg_versatz_ms: al.lag, fenster: fen,
     nacht: NE ? Object.assign(nightJson(NE, null, null, null, E, R, T0), { hinweis: "Fenster 15 s vor bis 35 s nach jedem Ereignis mit EKG und R-Zacken. Brust und Fuß stehen im 10-Hz-Strom, in voller Auflösung in roh_fenster (5 s vor bis 10 s nach jeder Zuckung und jedem Pulsanstieg; ab 1.9.3 kompakt: t0 und dt in 0,1 ms, Werte mal f als x0 plus Summe der dx).", schwelle_mg: Number.isFinite(zthr) ? Math.round(zthr) : null, pulsanstiege: (NE.pr || []).map(p => ({ t_ms: Math.round(p.t - T0), spitze_ms: Math.round(p.tPk - T0), puls: p.puls, ruhe: p.ruhe, fuss_mg: p.fuss ?? null, klein: !!p.klein })), ruhegrenze_mg: NE.fa ? Math.round(NE.fa.calm) : null, roh_fenster: NE.roh || [], ereignisse: NE.ev.map(e => ({ nr: e.nr, art: e.art, form: e.form || null, dauer_s: e.dauer ?? null, ausgenommen: e.aus || null, t_ms: Math.round(e.t - T0), spitze_ms: e.tPk ? Math.round(e.tPk - T0) : null, fuss_mg: e.fuss ?? null, brust_mg: e.brust ?? null, puls_vorher: e.base ?? null, puls_spitze: e.pv ?? null, spitze_bei_schlag: e.pk ?? null, puls_tief: e.tv ?? null, fenster: e.fenster ?? null })) }) : null,
     ...X9.json9 });
@@ -3520,7 +3520,7 @@ function detectActivities(mf, music) {
         const a = mf[s].t, b = mf[i - 1].t + 60000, hit = raw.slice(s, i).filter(x => x === name).length / n;
         const R = mf.slice(s, i).filter(f => f.r), md = k => { const v = R.map(f => f.r[k]).filter(x => x !== null && x !== undefined).sort((x, y) => x - y); return v.length ? v[v.length >> 1] : null; };
         let nm = name; const h0 = new Date(a).getHours(), h1 = new Date(b).getHours();
-        if (name === "Liegen" && n >= 60 && (h0 >= 21 || h0 < 9 || h1 < 9)) nm = "Schlafen";
+        if (name === "Liegen" && n >= 60 && (h0 >= 21 || h0 < 9 || h1 < 9)) nm = "Nachtruhe"; /* 2.9.8: gemessen ist Ruhe, kein Schlaf */
         const grund = [`Lagewechsel ${Math.round(md("ang") ?? 0)} °/min`, `Bewegung Brust ${Math.round(md("cMAD") ?? 0)} mg`, md("fMAD") !== null ? `Fuß ${Math.round(md("fMAD"))} mg` : null, `aufrecht ${Math.round(100 * (md("up") ?? 0))} %`, `liegend ${Math.round(100 * (md("lie") ?? 0))} %`, md("vib") !== null ? `Zittern ${Math.round(md("vib"))} mg` : null, md("steps") ? `${Math.round(md("steps"))} Schritte/min` : null, /^Yoga: /.test(name) ? "Kursplan" : null, md("puls") !== null ? `Puls ${Math.round(md("puls"))}` : null, md("rmssd") !== null ? `RMSSD ${Math.round(md("rmssd"))} ms` : null, (name === "Sitzen angespannt" || name === "Liegen wach") && ruhe.puls !== null ? `Ruhepuls ${Math.round(ruhe.puls)}, RMSSD in Ruhe ${ruhe.rmssd !== null ? Math.round(ruhe.rmssd) : "?"} ms` : null].filter(Boolean).join(", ");
         blocks.push({ a, b, name: nm, sicher: Math.round(hit * 100), grund });
       }
@@ -3643,7 +3643,7 @@ function pdfChart(d, box, o) {
   d.lw(0.6).col(170, 170, 170, false).line(x, y, x + w, y).line(x, y, x, y + h);
   return { X, Y };
 }
-const ACT_COL = { "Gehen": [27, 170, 122], "Autofahren": [120, 120, 120], "Radfahren": [20, 140, 160], "Liegen": [160, 196, 238], "Schlafen": [100, 140, 200], "Sitzen ruhig": [200, 200, 200], "Sitzen angespannt": [232, 160, 80], "Liegen wach": [205, 120, 170], "Biodanza": [214, 72, 140], "Yoga": [138, 79, 208] };
+const ACT_COL = { "Gehen": [27, 170, 122], "Autofahren": [120, 120, 120], "Radfahren": [20, 140, 160], "Liegen": [160, 196, 238], "Schlafen": [100, 140, 200], "Nachtruhe": [100, 140, 200], "Sitzen ruhig": [200, 200, 200], "Sitzen angespannt": [232, 160, 80], "Liegen wach": [205, 120, 170], "Biodanza": [214, 72, 140], "Yoga": [138, 79, 208] };
 function actCol(n) { return ACT_COL[n] || (/^Yoga/.test(n) ? ACT_COL.Yoga : [180, 180, 180]); }
 function report9(S) {
   const d = pdfDoc(), blue = [42, 120, 214], orange = [235, 104, 52], green = [27, 170, 122], purple = [138, 79, 208], grey = [150, 150, 150];
@@ -3675,7 +3675,7 @@ function report9(S) {
       d.col(40, 40, 40, true).text(40, y, `${q}: ${K.length} Werte, ${f1(Math.min(...cs))} bis ${f1(Math.max(...cs))} °C, Luftfeuchte ${f0(Math.min(...hs))} bis ${f0(Math.max(...hs))} %` + (ws.length ? `, WBGT geschätzt ${f1(Math.min(...ws))} bis ${f1(Math.max(...ws))}` : (/Haut/.test(q) ? " (am Körper, Hauttemperatur, keine WBGT)" : "")), 8.5); y -= 12; }); }
   d.col(120, 120, 120, true).text(40, 60, "WBGT geschätzt aus Temperatur und Luftfeuchte (Feuchttemperatur nach Stull, Kugeltemperatur gleich Thermometer), etwa ±2 Punkte.", 7)
     .text(40, 50, "Puls Min–Max: 5 bis 95 Prozent der Schläge. RMSSD aus allen plausiblen Abständen. Plausibel: im EKG bestätigt oder kein einzelner Ausreißer. Bewegung: mittlere Abweichung des Beschleunigungsbetrags je 5 s.", 7)
-    .text(40, 40, "Vitalspur 2.9. Uhrzeiten in Ortszeit.", 7);
+    .text(40, 40, "Vitalspur " + VS_VERSION + ". Uhrzeiten in Ortszeit.", 7);
   /* Seite 2: Verläufe */
   d.page().col(20, 20, 20, true).text(40, 800, "Verlauf", 16, true);
   const L = 70, Wd = 490;
@@ -3923,7 +3923,7 @@ async function extras9(X) {
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
-    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter", "Oxymeter", "Sense"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
+    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter", "Oxymeter", "Sense", "Kalibrierung", "Aufzeichnung", "Hinweis"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
     taetigkeiten_auto: act.blocks.map(b => ({ start_ms: rel(b.a), ende_ms: rel(b.b), name: b.name, sicherheit: b.sicher, grund: b.grund })),
     akku: BA.map(b => ({ t: rel(b.t), geraet: b.d, wert: b.txt })),
     phasen: PH.map(p => ({ start_ms: rel(p.a), ende_ms: rel(p.b), art: p.art, puls: p.puls, schritte_min: p.schritte, atem_min: p.atem, tiefe_n: p.tiefe, tiefe_prozent: p.prozent })),
@@ -3964,6 +3964,142 @@ function makeZip(files) {
 function tcols(ms) { const d = new Date(ms); return [dstamp(d), stamp(d), Math.round(ms)]; }
 /* Vitalspur 1.4: Auswertung eines Zeitfensters [a, b). opts: { a, b, nacht, kind ("Tag", "Nacht", "Session"), prefix, noRaw } */
 function recTime(k, d) { return k === "log" ? d.start : k === "beat" ? d[0] : d.t; }
+/* ================= 2.9.8: Zusatzschicht im Paket (Paket.json, Wachzeiten.csv, Minuten.csv, Ergänzung der Kerndatei) =================
+   Reine Rechnung auf der fertigen Fenster-Datei J, ohne Zugriff auf die Aufnahme. Schlägt sie fehl, bleibt das Paket wie bisher.
+   J     Fenster-Objekt (t0_epoch_ms, schlaege, strom, protokoll, atem, oxi, klima, taetigkeiten_auto, abgleich)
+   kern  Objekt der Kerndatei oder null (wird ergänzt, nicht ersetzt)
+   belt  Atemzüge des Atemgurts [{ t (Epoch ms), dauer, tiefe }] oder null
+   meta  { P, version, kind, nacht, pid, dateien }
+   Rückgabe { files: [{ name, text }], kern, info } */
+function vsZusatz(J, kern, belt, meta) {
+  const T0 = Number(J.t0_epoch_ms), PR = (J.protokoll || []).filter(p => Number.isFinite(p.t)), S = J.schlaege || { t: [], rr: [], ok: [] };
+  const p2 = n => String(n).padStart(2, "0");
+  const dS = e => { const d = new Date(e); return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const tS = e => { const d = new Date(e); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
+  const nm = (v, d) => v === null || v === undefined || !Number.isFinite(v) ? "" : v.toFixed(d === undefined ? 1 : d).replace(".", ",");
+  const med = a => { if (!a.length) return NaN; const b = Array.from(a).sort((x, y) => x - y), h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; };
+  const pct = (a, q) => { if (!a.length) return NaN; const b = Array.from(a).sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
+  const lb = (arr, x) => { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < x) lo = m + 1; else hi = m; } return lo; };
+
+  /* ---- Strom: Brust (md, Lage als aufsummierte x, y, z) und Fuß (aus) ---- */
+  const segB = ((J.strom && J.strom.brust) || []).map(a => { const n = a.n, md = new Float32Array(n), X = [new Float64Array(n), new Float64Array(n), new Float64Array(n)];
+    ["x", "y", "z"].forEach((k, c) => { let s = 0; const v = a[k] || []; for (let i = 0; i < n; i++) { s += Number(v[i]) || 0; X[c][i] = s; } });
+    const m = a.md || []; for (let i = 0; i < n; i++) md[i] = Number(m[i]) || 0; return { a: a.start_ms, n, md, X }; });
+  const segF = ((J.strom && J.strom.fuss) || []).map(a => { const n = a.n, v = new Float32Array(n), m = a.aus || []; for (let i = 0; i < n; i++) v[i] = Number(m[i]) || 0; return { a: a.start_ms, n, v }; });
+  /* Werte eines Stroms im Zeitbereich [ta, tb) einsammeln */
+  const slice = (segs, key, ta, tb) => { const out = []; for (const s of segs) { const i0 = Math.max(0, Math.ceil((ta - s.a) / 100)), i1 = Math.min(s.n, Math.ceil((tb - s.a) / 100)); for (let i = i0; i < i1; i++) out.push(s[key][i]); } return out; };
+  const mdMax = (ta, tb) => { let mx = -1, n = 0; for (const s of segB) { const i0 = Math.max(0, Math.ceil((ta - s.a) / 100)), i1 = Math.min(s.n, Math.ceil((tb - s.a) / 100)); for (let i = i0; i < i1; i++) { n++; if (s.md[i] > mx) mx = s.md[i]; } } return n >= 20 ? mx : null; };
+
+  /* ---- Ende der Aufnahme ---- */
+  let tEnd = S.t.length ? S.t[S.t.length - 1] : 0;
+  segB.forEach(s => { tEnd = Math.max(tEnd, s.a + s.n * 100); }); segF.forEach(s => { tEnd = Math.max(tEnd, s.a + s.n * 100); });
+  let tBeg = S.t.length ? S.t[0] : 0; segB.forEach(s => { tBeg = Math.min(tBeg, s.a); }); tBeg = Math.min(tBeg, 0);
+
+  /* ---- 1 Belegte Wachzeiten ---- */
+  const bel = [];
+  PR.forEach(p => {
+    const e = Number.isFinite(p.ende) ? p.ende : p.t;
+    if (p.typ === "Marker" || p.typ === "Notiz" || p.typ === "Störung" || p.typ === "Gefühl" || p.typ === "Gewicht") bel.push({ a: p.t, b: e, art: p.typ === "Störung" ? "Störung" : p.typ });
+    else if (p.typ === "Atemphase" || p.typ === "Atemhilfe") bel.push({ a: p.t, b: e, art: "Atemhilfe" });
+    else if (p.typ === "Kalibrierung") bel.push({ a: p.t, b: e, art: "Kalibrierung" });
+    else if (p.typ === "Schalter") bel.push({ a: p.t, b: p.t, art: "Schalter" });
+    else if (p.typ === "Ansage" && /Abgleich erkannt|Kalibrierung fertig|Fünf tiefe Atemzüge/.test(p.name || "")) bel.push({ a: p.t, b: p.t, art: "Abgleich oder Kalibrierung" });
+  });
+  /* Musik: aufeinanderfolgende Stücke bilden einen Block; als wach gelten die ersten 30 Minuten ab Beginn (Festlegung Michael, 26.11.2026) */
+  const stk = PR.filter(p => p.typ === "Stück").sort((x, y) => x.t - y.t), musik = [];
+  stk.forEach(p => { const e = Number.isFinite(p.ende) ? p.ende : p.t; const l = musik[musik.length - 1]; if (l && p.t - l.b <= 120000) l.b = Math.max(l.b, e); else musik.push({ a: p.t, b: e }); });
+  musik.forEach(m => bel.push({ a: m.a, b: Math.min(m.b, m.a + 1800000), art: "Musik (erste 30 min)" }));
+  bel.sort((x, y) => x.a - y.a);
+  const wach = [];
+  bel.forEach(x => { const l = wach[wach.length - 1]; if (l && x.a - l.b <= 360000) { l.b = Math.max(l.b, x.b); l.n++; l.art[x.art] = (l.art[x.art] || 0) + 1; } else wach.push({ a: x.a, b: x.b, n: 1, art: { [x.art]: 1 } }); });
+  wach.forEach(w => { w.a = Math.max(tBeg, w.a - 60000); w.b = Math.min(tEnd, w.b + 60000); w.text = Object.keys(w.art).map(k => w.art[k] > 1 && k !== "Atemhilfe" ? `${k} ${w.art[k]}` : k).join(", "); });
+  for (let i = wach.length - 1; i > 0; i--) if (wach[i].a <= wach[i - 1].b) { wach[i - 1].b = Math.max(wach[i - 1].b, wach[i].b); wach[i - 1].n += wach[i].n; wach[i - 1].text += ", " + wach[i].text; wach.splice(i, 1); }
+  const wachOv = (ta, tb) => wach.some(w => w.a < tb && w.b > ta);
+  const marker = PR.filter(p => p.typ === "Marker").map(p => ({ t: Math.round(p.t), name: p.name })), mT = marker.map(m => m.t);
+  const WZ = ["Datum;Beginn;Ende;Epoch_Beginn_ms;Epoch_Ende_ms;Dauer_min;Belege;Eintraege"];
+  wach.forEach(w => WZ.push([dS(T0 + w.a), tS(T0 + w.a), tS(T0 + w.b), Math.round(T0 + w.a), Math.round(T0 + w.b), nm((w.b - w.a) / 60000, 1), w.text, w.n].join(";")));
+
+  /* ---- 2 Minutentabelle ---- */
+  const k0 = Math.floor((T0 + tBeg) / 60000), k1 = Math.floor((T0 + tEnd) / 60000);
+  /* Atemzüge: Atemgurt, sonst die Liste der Fenster-Datei mit Quelle Gurt */
+  const AZ = (belt && belt.length ? belt.map(c => ({ t: c.t - T0, d: c.dauer, tf: c.tiefe })) : (J.atem || []).filter(c => c.quelle === "Gurt").map(c => ({ t: c.t, d: c.dauer, tf: null }))).filter(c => Number.isFinite(c.t) && c.d > 0).sort((x, y) => x.t - y.t), azT = AZ.map(c => c.t);
+  const OXt = (J.oxi && J.oxi.t) || [], OXs = (J.oxi && J.oxi.spo2) || [];
+  const KL = (J.klima || []).filter(c => Number.isFinite(c.c)).sort((x, y) => x.t - y.t), klT = KL.map(c => c.t);
+  const ZU = kern && kern.zuckungen ? kern.zuckungen.map(z => z.t) : ((J.nacht && J.nacht.ereignisse) || []).filter(e => e.art === "Zuckung").map(e => e.t_ms); ZU.sort((x, y) => x - y);
+  const TA = J.taetigkeiten_auto || [], AH = PR.filter(p => p.typ === "Atemphase" && Number.isFinite(p.ende));
+  /* Atemfrequenz aus der Bewegung der Brust: 2 Minuten um die Minutenmitte, je Achse Trend abziehen, Hann-Fenster, Leistung von 0,07 bis 0,6 Hz */
+  const NF = 107, FR = Array.from({ length: NF }, (_, i) => 0.07 + i * 0.005), CT = new Map();
+  const table = n => { let t = CT.get(n); if (!t) { const c = new Float32Array(NF * n), s = new Float32Array(NF * n), h = new Float32Array(n); for (let i = 0; i < n; i++) h[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1));
+      for (let f = 0; f < NF; f++) { const w = 2 * Math.PI * FR[f] / 10; for (let i = 0; i < n; i++) { c[f * n + i] = Math.cos(w * i) * h[i]; s[f * n + i] = Math.sin(w * i) * h[i]; } } t = { c, s }; CT.set(n, t); } return t; };
+  const atemBrust = mid => { for (const sg of segB) { const i0 = Math.ceil((mid - 60000 - sg.a) / 100), i1 = i0 + 1200; if (i0 < 0 || i1 > sg.n) continue; const n = 1200, tb = table(n), P = new Float64Array(NF);
+      for (let c = 0; c < 3; c++) { const x = sg.X[c]; let sx = 0, sy = 0, sxx = 0, sxy = 0; for (let i = 0; i < n; i++) { const v = x[i0 + i]; sx += i; sy += v; sxx += i * i; sxy += i * v; }
+        const b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n; const y = new Float32Array(n); for (let i = 0; i < n; i++) y[i] = x[i0 + i] - a - b * i;
+        for (let f = 0; f < NF; f++) { let re = 0, im = 0; const o = f * n; for (let i = 0; i < n; i++) { re += y[i] * tb.c[o + i]; im += y[i] * tb.s[o + i]; } P[f] += re * re + im * im; } }
+      let bi = 0, sum = 0; for (let f = 0; f < NF; f++) { sum += P[f]; if (P[f] > P[bi]) bi = f; } if (!(sum > 0)) return null;
+      const lo = Math.max(0, bi - 2), hi = Math.min(NF - 1, bi + 2); let pk = 0; for (let f = lo; f <= hi; f++) pk += P[f]; return { rate: FR[bi] * 60, deutlich: pk / sum }; } return null; };
+  const HEAD = "Datum;Zeit;Epoch_ms;Schlaege;Anteil_bestaetigt;Puls_Median;RMSSD_ms;QNR;Pulsankunft_Median_ms;Pulshoehe_Median;Atemzuege_Gurt_pro_min;Atemtiefe_N;Atem_Unruhe;Atemzuege_Brust_pro_min;Atem_Brust_Deutlichkeit;Brust_Bewegung_95_mg;Brust_Anteil_ueber_10mg_Prozent;Fuss_Ausschlag_95_mg;Zuckungen;SpO2_Median;SpO2_Min;Temperatur_C;belegt_wach;Musik;Atemhilfe;Taetigkeit";
+  const MI = [HEAD], st = S.t, sr = S.rr, so = S.ok, pa = S.pulsankunft_ms || [], ph = S.pulshoehe_rel || [];
+  let wachMin = 0;
+  for (let k = k0; k <= k1; k++) {
+    const ta = k * 60000 - T0, tb = ta + 60000, mid = ta + 30000, row = [dS(T0 + ta), tS(T0 + ta).slice(0, 5), Math.round(T0 + ta)];
+    const i0 = lb(st, ta), i1 = lb(st, tb), R = [], PA = [], PH = []; let nOk = 0;
+    for (let i = i0; i < i1; i++) { if (so[i]) { nOk++; if (sr[i] > 300 && sr[i] < 2000) R.push(sr[i]); if (Number.isFinite(pa[i]) && pa[i] !== null) PA.push(pa[i]); if (Number.isFinite(ph[i]) && ph[i] !== null) PH.push(ph[i]); } }
+    const mR = med(R); let rms = NaN, qnr = NaN;
+    if (R.length >= 20) { let s2 = 0, n2 = 0, sm = 0, nmn = 0; const g = v => v > 0.5 * mR && v < 1.76 * mR;
+      for (let i = Math.max(i0, 1); i < i1; i++) if (so[i] && so[i - 1] && g(sr[i]) && g(sr[i - 1])) { const d = sr[i] - sr[i - 1]; s2 += d * d; n2++; sm += sr[i]; nmn++; }
+      if (n2 >= 20) { rms = Math.sqrt(s2 / n2); const mm = sm / nmn; qnr = rms * 60000 / (mm * mm); } }
+    row.push(i1 - i0, i1 > i0 ? nm(100 * nOk / (i1 - i0), 0) : "", R.length >= 5 ? nm(60000 / mR, 1) : "", nm(rms, 1), nm(qnr, 2), PA.length >= 10 ? nm(med(PA), 0) : "", PH.length >= 10 ? nm(med(PH), 2) : "");
+    const a0 = lb(azT, ta), a1 = lb(azT, tb), D = [], TF = []; for (let i = a0; i < a1; i++) { D.push(AZ[i].d); if (Number.isFinite(AZ[i].tf) && AZ[i].tf !== null) TF.push(AZ[i].tf); }
+    let unr = NaN; if (D.length >= 4) { const dd = []; for (let i = 1; i < D.length; i++) dd.push(Math.abs(D[i] - D[i - 1])); unr = med(dd) / med(D); }
+    row.push(D.length >= 3 ? nm(60 / med(D), 1) : "", TF.length >= 3 ? nm(med(TF), 2) : "", nm(unr, 3));
+    const ab = atemBrust(mid); row.push(ab ? nm(ab.rate, 1) : "", ab ? nm(ab.deutlich, 2) : "");
+    const M = slice(segB, "md", ta, tb); row.push(M.length >= 300 ? nm(pct(M, 0.95), 1) : "", M.length >= 300 ? nm(100 * M.filter(v => v > 10).length / M.length, 1) : "");
+    const Fz = slice(segF, "v", ta, tb); row.push(Fz.length >= 300 ? nm(pct(Fz, 0.95), 0) : "");
+    row.push(lb(ZU, tb) - lb(ZU, ta));
+    const o0 = lb(OXt, ta), o1 = lb(OXt, tb), O = []; for (let i = o0; i < o1; i++) if (OXs[i] > 0) O.push(OXs[i]); row.push(O.length >= 5 ? nm(med(O), 0) : "", O.length >= 5 ? Math.min(...O) : "");
+    const ki = lb(klT, mid); let kc = null; [ki - 1, ki].forEach(i => { if (i >= 0 && i < KL.length && Math.abs(KL[i].t - mid) <= 900000 && (kc === null || Math.abs(KL[i].t - mid) < Math.abs(kc.t - mid))) kc = KL[i]; }); row.push(kc ? nm(kc.c, 1) : "");
+    const w = wachOv(ta, tb) ? 1 : 0; wachMin += w; row.push(w);
+    const mu = stk.find(p => p.t <= mid && (Number.isFinite(p.ende) ? p.ende : p.t) > mid); row.push(mu ? String(mu.name).replace(/;/g, ",") : "");
+    row.push(AH.some(p => p.t < tb && p.ende > ta) ? 1 : 0);
+    const tk = TA.find(x => x.start_ms <= mid && x.ende_ms > mid); row.push(tk ? String(tk.name).replace(/;/g, ",") : "");
+    MI.push(row.join(";"));
+  }
+
+  /* ---- 3 Kerndatei ergänzen ---- */
+  if (kern && kern.zuckungen) {
+    const Z = kern.zuckungen, zt = Z.map(z => z.t);
+    Z.forEach((z, i) => { z.brust_nach = mdMax(z.t + 3000, z.t + 20000); z.brust_vor = mdMax(z.t - 20000, z.t - 3000);
+      z.ab_vor_s = i > 0 ? Math.round((z.t - zt[i - 1]) / 100) / 10 : null; z.ab_nach_s = i + 1 < Z.length ? Math.round((zt[i + 1] - z.t) / 100) / 10 : null;
+      z.wach = wachOv(z.t, z.t + 1) ? 1 : 0;
+      let mk = null; if (mT.length) { const j = lb(mT, z.t); [j - 1, j].forEach(q => { if (q >= 0 && q < mT.length && (mk === null || Math.abs(mT[q] - z.t) < Math.abs(mk))) mk = mT[q] - z.t; }); } z.marker_s = mk === null || Math.abs(mk) > 3600000 ? null : Math.round(mk / 100) / 10; });
+    (kern.gueltig || []).forEach(g => { const z = Z[g.i]; if (!z) return; const j = lb(st, z.t), A = [], H = []; let any = false;
+      for (let q = j - 10; q < j + 20; q++) { const okq = q >= 0 && q < st.length && so[q]; const a = okq && Number.isFinite(pa[q]) && pa[q] !== null ? Math.round(pa[q]) : null, h = okq && Number.isFinite(ph[q]) && ph[q] !== null ? Math.round(ph[q] * 100) / 100 : null; if (a !== null) any = true; A.push(a); H.push(h); }
+      if (any) { g.pa = A; g.ph = H; } });
+    kern.marker = marker; kern.wachzeiten = wach.map(w => [Math.round(w.a), Math.round(w.b), w.text]);
+    kern.zusatz = { version: 1, seit: "Vitalspur 2.9.8", hinweis: "Je Zuckung: brust_nach und brust_vor = größte Bewegung der Brust (md des 10-Hz-Stroms, mg) 3 bis 20 s nach und 20 bis 3 s vor der Zuckung; ab_vor_s und ab_nach_s = Abstand zur vorigen und nächsten Zuckung; wach = liegt in einer belegten Wachzeit; marker_s = Abstand zum nächsten Marker (negativ = Marker davor). Je gültiger Zuckung: pa und ph = Pulsankunft (ms) und Pulshöhe der Schläge -10 bis +20 (30 Werte, der elfte ist der erste Schlag ab der Zuckung; null = fehlt). marker: alle Marker der Aufnahme. wachzeiten: [Beginn, Ende, Belege] in ms seit t0." };
+    kern.player = "Vitalspur " + meta.version;
+  }
+
+  /* ---- 4 Paket.json ---- */
+  const d0 = new Date(T0 + tBeg), vortag = new Date(d0.getTime() - (d0.getHours() < 12 ? 86400000 : 0)), ymdS = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  const txt = PR.map(p => p.name || "").join("\n"), ger = [];
+  [[/Polar H10 [0-9A-Fa-f]+/, "Brustgurt"], [/Polar Sense [0-9A-Fa-f]+/, "Sense"], [/Bangle\.js [0-9A-Za-z]+/, "Markeruhr"], [/Markeruhr [0-9.]+/, "Programm der Markeruhr"], [/OxySmart [0-9A-Za-z]+/, "Oxymeter"], [/GDX-RB [0-9A-Za-z]+/, "Atemgurt"]].forEach(([re, was]) => { const m = txt.match(re); if (m) ger.push({ geraet: was, kennung: m[0] }); });
+  const kal = PR.filter(p => p.typ === "Kalibrierung").map(p => { const m = /100 % = ([0-9,]+) N/.exec(p.name || ""), g = /Grundspannung ([0-9,]+) N/.exec(p.name || ""), w = /\(([^)]*)\)/.exec(p.name || ""), u = /Bezugswert ([0-9,]+)/.exec(p.name || "");
+    return { epoch_ms: Math.round(T0 + p.t), uhrzeit: tS(T0 + p.t), anlass: w ? w[1] : null, ausgeloest: /von Hand/.test(p.name || "") ? "Hand" : "Programm", bezug_100_prozent_N: m ? Number(m[1].replace(",", ".")) : u ? Number(u[1].replace(",", ".")) : null, grundspannung_N: g ? Number(g[1].replace(",", ".")) : null, eintrag: p.name }; });
+  const P = meta.P || "", pk = {
+    format: "Vitalspur-Paket", version: 1, programm: "Vitalspur", programm_version: meta.version, art: meta.kind || (meta.nacht ? "Nacht" : "Messung"), proband: meta.pid || null, vorsatz: P,
+    bezeichnung: meta.nacht ? ymdS(vortag) + "N" : ymdS(d0), hinweis_bezeichnung: "Eine Nacht trägt das Datum des Vortags mit N; beginnt die Aufnahme vor 12 Uhr, gilt der Tag davor.",
+    beginn_epoch_ms: Math.round(T0 + tBeg), beginn: dS(T0 + tBeg) + " " + tS(T0 + tBeg), ende_epoch_ms: Math.round(T0 + tEnd), ende: dS(T0 + tEnd) + " " + tS(T0 + tEnd), dauer_min: Math.round((tEnd - tBeg) / 60000),
+    dieses_paket: P + (meta.kind || "Messung") + ".zip", schwesterpakete: { ekg: P + "EKG.zip", pulswelle: P + "Pulswelle.zip", hinweis: "liegen im Ordner RohEKG des Tagesordners, sofern EKG und Oxymeter aufgezeichnet wurden" },
+    dateien: (meta.dateien || []).slice(), geraete: ger,
+    uhr_brustgurt_h10_gang_ms_pro_h: J.abgleich && Number.isFinite(Number(J.abgleich.gurtuhr_gang_ms_pro_h)) && J.abgleich.gurtuhr_gang_ms_pro_h !== null ? Number(J.abgleich.gurtuhr_gang_ms_pro_h) : null,
+    kalibrierung_atemgurt: kal, schlaege: st.length, schlaege_bestaetigt: so.reduce((s, v) => s + (v ? 1 : 0), 0), zuckungen: ZU.length, marker: marker.length,
+    wachzeiten: wach.length, wach_minuten: wachMin,
+    regeln: { wachzeit: "Belege: Marker, Notiz, Störung, Gefühl, Gewicht, Atemhilfe, Kalibrierung, Schalter, Ansage zu Abgleich oder Kalibrierung; Musik in den ersten 30 Minuten ab Beginn. Belege mit höchstens 6 Minuten Abstand bilden eine Wachzeit, dazu je 1 Minute Rand. Stilles Wachliegen ohne Eintrag bleibt unerkannt.",
+      minuten: "Eine Zeile je Minute. Puls, RMSSD und QNR nur aus im EKG bestätigten Schlägen; RMSSD aus aufeinanderfolgenden bestätigten Schlägen, beide Abstände zwischen dem 0,5- und dem 1,76-Fachen des Minutenmedians, mindestens 20 Paare; QNR = RMSSD mal 60000 durch das Quadrat des mittleren Abstands. Atem_Unruhe = mittlere Änderung der Atemdauer von Zug zu Zug durch die mittlere Atemdauer. Atemzuege_Brust_pro_min = stärkste Frequenz der Brustbewegung in 2 Minuten um die Minutenmitte, Atem_Brust_Deutlichkeit = Anteil dieser Frequenz an der Leistung von 0,07 bis 0,6 Hz. Brust_Bewegung_95_mg = 95-Prozent-Wert von md. Leere Felder = zu wenig Werte.",
+      taetigkeit: "Nachtruhe heißt: in der Nacht mindestens 60 Minuten ruhig gelegen. Gemessen ist Ruhe, kein Schlaf." } };
+  return { files: [{ name: "Paket.json", text: JSON.stringify(pk, null, 1) }, { name: "Wachzeiten.csv", text: WZ.join("\n") }, { name: "Minuten.csv", text: MI.join("\n") }], kern, info: `${MI.length - 1} Minuten, ${wach.length} Wachzeiten (${wachMin} min), ${marker.length} Marker` };
+}
 async function buildZip(opts) {
   opts = opts || {};
   const A0 = Number.isFinite(opts.a) ? opts.a : -Infinity, B0 = Number.isFinite(opts.b) ? opts.b : Infinity;
@@ -3974,6 +4110,10 @@ async function buildZip(opts) {
   const W = ALL.map((arr, i) => arr.filter(d => { const t = recTime(KINDS[i], d); return t >= A0 && t < B0; }));
   /* Trageorte gelten weiter: letzter Eintrag vor dem Fenster wird an den Anfang gelegt */
   if (Number.isFinite(A0)) ["Trageort", "Trageort Ruuvi", "Trageort Sense", "Proband"].forEach(typ => { const r = ALL[0].filter(x => x.typ === typ && x.start < A0).pop(); if (r && !W[0].some(x => x.typ === typ && x.start < A0 + 60000)) W[0].unshift(Object.assign({}, r, { start: A0 })); });
+  /* 2.9.8: Kalibrierung des Atemgurts gehört zu beiden Seiten des Schalters: die letzte vor dem Fenster gilt weiter, die erste nach dem Ende ist der Abschlusswert */
+  try { const KA = ALL[0].filter(x => x.typ === "Kalibrierung" && Number.isFinite(x.ref));
+    if (Number.isFinite(A0)) { const r = KA.filter(x => x.start < A0 && A0 - x.start < 12 * 3600000).pop(); if (r) W[0].unshift(Object.assign({}, r, { start: A0, end: undefined, name: `${r.name} [vor Beginn dieser Aufnahme um ${stamp(new Date(r.tm || r.start)).slice(0, 8)} Uhr, gilt weiter]` })); }
+    if (Number.isFinite(B0)) KA.filter(x => x.start >= B0 && x.start < B0 + 900000).slice(0, 1).forEach(r => W[0].push(Object.assign({}, r, { start: B0 - 1, end: undefined, name: `${r.name} [Abschlusswert, gemessen nach dem Ende dieser Aufnahme um ${stamp(new Date(r.tm || r.start)).slice(0, 8)} Uhr]` }))); } catch (e) {}
   /* 2.1: übernommener Abgleich: Klopfdaten der Referenz vor dem Fenster dazuholen */
   { const ub = W[0].find(r => r.typ === "Abgleich" && Number.isFinite(r.ref) && /übernommen/.test(r.name || ""));
     if (ub && Number.isFinite(A0) && !W[0].some(r => r.typ === "Abgleich" && /erkannt/.test(r.name || ""))) { const ra = ub.ref - 8000, rz = Math.min(A0, ub.ref + 8000);
@@ -4001,7 +4141,7 @@ async function buildZip(opts) {
   }
   const offs = {};
   [["a", AC], ["e", EC], ["f", FT0.concat(PP, GY)]].forEach(([kind, arr]) => arr.forEach(c => { const o = c.t - c.us / 1000; const k = kind + (c.s ?? ""); if (offs[k] === undefined || o < offs[k]) offs[k] = o; }));
-  try { const g = gangFit([["e", EC], ["a", AC]], offs); if (g.k) addEntry({ typ: "Abgleich", name: `Gang der Gurtuhr gegen das Handy: ${String(g.ms_pro_h).replace(".", ",")} ms je Stunde (positiv = Gurtuhr schneller), aus ${g.dauer_min} min, in den Zeiten berücksichtigt`, start: Date.now() }); } catch (e) { addEntry({ typ: "Fehler", name: "Gang der Gurtuhr: " + (e.message || e), start: Date.now() }); }
+  try { const g = gangFit([["e", EC], ["a", AC]], offs); if (g.k) addEntry({ typ: "Abgleich", name: `Gang der Uhr des Brustgurts (H10) gegen das Handy: ${String(g.ms_pro_h).replace(".", ",")} ms je Stunde (positiv = Uhr des Brustgurts schneller), aus ${g.dauer_min} min, in den Zeiten berücksichtigt`, start: Date.now() }); } catch (e) { addEntry({ typ: "Fehler", name: "Gang der Uhr des Brustgurts (H10): " + (e.message || e), start: Date.now() }); }
   if (big) {
     const add = (name, rows) => { if (rows.length > 1) files.push({ name, text: rows.join("\n") }); };
     add("Beschleunigung.csv", vsRawRows("acc", AC, offs).rows);
@@ -4018,11 +4158,12 @@ async function buildZip(opts) {
   if (TP.length) { const s = ["Datum;Zeit;Epoch_ms;Temperatur_C;Luftfeuchte_Prozent;Thermometer;WBGT_geschaetzt_C"]; [...TP].sort((a, b) => a.t - b.t).forEach(r => s.push([...tcols(r.t), num(r.c), r.h, r.n || 1, num(wbgtEst(r.c, r.h))].join(";"))); files.push({ name: "Temperatur.csv", text: s.join("\n") }); }
   if (RU.length) { const s = ["Datum;Zeit;Epoch_ms;Temperatur_C;Luftfeuchte_Prozent;Luftdruck_hPa;x_mg;y_mg;z_mg;Batterie_V;Bewegungszaehler;Paket_Nr;WBGT_geschaetzt_C;Pakete_gemittelt"]; RU.forEach(r => s.push(vsRuRow(r))); files.push({ name: "Ruuvi.csv", text: s.join("\n") }); }
   if (RB.length && !opts.noRaw) { const s = [VS_HEAD.Atemgurt]; RB.forEach(r => r.v.forEach((v, k) => s.push([...tcols(r.ts[k]), num(v, 3)].join(";")))); files.push({ name: "Atemgurt.csv", text: s.join("\n") }); }
+  else if (RB.length && opts.nacht) try { const s = ["Epoch_ms;Kraft_N"]; RB.forEach(r => r.v.forEach((v, k) => s.push(Math.round(r.ts[k]) + ";" + num(v, 3)))); files.push({ name: "Atemgurt_roh.csv", text: s.join("\n") }); } catch (e) {} /* 2.9.8 */
   const enc = new TextEncoder();
   const out = files.map(f => ({ name: P + f.name, data: enc.encode("﻿" + f.text) }));
   /* 2.9.7: Rohwelle des Oxymeters auch im Sessionpaket (gleicher Aufbau wie PW_*.bin im Pulswelle-Paket) */
   if (OXW && OXW.length && !opts.noRaw) try { const d = oxwBin(OXW); if (d) out.push({ name: P + "Pulswelle.bin", data: d }); } catch (e) { addEntry({ typ: "Fehler", name: "Pulswelle im Paket: " + (e.message || e), start: Date.now() }); }
-  let sp = null, kern = null; window.lastKern = null; window.lastStrom = null;
+  let sp = null, kern = null, JoZ = null, kernObj = null; window.lastKern = null; window.lastStrom = null;
   const beltCsv = () => { if (belt && belt.list.length && !opts.noRaw) { const s = ["Datum;Zeit;Epoch_ms;Einatmen_s;Ausatmen_s;Dauer_s;Atemzuege_pro_min;Tiefe_N;Tiefe_Prozent"]; belt.list.forEach(c => s.push([...tcols(c.t), num(c.ein, 2), num(c.aus, 2), num(c.dauer, 2), num(60 / c.dauer), num(c.tiefe, 2), Number.isFinite(c.prozent) ? num(c.prozent) : ""].join(";"))); out.push({ name: P + "Atemzuege_Gurt.csv", data: enc.encode("\ufeff" + s.join("\n")) }); } };
   const nacht = opts.nacht !== undefined ? !!opts.nacht : $("nacht").checked;
   try {
@@ -4037,7 +4178,7 @@ async function buildZip(opts) {
     /* 2.0: Auffälligkeiten finden, EKG-Fenster um Herz und mögliche Atemstillstände in Fenster.json */
     window.lastAnom = null;
     try { const Jo = JSON.parse(sp.json), rbr = sp.raw && sp.raw.rbRaw ? { t: sp.raw.rbRaw.t.map(x => x - Jo.t0_epoch_ms), f: sp.raw.rbRaw.f } : null, an = vsAnom(Jo, rbr);
-      Jo.pruef_fenster = pruefFenster(an.concat(unbList(Jo), lageList(Jo)), sp.raw); Jo.pruef_regeln = ANOM_REGELN; sp.json = JSON.stringify(Jo); window.lastAnom = { an, T0: Jo.t0_epoch_ms }; } catch (e) { addEntry({ typ: "Fehler", name: "Prüfliste: " + (e.message || e), start: Date.now() }); }
+      Jo.pruef_fenster = pruefFenster(an.concat(unbList(Jo), lageList(Jo)), sp.raw); Jo.pruef_regeln = ANOM_REGELN; sp.json = JSON.stringify(Jo); JoZ = Jo; window.lastAnom = { an, T0: Jo.t0_epoch_ms }; } catch (e) { addEntry({ typ: "Fehler", name: "Prüfliste: " + (e.message || e), start: Date.now() }); }
     out.unshift({ name: P + "Messung.xlsx", data: sp.xlsx }, { name: P + "Fenster.json", data: enc.encode(sp.json) });
     if (sp.pdf) out.unshift({ name: P + pdfName, data: sp.pdf });
     addEntry({ typ: "Daten", name: "Auswertung " + (opts.kind || "Speicher") + ": " + sp.info, start: Date.now() });
@@ -4056,7 +4197,7 @@ async function buildZip(opts) {
         const xl = await makeXlsx([{ name: "Zuckungen", rows: rep.rows }, { name: "Mittelwerte", rows: rep.MR }, { name: "Serien", rows: rep.SR }, { name: "Kopf", rows: rep.KR }]);
         const pdf = nightPdf(rep, raw, pid, nachtTxt, pulseMin, lageMin, raw.TP);
         out.unshift({ name: P + "Zuckungen.xlsx", data: xl }, { name: P + "Nachtbericht.pdf", data: pdf });
-        try { const kj = enc.encode(nightKern(rep, raw, pid, nachtTxt, pulseMin, L)); kern = { name: P + "Nachtkern.json", data: kj }; window.lastKern = kern; out.push(kern); } catch (e3) { out.push({ name: P + "Fehler_Kerndatei.txt", data: enc.encode(String(e3 && e3.stack || e3)) }); }
+        try { const ks = nightKern(rep, raw, pid, nachtTxt, pulseMin, L); try { kernObj = JSON.parse(ks); } catch (e4) {} const kj = enc.encode(ks); kern = { name: P + "Nachtkern.json", data: kj }; window.lastKern = kern; out.push(kern); } catch (e3) { out.push({ name: P + "Fehler_Kerndatei.txt", data: enc.encode(String(e3 && e3.stack || e3)) }); }
         addEntry({ typ: "Daten", name: `Nachtauswertung: ${rep.zu.length} Zuckungen, ${rep.valid.length} gültig`, start: Date.now() });
       } catch (e2) { out.push({ name: P + "Fehler_Nachtauswertung.txt", data: enc.encode(String(e2 && e2.stack || e2)) }); }
     }
@@ -4064,6 +4205,15 @@ async function buildZip(opts) {
     out.push({ name: P + "Fehler_Auswertung.txt", data: enc.encode(String(e && e.stack || e)) });
     addEntry({ typ: "Fehler", name: "Auswertung fehlgeschlagen: " + (e.message || e), start: Date.now() });
   }
+  /* 2.9.8: Zusatzschicht (Paket.json, Wachzeiten.csv, Minuten.csv, Ergänzung der Kerndatei); ein Fehler hier lässt das Paket unberührt */
+  try { if (sp && sp.json) { $("savestatus").textContent = "Schreibe die Zusatztabellen …"; await wait(20);
+      if (!JoZ) JoZ = JSON.parse(sp.json);
+      const zz = vsZusatz(JoZ, kernObj, belt && belt.list ? belt.list : null, { P, version: VS_VERSION, kind: opts.kind || (nacht ? "Nacht" : "Messung"), nacht, pid, dateien: out.map(f => f.name).concat([P + "Paket.json", P + "Wachzeiten.csv", P + "Minuten.csv"]) });
+      zz.files.forEach(f => out.push({ name: P + f.name, data: enc.encode((/\.csv$/.test(f.name) ? "\ufeff" : "") + f.text) }));
+      if (kern && zz.kern) kern.data = enc.encode(JSON.stringify(zz.kern));
+      addEntry({ typ: "Daten", name: "Zusatztabellen: " + zz.info, start: Date.now() }); } }
+  catch (e) { out.push({ name: P + "Fehler_Zusatz.txt", data: enc.encode(String(e && e.stack || e)) }); addEntry({ typ: "Fehler", name: "Zusatztabellen: " + (e.message || e), start: Date.now() }); }
+  JoZ = null; kernObj = null;
   $("savestatus").textContent = "Packe ZIP …";
   const blob = await makeZip8(out);
   return { blob, name: P + (opts.kind || "Messung") + ".zip", list: out.map(f => f.name).join(", "), kern, out, sp };
@@ -4124,6 +4274,14 @@ async function ekgCacheTick() {
     if (made) diagT(`EKG-Stunden vorab (${made})`, Date.now() - t0);
   } catch (e) {} finally { EKGC.busy = false; } }
 setInterval(() => { try { if (typeof anyActive === "function" && anyActive()) ekgCacheTick(); } catch (e) {} }, 10 * 60000);
+/* 2.9.8: Gerade der Uhrabbildung je Sitzung für das EKG-Paket: Neigung als Median über Paare mit halbem Abstand (wie gangFit), Lage so, dass die Gerade den unteren Rand berührt */
+function ekgUhrFit(uhrMin) { const out = {};
+  for (const [sn, m] of uhrMin) { const P = [...m.values()].sort((p, q) => p[0] - q[0]); if (!P.length) continue; const x0 = P[0][0], span = P[P.length - 1][0] - x0; let k = 0;
+    if (P.length >= 10 && span >= 600000) { const h = P.length >> 1, sl = []; for (let i = 0; i + h < P.length; i++) sl.push((P[i + h][1] - P[i][1]) / (P[i + h][0] - P[i][0])); sl.sort((p, q) => p - q); const kk = sl[sl.length >> 1]; if (Number.isFinite(kk) && Math.abs(kk) <= 2e-4) k = kk; }
+    let c = Infinity; P.forEach(p => { const v = p[1] - k * (p[0] - x0); if (v < c) c = v; });
+    const res = P.map(p => p[1] - k * (p[0] - x0) - c).sort((p, q) => p - q);
+    out[sn] = { x0_ms: x0, versatz_anfang_ms: c, gang_ms_pro_h: k ? Math.round(-k * 36000000) / 10 : null, dauer_min: Math.round(span / 60000), stuetzstellen: P.length, rest_median_ms: Math.round(res[res.length >> 1] * 10) / 10 }; }
+  return out; }
 async function rohEkgExport(say, opt) {
   /* 2.8: Zeitbereich, 16 Bit; 2.9: abgeschlossene Stunden aus dem Stundenzwischenspeicher */
   opt = opt || {}; await flush();
@@ -4132,6 +4290,7 @@ async function rohEkgExport(say, opt) {
   else { const fl = await vsFirstLast(); if (fl.f == null) throw new Error("Gerätespeicher ist leer");
     const first = await vsRecAt(fl.f); a0 = first && Number.isFinite(first.t) ? first.t : now - 40 * 3600000; if (a0 < now - 48 * 3600000) a0 = now - 48 * 3600000; b0 = now; }
   const H = 3600000, files = [], liste = [], sess = [], offs = {}; let tA = null, tB = null, nAll = 0, ausC = 0;
+  const uhrMin = new Map(); /* 2.9.8: je Sitzung und Minute das Paket mit der kleinsten Verspätung (Gerätezeit, Ankunft minus Gerätezeit) */
   const cdir = await ekgCacheDir();
   for (let a = Math.floor(a0 / H) * H; a < b0; a += H) {
     say(`Lese EKG ${pad(new Date(a).getHours())}:00 …`);
@@ -4140,16 +4299,17 @@ async function rohEkgExport(say, opt) {
     if (!E) { const pk = ((await readKinds(["ecg"], Math.max(a, a0), Math.min(a + H, b0))).ecg || []).filter(p => p && p.v && p.v.length && p.t >= Math.max(a, a0) && p.t < Math.min(a + H, b0)).sort((p, q) => p.t - q.t);
       if (!pk.length) continue; E = ekgHourEnc(pk); if (whole && cdir) { try { await ekgCachePut(cdir, a, E); } catch (e) {} } }
     for (const k in E.offs) if (offs[k] === undefined || E.offs[k] < offs[k]) offs[k] = E.offs[k];
+    try { for (let i = 0; i < E.n; i++) { const sn = String(E.sess[E.meta[4 * i + 2]]), x = E.meta[4 * i + 1] / 1000, o = E.meta[4 * i] - x; let m = uhrMin.get(sn); if (!m) uhrMin.set(sn, m = new Map()); const b = Math.floor(x / 60000), e = m.get(b); if (!e || o < e[1]) m.set(b, [x, o]); } } catch (e) {}
     const data = await ekgHourBlob(E, sess), name = `EKG_${idstamp(new Date(a)).slice(0, 11)}.bin`;
     files.push({ name, data }); liste.push({ datei: name, von: stamp(new Date(E.von)), bis: stamp(new Date(E.bis)), pakete: E.n, werte: E.m, bit: E.bits });
     if (tA === null) tA = E.von; tB = E.bis; nAll += E.m;
     await new Promise(r => setTimeout(r, 0));
   }
   if (!files.length) throw new Error("kein EKG im Gerätespeicher");
-  const info = { format: "Vitalspur-RohEKG", version: 2, player: "Vitalspur 2.9", erstellt: new Date().toISOString(), von_epoch_ms: Math.round(tA), bis_epoch_ms: Math.round(tB),
-    werte: nAll, sitzungen: sess, offs_ms: offs, stunden_aus_zwischenspeicher: ausC,
+  const info = { format: "Vitalspur-RohEKG", version: 2, player: "Vitalspur " + VS_VERSION, erstellt: new Date().toISOString(), von_epoch_ms: Math.round(tA), bis_epoch_ms: Math.round(tB),
+    werte: nAll, sitzungen: sess, offs_ms: offs, uhr_brustgurt_h10: ekgUhrFit(uhrMin), stunden_aus_zwischenspeicher: ausC,
     aufbau: "Je Stunde eine Datei EKG_JJJJMMTT-HH.bin, little endian: Uint32 Kennung 'VSE2', Uint32 n (Pakete), Uint32 m (Werte), Uint32 bit (16 oder 32); Float64[4n] je Paket: t_ms (Ankunft am Handy, Epoch), us (Zeitstempel des H10 in µs), Index in sitzungen, Rate in Hz; Uint32[n] Zahl der Werte je Paket; Int16[m] bzw. Int32[m] EKG in µV als Differenz zum vorigen Wert (erster Wert gegen 0, fortlaufend über alle Pakete der Datei).",
-    zeit: "Zeit eines Werts wie im Player: letzter Wert eines Pakets bei us/1000 + offs_ms[Sitzung], davor im Abstand 1000/Rate (bzw. aus dem Abstand der Zeitstempel).",
+    zeit: "Zeit eines Werts: letzter Wert eines Pakets bei us/1000 + Versatz, davor im Abstand 1000/Rate (bzw. aus dem Abstand der Zeitstempel). Versatz ab 2.9.8 aus uhr_brustgurt_h10[Sitzung]: versatz_anfang_ms + gang_ms_pro_h / 3600000 * (us/1000 - x0_ms), mit umgekehrtem Vorzeichen des Gangs (positiver Gang = Uhr des Brustgurts schneller, der Versatz nimmt ab). offs_ms[Sitzung] ist der kleinste Versatz der ganzen Aufnahme und gilt bei positivem Gang nur am Ende.",
     dateien: liste };
   files.unshift({ name: "info.json", data: new TextEncoder().encode(JSON.stringify(info, null, 1)) });
   say("Packe ZIP …");
@@ -4256,7 +4416,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.7";
+const VS_VERSION = "2.9.8";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4802,7 +4962,7 @@ function nightReport(raw, pid, startText) {
   const r1 = v => v === null || v === undefined ? null : Math.round(v * 10) / 10;
   idx.forEach((j, i) => MR.push([pid, j, tz[i] === null ? null : Math.round(tz[i]) / 1000, r1(mc && mc[i]), r1(bz && bz.lo[i]), r1(bz && bz.hi[i]), r1(cc && cc[i]), r1(bc && bc.lo[i]), r1(bc && bc.hi[i]), r1(einz && einz.c[i]), r1(seri && seri.c[i]), valid.length, einz ? einz.n : 0, seri ? seri.n : 0, ctrl.length]));
   const fci = c => c ? `[${r1(c[0])}; ${r1(c[1])}]` : "";
-  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur 2.9"],
+  const KR = [["Feld", "Wert"], ["Proband", pid], ["Nacht", nacht], ["Beginn der Aufzeichnung", stamp(new Date(T0))], ["Version", "Vitalspur " + VS_VERSION],
     ["Zuckungen gesamt", zu.length], ["davon Form Bewegung (Beginn einer Wiese)", zu.filter(e => e.form === "Bewegung").length], ["kleine Zuckungen (nicht in der Mittelung)", (NE.pr || []).filter(p => p.klein).length], ["nicht gezählt: aufrecht", NE.aus ? NE.aus.aufrecht : 0], ["nicht gezählt: Lage dazwischen", NE.aus ? NE.aus.dazwischen || 0 : 0], ["nicht gezählt: Klopfen", NE.aus ? NE.aus.Klopfen : 0], ["nicht gezählt: ab dem Ende der Aufnahme", NE.aus ? NE.aus.Ende : 0], ["Lage", NE.lageDa === false ? "ohne Brustgurt nicht bestimmt, alle Zuckungen gezählt" : "gezählt nur im Liegen: Rücken, Bauch, linke oder rechte Seite (Lage aus den 5 s vor T0)"], ["gültig", valid.length], ["ausgeschlossen: weniger als 15 s Ruhe davor", why.ruhe], ["ausgeschlossen: Schritte in der Nähe", why.schritt],
     ["ausgeschlossen: Brustbewegung oder Umdrehen", why.brust], ["ausgeschlossen: Herzschläge nicht vollständig oder unplausibel im EKG", why.ekg],
     ["Häufungen (Abstand über 2 Minuten trennt)", byH.size],
@@ -4997,7 +5157,7 @@ function nightKern(rep, raw, pid, nacht, pulseMin, log) {
   const T = (rep.Rc && rep.Rc.length) ? null : null;
   const TPs = (raw.TP || []).filter(p => Number.isFinite(p.c)).map(p => p.c);
   const k = {
-    format: "Nachtkern", version: 2, player: "Vitalspur 2.9", proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
+    format: "Nachtkern", version: 2, player: "Vitalspur " + VS_VERSION, proband: pid, nacht, t0_epoch_ms: Math.round(raw.T0),
     kopf: { trageort: last("Trageort") || "Fuß rechts", gewicht: last("Gewicht"), gefuehl: first("Gefühl"), gefuehl_morgen: (log || []).filter(x => x.typ === "Gefühl").length > 1 ? last("Gefühl") : null, seitenlage: SIDE.quelle,
       temperatur_min: TPs.length ? Math.min(...TPs) : null, temperatur_max: TPs.length ? Math.max(...TPs) : null,
       zuckungen: rep.zu.length, gueltig: rep.valid.length, serien: rep.serien.length, in_serien: rep.inSer, ausgeschlossen: rep.why, nicht_gezaehlt: (raw.NE && raw.NE.aus) || null, kleine_zuckungen: raw.NE && raw.NE.pr ? raw.NE.pr.filter(p => p.klein).map(p => Math.round(p.t - raw.T0)) : [],
@@ -5934,7 +6094,8 @@ function calPlan(why, cb) {
   cb = cb || (() => {});
   if (!calWanted()) { cb(false); return; }
   /* 2.3: Kalibrierung gilt, solange der Atemgurt verbunden bleibt */
-  if (calReused(why)) { cb(true); return; }
+  /* 2.9.8: beim Schalter (Nacht auf Tag und Tag auf Nacht) immer neu kalibrieren, nie übernehmen: die Nacht braucht einen Abschlusswert, und die Lage wechselt */
+  if (!/^Schalter/.test(why) && calReused(why)) { cb(true); return; }
   calCancel("neue Kalibrierung");
   cal.pend = { why, cb, t: Date.now() };
   cal.wait = setInterval(() => {
@@ -5951,6 +6112,7 @@ function calStart(why, cb) {
   cal.on = { why, cb, t0: Date.now(), n: 0 };
   addEntry({ typ: "Kalibrierung", name: `Beginn (${why}): fünf tiefe Atemzüge`, start: cal.on.t0 }); flush();
   say("Fünf tiefe Atemzüge");
+  try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) {} /* 2.9.8: auch spürbar, falls die Ansage nach einem Wecker stumm bleibt */
   clearInterval(cal.tick); cal.tick = setInterval(calTick, 1000); calShow();
 }
 function calFound(c) {
@@ -5976,7 +6138,7 @@ function calEnd(ok, why) {
     const top = calFound(c).map(b => b.tiefe).sort((x, y) => y - x).slice(0, 5);
     const ref = top.reduce((s, v) => s + v, 0) / top.length;
     const g = rbLive.f.filter((v, k) => rbLive.t[k] >= c.t0), base = g.length ? Math.min(...g) : null;
-    addEntry({ typ: "Kalibrierung", name: `Ende (${c.why}): ${top.length} Züge, 100 % = ${ref.toFixed(2).replace(".", ",")} N` + (base !== null ? `, Grundspannung ${base.toFixed(1).replace(".", ",")} N` : ""), start: c.t0, end: now, ref, tm: (c.t0 + now) / 2 });
+    addEntry({ typ: "Kalibrierung", name: `Ende (${c.why}): ${top.length} Züge, 100 % = ${ref.toFixed(2).replace(".", ",")} N` + (base !== null ? `, Grundspannung ${base.toFixed(1).replace(".", ",")} N` : "") + (/von Hand/.test(c.why) ? ", ausgelöst von Hand" : ", ausgelöst vom Programm"), start: c.t0, end: now, ref, tm: (c.t0 + now) / 2, grund: base, hand: /von Hand/.test(c.why) });
     say("Kalibrierung fertig");
   } else { addEntry({ typ: "Kalibrierung", name: `Ohne Ergebnis (${c.why}): ${why}`, start: c.t0, end: now }); say("Kalibrierung ohne Ergebnis"); }
   flush(); cal.last = { t: now, ok }; calShow();
