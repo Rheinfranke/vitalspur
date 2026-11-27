@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.8</h1>
+<h1>Vitalspur 2.9.9</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -168,7 +168,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <fieldset>
   <legend>Polar Verity Sense</legend>
   <div class="hint">Einmal kurz drücken und loslassen, nicht halten (Halten schaltet aus). Er startet von selbst mit blauem Licht an der Seite. Warten, bis alle sechs Lämpchen geleuchtet haben, dann verbinden. Polar-App vorher schließen. Am Fuß misst er Bewegung und Drehrate, rechts außen über dem Knöchel. Am Oberarm zusätzlich die Pulswelle, Licht zur Haut, fest anliegend, immer dieselbe Stelle.<br><b>Abgleich:</b> Am Anfang und am Ende den Sense neben den H10 auf den Gurt halten und dreimal mit dem Knöchel auf beide klopfen, etwa im Abstand einer halben Sekunde. Davor und danach zwei Sekunden still halten.</div>
-  <label>Trageort: <select id="vplace"><option value="Fuß">Fuß</option><option value="Oberarm links">Oberarm links</option><option value="Oberarm rechts">Oberarm rechts</option><option value="Handgelenk links">Handgelenk links</option><option value="Handgelenk rechts">Handgelenk rechts</option></select></label>
+  <label>Trageort: <select id="vplace"><option value="Fuß rechts">Fuß rechts (außen über dem Knöchel)</option><option value="Fuß links">Fuß links</option><option value="Kiefer">Kiefer (über dem Kaumuskel)</option><option value="Oberarm links">Oberarm links</option><option value="Oberarm rechts">Oberarm rechts</option><option value="Handgelenk links">Handgelenk links</option><option value="Handgelenk rechts">Handgelenk rechts</option></select></label>
   <label>Rate Bewegung: <select id="vrate"><option value="52">52 Hz (Standard)</option><option value="104">104 Hz</option><option value="208">208 Hz (für die Nacht, genauer Beginn der Zuckung)</option></select></label>
   <label><input type="checkbox" id="usegyro" checked> Am Fuß zusätzlich die Drehrate (Gyroskop) aufzeichnen</label>
   <button class="main" id="vconnect">Sense verbinden</button>
@@ -196,6 +196,8 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
   <button class="main" id="vsphase">Schalter: Tag</button> <button id="vsord">Speicherordner</button> <button id="devbtn" title="Name dieses Geräts für die Ausschluss-Datei">Gerät</button>
   <div id="vsstatus" class="stat"></div>
   <div class="hint">Schalter abends auf Nacht: Nachtmodus, Sense am Fuß mit 208 Hz, Thermometer alle 10 Minuten, dazu der Tagesbericht. Morgens auf Tag: Nachtbericht, dann beginnt der neue Tagesordner. Zur Sicherheit zweimal tippen.</div>
+  <label>Wecker um <input type="time" id="wkzeit" style="width:auto"> <input type="checkbox" id="wkon"> an</label> <span id="wkstat" class="stat"></span>
+  <div class="hint">Schriller Ton, bis ein Marker von der Uhr kommt; dann 5 Minuten Ruhe und wieder Ton. „Wecker aus“ beendet ihn für heute. Die Seite muss offen bleiben; bis er sich bewährt hat, den Handywecker einige Minuten später stellen.</div>
   <label><input type="checkbox" id="keepon" checked> Unhörbaren Wachhalte-Ton abspielen (hält die Seite bei gesperrtem Bildschirm wach)</label>
   <label><input type="checkbox" id="bigdata" checked> BigData: zusätzlich alle Rohdaten speichern (stündlich im Ordner Roh des Tages und in den Sessions)</label>
   <label><input type="checkbox" id="nacht"> Nachtmodus (über den Schalter): Ereignisse (Zuckungen, Umdrehen) und Fenster in voller Auflösung, dazu Vergleichsfenster alle 10 Minuten</label>
@@ -205,7 +207,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 
 <fieldset>
   <legend>Nacht</legend>
-  <label>Sense getragen am: <select id="nort"><option value="Fuß rechts">Fuß rechts (außen über dem Knöchel)</option><option value="Kiefer">Kiefer (über dem Kaumuskel)</option></select></label>
+  <label>Sense getragen am: <select id="nort"><option value="Fuß rechts">Fuß rechts (außen über dem Knöchel)</option><option value="Fuß links">Fuß links</option><option value="Kiefer">Kiefer (über dem Kaumuskel)</option><option value="Oberarm links">Oberarm links</option><option value="Oberarm rechts">Oberarm rechts</option><option value="Handgelenk links">Handgelenk links</option><option value="Handgelenk rechts">Handgelenk rechts</option></select></label>
   <div>Wie fühlst du dich? <button class="nnote" data-n="frieren">frieren</button> <button class="nnote" data-n="angenehm">angenehm</button> <button class="nnote" data-n="warm">warm</button></div>
   <div id="nnotestatus" class="stat"></div>
 </fieldset>
@@ -455,6 +457,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
   <div id="clearstatus" class="hint"></div>
 </fieldset>
 <div id="guard" style="display:none;position:fixed;inset:0;z-index:9998"></div>
+<button id="wkaus" style="display:none;position:fixed;left:8%;right:8%;top:28%;z-index:10000;font-size:1.7rem;padding:1.3rem 0.5rem;background:#b00020;color:#fff;border:0;border-radius:14px">Wecker aus</button>
 
 <div id="blackout"><div id="bltxt">Nachtsperre</div><div id="unlockq">Entsperren?<br><button id="unlockyes">Ja</button><button id="unlockno">Nein</button></div></div>
 
@@ -591,12 +594,12 @@ function row(r) {
   const tb = $("log").querySelector("tbody"); tb.insertBefore(tr, tb.firstChild);
   while (tb.children.length > 300) tb.removeChild(tb.lastChild);
 }
-function addEntry(r) { if (!r.session) r.session = sessionId || hrRec || vRec || micRec || ""; log.push(r); row(r); put("log", r); }
+function addEntry(r) { if (!r.session) r.session = sessionId || hrRec || vRec || micRec || ""; log.push(r); row(r); put("log", r); try { if (r.typ === "Marker" && typeof wkMarker === "function") wkMarker(r); } catch (e) {} }
 
 /* ================= Wachhalten ================= */
 let wakeLock = null, wlPending = null;
 setInterval(() => { const el = $("miclive"); if (el) el.style.display = micOn ? "" : "none"; }, 500); /* 1.8 */
-function needAwake() { return running || hrWanted || micOn || !!breath || vWanted; }
+function needAwake() { return running || hrWanted || micOn || !!breath || vWanted || (typeof wkArmed === "function" && wkArmed()); }
 async function keepAwake() {
   keepTone();
   if (wakeLock && !wakeLock.released) return;
@@ -1088,10 +1091,10 @@ async function onGattLost() {
       if (!hrWanted) return;
       hrStatus("Verbindung verloren, verbinde neu …"); pmdOn = false;
       addEntry({ typ: "Gurt", name: "Verbindung verloren", start: Date.now() });
-      for (let i = 0; i < 40 && hrWanted; i++) {
+      for (let i = 0; i < (typeof hrWd !== "undefined" && hrWd.max ? hrWd.max : 40) && hrWanted; i++) { /* 2.9.9: nach wiederholten Eingriffen des Wächters nur noch 4 Versuche je Eingriff */
         try { try { hrDev.gatt.disconnect(); } catch (e) {} await wait(300);
           await withTO(hrAttach(), 20000, "Gurt"); addEntry({ typ: "Gurt", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); reconnecting = false; if (vWanted) syncOpen("Gurt neu verbunden", true); return; }
-        catch (e) { addEntry({ typ: "Fehler", name: `H10: Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); await new Promise(r => setTimeout(r, 3000)); }
+        catch (e) { if (i < 2 || i === 39) addEntry({ typ: "Fehler", name: `H10: Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}` + (i === 1 ? " (weitere Versuche ohne Zeile)" : ""), start: Date.now() }); await new Promise(r => setTimeout(r, 3000)); }
       }
       reconnecting = false;
       hrStatus("Neu verbinden fehlgeschlagen. Bitte erneut „H10 verbinden“ tippen.");
@@ -1406,7 +1409,7 @@ $("unlockno").addEventListener("click", e => { e.preventDefault(); e.stopPropaga
 /* ================= Fußsensor Polar Verity Sense ================= */
 /* 1.4: vOrt ist der genaue Trageort (Oberarm/Handgelenk, links/rechts), vPlace nur die Art (Fuß oder Arm) */
 let vOrt = "Fuß", vOrtLogged = null, vPpgRate = 55, vPpgCh = 4, vPpgStat = null;
-const vPlaceOf = o => (o === "Fuß" || o === "Fuß rechts" || o === "Kiefer") ? "Fuß" : "Arm";
+const vPlaceOf = o => /^(Fuß|Kiefer)/.test(String(o || "")) ? "Fuß" : "Arm";
 let vPlace = "Fuß", vP = 0, vPpgSeen = false, vHr = null, lastBpm = null, vDev = null, vCp = null, vData = null, vWanted = false, vRec = null, vLast = 0, vN = 0, vFactor = 0.000244141, vFrameSeen = false, vResp = null, vReconn = false, vListened = null, vG = 0, vGSeen = false, vGFactor = null, vRateNom = 52;
 function vStatus(t) { $("vstatus").textContent = t; }
 /* Delta-Format nach dem Polar BLE SDK: Referenzwert mit 16 bit je Achse, dann Blöcke aus Bitbreite, Anzahl und bitweise gepackten Differenzen */
@@ -1593,7 +1596,15 @@ async function onVLost() {
   }
   vReconn = false; vStatus("Neu verbinden fehlgeschlagen. Bitte „Fußsensor verbinden“ tippen.");
 }
-try { const o = localStorage.getItem("vs_vort"); if (o && [...$("vplace").options].some(x => x.value === o)) $("vplace").value = o; } catch (e) {}
+/* 2.9.9: ein Trageort für Tag und Nacht. Er bleibt, wo er eingestellt wurde (Speicher vs_vort); beide Auswahlfelder zeigen dasselbe. Der alte Wert „Fuß“ heißt jetzt „Fuß rechts“. */
+function vOrtSet(v, log) {
+  if (v === "Fuß") v = "Fuß rechts"; if (!v || ![...$("vplace").options].some(x => x.value === v)) v = "Fuß rechts";
+  try { $("vplace").value = v; if ($("nort")) $("nort").value = v; localStorage.setItem("vs_vort", v); localStorage.setItem("nacht_ort", v); } catch (e) {}
+  if (log) { addEntry({ typ: "Trageort", name: v, start: Date.now() }); if (typeof vWanted !== "undefined" && vWanted && vOrt !== v) { vOrt = v; vOrtLogged = v; addEntry({ typ: "Trageort Sense", name: v + " (umgestellt bei laufender Verbindung, Messart unverändert)", start: Date.now(), session: vRec }); } flush(); }
+  return v;
+}
+try { let o = localStorage.getItem("vs_vort"); if (!o) o = localStorage.getItem("nacht_ort"); vOrtSet(o || "Fuß rechts", false); } catch (e) {}
+$("vplace").addEventListener("change", () => vOrtSet($("vplace").value, true));
 $("vconnect").addEventListener("click", async () => {
   if (!navigator.bluetooth) { vStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
   try {
@@ -1989,10 +2000,14 @@ async function bgAttach() {
 async function onBgLost() {
   bgRx = null; bgHi = false; if (!bgWanted || bgReconn) return;
   bgReconn = true; bgStatus("Uhr: Verbindung verloren, verbinde neu …"); addEntry({ typ: "Uhr", name: "Verbindung verloren", start: Date.now() });
-  for (let i = 0; i < 60 && bgWanted; i++) { try { try { bgDev.gatt.disconnect(); } catch (e) {} await wait(300);
+  /* 2.9.9: nicht nach 60 Versuchen aufgeben. Pause wächst von 5 s auf 5 min, Zeile im Protokoll beim ersten und dann bei jedem zehnten Fehlschlag, keine Ansage.
+     „Uhr neu verbinden“ verbindet sofort. Die Marker bleiben so lange auf der Uhr gespeichert. */
+  for (let i = 0; bgWanted; i++) { try { try { bgDev.gatt.disconnect(); } catch (e) {} await wait(300);
       await withTO(bgAttach(), 10000, "Uhr"); addEntry({ typ: "Uhr", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); bgReconn = false; return; }
-    catch (e) { bgRx = null; addEntry({ typ: "Uhr", name: `Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}`, start: Date.now() }); await wait(5000); } }
-  bgReconn = false; bgStatus("Uhr: Neu verbinden fehlgeschlagen. Die Marker bleiben auf der Uhr gespeichert.");
+    catch (e) { bgRx = null; if (i === 0 || i % 10 === 9) addEntry({ typ: "Uhr", name: `Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}, versuche weiter`, start: Date.now() });
+      bgStatus(`Uhr nicht verbunden seit ${i + 1} Versuchen, versuche weiter. „Uhr neu verbinden“ verbindet sofort. Die Marker bleiben auf der Uhr gespeichert.`);
+      const pz = Math.min(300000, 5000 * 2 ** Math.min(6, Math.floor(i / 6))), t9 = Date.now(); while (bgWanted && bgReconn && Date.now() - t9 < pz) await wait(1000); if (!bgReconn) return; } }
+  bgReconn = false;
 }
 function bgBind() {
   const b = $("bgconnect"); if (!b) return;
@@ -2003,6 +2018,7 @@ function bgBind() {
       const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Bangle" }], optionalServices: [NUS] });
       if (bgDev && bgDev !== dev) { try { bgDev.gatt.disconnect(); } catch (e) {} }
       bgDev = dev; if (bgListened !== dev) { bgListened = dev; dev.addEventListener("gattserverdisconnected", onBgLost); }
+      bgReconn = false; /* 2.9.9: laufendes Neuverbinden beenden */
       bgStatus("Verbinde …"); bgWanted = true; await bgAttach();
       addEntry({ typ: "Uhr", name: "Verbunden: " + (dev.name || "Bangle"), start: Date.now() });
       b.textContent = "Uhr neu verbinden"; $("bgstop").disabled = false;
@@ -3197,13 +3213,21 @@ async function buildSpar(D, stamp8) {
      je R-Zacke höchstens ein Schlag; ein bestätigter Schlag, dessen Abstand mehr als 120 ms vom Abstand zur vorigen gültigen R-Zacke abweicht, gilt nicht. */
   if (E && E.t && E.t.length && R.length) { const RA = Array.from(R, r => { const q = rsAmp(E.t, E.c[0], r); return q ? q[0] - q[1] : null; }), RV = [];
     for (let k = 0; k < R.length; k++) { const v = RA[k]; if (v === null) { RV.push(R[k]); continue; } const w = []; for (let m = Math.max(0, k - 15); m <= Math.min(R.length - 1, k + 15); m++) if (RA[m] !== null) w.push(RA[m]); w.sort((p, q) => p - q); const md = w[w.length >> 1]; if (v > 0 && v >= 0.35 * md && v <= 2.5 * md) RV.push(R[k]); }
-    let nR = 0, nD = 0, nA = 0, last = null;
+    let nR = 0, nD = 0, nA = 0, nF = 0, last = null;
+    /* 2.9.9: Bewegungsstörung, die wie ein Schlag aussieht (Treppe 27.11.2026, 18:25:07): R-Höhe über dem 1,7-Fachen des Medians der Umgebung
+       und Abstand zur vorigen R-Zacke unter 85 Prozent des Medians der Umgebung. Trifft auch einen hohen Extraschlag; er zählt dann nicht für Puls und Feinregelung. */
+    let RH = null; try { RH = Array.from(R, r => { const q = rsAmp(E.t, E.c[0], r); return q ? q[0] : null; }); } catch (e) { RH = null; }
+    const formBad = tt => { if (!RH) return false; const k = lowerBound(R, tt - 5); if (k < 1 || k >= R.length || Math.abs(R[k] - tt) > 5 || RH[k] === null) return false;
+      const w = [], iv = []; for (let m = Math.max(0, k - 15); m <= Math.min(R.length - 1, k + 15); m++) { if (m !== k && RH[m] !== null) w.push(RH[m]); if (m > 0 && m !== k && m - 1 !== k) { const dI = R[m] - R[m - 1]; if (dI > 250 && dI < 2500) iv.push(dI); } }
+      if (w.length < 6 || iv.length < 6) return false; w.sort((p, q) => p - q); iv.sort((p, q) => p - q);
+      return RH[k] > 1.7 * w[w.length >> 1] && R[k] - R[k - 1] < 0.85 * iv[iv.length >> 1]; };
     for (const b of B) { if (!b.ok) continue; const j = lowerBound(RV, b.tt - 5);
       if (j >= RV.length || Math.abs(RV[j] - b.tt) > 5) { b.ok = false; b.art = "R unplausibel"; nR++; continue; }
+      if (formBad(b.tt)) { b.ok = false; b.art = "hohe R-Zacke mit kurzem Abstand (Störung oder Extraschlag)"; nF++; continue; }
       if (last && Math.abs(b.tt - last.tt) < 150) { b.ok = false; b.dup = true; nD++; continue; }
       if (j > 0) { const dd = b.tt - RV[j - 1]; if (dd >= 300 && dd <= 2500 && Math.abs(dd - b.rr) > 120) { b.ok = false; b.art = "Abstand passt nicht zum EKG"; nA++; continue; } }
       last = b; }
-    if (nR + nD + nA) addEntry({ typ: "Daten", name: `Schläge nach dem EKG verworfen: ${nR} mit unplausibler R-Zacke, ${nD} doppelt, ${nA} mit falschem Abstand`, start: Date.now() }); }
+    if (nR + nD + nA + nF) addEntry({ typ: "Daten", name: `Schläge nach dem EKG verworfen: ${nR} mit unplausibler R-Zacke, ${nD} doppelt, ${nA} mit falschem Abstand, ${nF} mit hoher R-Zacke und kurzem Abstand`, start: Date.now() }); }
   for (let i = 0; i < B.length; i++) { const p = B[i - 1], b = B[i]; b.rre = p && p.ok && b.ok && b.tt - p.tt < 2500 ? Math.round((b.tt - p.tt) * 10) / 10 : null; }
   /* 1.9: lief zur Zeit des Schlags das EKG und ist er dort nicht bestätigt, zählt er nicht für Puls und Spannweite (z. B. Gurt ohne Hautkontakt) */
   if (E && E.t && E.t.length) for (const b of B) { const k = lowerBound(E.t, b.tt - 1500); b.ekgDa = k < E.t.length && E.t[k] < b.tt + 1500; b.drop = b.ekgDa && !b.ok; }
@@ -3923,7 +3947,7 @@ async function extras9(X) {
     atem: breaths.map(c => ({ t: rel(c.t), dauer: c.dauer, ein: c.ein, aus: c.aus, quelle: c.quelle, sicher: !!c.sicher })),
     schritte: steps.map(s => ({ t: rel(s.t), seite: s.side, sicher: !!s.sicher, groesse: stepClass(s), fuss_mg: s.spitze ?? null, dreh_dps: Number.isFinite(s.gyro) ? Math.round(s.gyro) : null })),
     klima: klima.map(k => ({ t: rel(k.t), quelle: k.q, c: Math.round(k.c * 100) / 100, h: k.h === null ? null : Math.round(k.h * 10) / 10, wbgt: k.w === null ? null : Math.round(k.w * 10) / 10, p: k.p === null ? null : Math.round(k.p * 10) / 10, hoehe_m: Number.isFinite(k.hm) ? Math.round(k.hm * 10) / 10 : null })),
-    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter", "Oxymeter", "Sense", "Kalibrierung", "Aufzeichnung", "Hinweis"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
+    protokoll: ev.filter(r => ["Stück", "Tätigkeit", "Marker", "Notiz", "Testabschnitt", "Abgleich", "Akku", "Einschlafen", "Atemhilfe", "Atemphase", "Gefühl", "Gewicht", "Trageort", "Trageort Ruuvi", "Trageort Sense", "PPG Stufe", "Uhr", "Mikrofon", "Testablauf", "Bildschirm", "Einstellen", "Störung", "Gurt", "Ansage", "Atemgurt", "Fehler", "Daten", "Schalter", "Oxymeter", "Sense", "Kalibrierung", "Aufzeichnung", "Hinweis", "Geräte", "Wecker", "Ruuvi"].includes(r.typ)).map(r => ({ t: rel(r.start), ende: r.end ? rel(r.end) : null, typ: r.typ, name: r.name })),
     taetigkeiten_auto: act.blocks.map(b => ({ start_ms: rel(b.a), ende_ms: rel(b.b), name: b.name, sicherheit: b.sicher, grund: b.grund })),
     akku: BA.map(b => ({ t: rel(b.t), geraet: b.d, wert: b.txt })),
     phasen: PH.map(p => ({ start_ms: rel(p.a), ende_ms: rel(p.b), art: p.art, puls: p.puls, schritte_min: p.schritte, atem_min: p.atem, tiefe_n: p.tiefe, tiefe_prozent: p.prozent })),
@@ -3999,6 +4023,8 @@ function vsZusatz(J, kern, belt, meta) {
   const bel = [];
   PR.forEach(p => {
     const e = Number.isFinite(p.ende) ? p.ende : p.t;
+    if (/gilt weiter\]\s*$/.test(p.name || "")) return; /* 2.9.9: übernommene Einträge sind kein Beleg */
+    if (p.typ === "Wecker") { bel.push({ a: p.t, b: p.t, art: "Wecker" }); return; }
     if (p.typ === "Marker" || p.typ === "Notiz" || p.typ === "Störung" || p.typ === "Gefühl" || p.typ === "Gewicht") bel.push({ a: p.t, b: e, art: p.typ === "Störung" ? "Störung" : p.typ });
     else if (p.typ === "Atemphase" || p.typ === "Atemhilfe") bel.push({ a: p.t, b: e, art: "Atemhilfe" });
     else if (p.typ === "Kalibrierung") bel.push({ a: p.t, b: e, art: "Kalibrierung" });
@@ -4083,21 +4109,34 @@ function vsZusatz(J, kern, belt, meta) {
   /* ---- 4 Paket.json ---- */
   const d0 = new Date(T0 + tBeg), vortag = new Date(d0.getTime() - (d0.getHours() < 12 ? 86400000 : 0)), ymdS = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
   const txt = PR.map(p => p.name || "").join("\n"), ger = [];
-  [[/Polar H10 [0-9A-Fa-f]+/, "Brustgurt"], [/Polar Sense [0-9A-Fa-f]+/, "Sense"], [/Bangle\.js [0-9A-Za-z]+/, "Markeruhr"], [/Markeruhr [0-9.]+/, "Programm der Markeruhr"], [/OxySmart [0-9A-Za-z]+/, "Oxymeter"], [/GDX-RB [0-9A-Za-z]+/, "Atemgurt"]].forEach(([re, was]) => { const m = txt.match(re); if (m) ger.push({ geraet: was, kennung: m[0] }); });
+  [[/Polar H10 [0-9A-Fa-f]+/, "Brustgurt"], [/Polar Sense [0-9A-Fa-f]+/, "Sense"], [/Bangle\.js [0-9A-Za-z]+/, "Markeruhr"], [/Markeruhr [0-9.]+/, "Programm der Markeruhr"], [/OxySmart [0-9A-Za-z]+/, "Oxymeter"], [/GDX-RB [0-9A-Za-z]+/, "Atemgurt"], [/Ruuvi [0-9A-Za-z]+/, "Ruuvi"]].forEach(([re, was]) => { const m = txt.match(re); if (m) ger.push({ geraet: was, kennung: m[0] }); });
   const kal = PR.filter(p => p.typ === "Kalibrierung").map(p => { const m = /100 % = ([0-9,]+) N/.exec(p.name || ""), g = /Grundspannung ([0-9,]+) N/.exec(p.name || ""), w = /\(([^)]*)\)/.exec(p.name || ""), u = /Bezugswert ([0-9,]+)/.exec(p.name || "");
     return { epoch_ms: Math.round(T0 + p.t), uhrzeit: tS(T0 + p.t), anlass: w ? w[1] : null, ausgeloest: /von Hand/.test(p.name || "") ? "Hand" : "Programm", bezug_100_prozent_N: m ? Number(m[1].replace(",", ".")) : u ? Number(u[1].replace(",", ".")) : null, grundspannung_N: g ? Number(g[1].replace(",", ".")) : null, eintrag: p.name }; });
   const P = meta.P || "", pk = {
     format: "Vitalspur-Paket", version: 1, programm: "Vitalspur", programm_version: meta.version, art: meta.kind || (meta.nacht ? "Nacht" : "Messung"), proband: meta.pid || null, vorsatz: P,
-    bezeichnung: meta.nacht ? ymdS(vortag) + "N" : ymdS(d0), hinweis_bezeichnung: "Eine Nacht trägt das Datum des Vortags mit N; beginnt die Aufnahme vor 12 Uhr, gilt der Tag davor.",
+    bezeichnung: meta.nacht ? ymdS(vortag) + "N" : ymdS(d0), hinweis_bezeichnung: "Tag, Session und Probe am Tag gehören zum Kalendertag ihres Beginns. Eine Nacht trägt ein N und gehört zu dem Tag, an dem ihr Fenster von 12:00 bis 11:59 Uhr des Folgetags beginnt (Beginn vor 12 Uhr: Vortag). Der Ordner folgt ab 2.9.9 derselben Regel.",
+    ablage_ordner: meta.kind === "Session" ? `${d0.getFullYear()}/Sessions` : `${ymdS(meta.nacht ? vortag : d0).slice(0, 4)}/${ymdS(meta.nacht ? vortag : d0).slice(5, 7)}/${ymdS(meta.nacht ? vortag : d0)}`,
+    gewicht_kg: Number.isFinite(Number(J.gewicht_kg)) && J.gewicht_kg !== null ? Number(J.gewicht_kg) : null, gewicht_eintrag: (PR.filter(p => p.typ === "Gewicht").pop() || {}).name || null,
+    trageort_sense: (PR.filter(p => p.typ === "Trageort Sense").pop() || {}).name || null, trageort_ruuvi: (PR.filter(p => p.typ === "Trageort Ruuvi").pop() || {}).name || null,
+    geraete_stand: PR.filter(p => p.typ === "Geräte").map(p => ({ uhrzeit: tS(T0 + p.t), stand: p.name })),
     beginn_epoch_ms: Math.round(T0 + tBeg), beginn: dS(T0 + tBeg) + " " + tS(T0 + tBeg), ende_epoch_ms: Math.round(T0 + tEnd), ende: dS(T0 + tEnd) + " " + tS(T0 + tEnd), dauer_min: Math.round((tEnd - tBeg) / 60000),
-    dieses_paket: P + (meta.kind || "Messung") + ".zip", schwesterpakete: { ekg: P + "EKG.zip", pulswelle: P + "Pulswelle.zip", hinweis: "liegen im Ordner RohEKG des Tagesordners, sofern EKG und Oxymeter aufgezeichnet wurden" },
+    dieses_paket: P + (meta.kind || "Messung") + ".zip", schwesterpakete: meta.kind === "Session"
+      ? { ekg: meta.phaseP ? meta.phaseP + "EKG.zip" : null, pulswelle: meta.phaseP ? meta.phaseP + "Pulswelle.zip" : null, ordner: meta.phaseOrdner || null,
+          hinweis: "Eine Session hat kein eigenes EKG-Paket. Roh-EKG und Pulswelle stehen im Paket der laufenden Phase (Tag oder Nacht); es wird beim nächsten Schalter in den Ordner RohEKG des genannten Tagesordners geschrieben. Die Pulswelle der Session liegt zusätzlich als Pulswelle.bin in diesem Paket." }
+      : { ekg: P + "EKG.zip", pulswelle: P + "Pulswelle.zip", hinweis: "liegen im Ordner RohEKG des Tagesordners, sofern EKG und Oxymeter aufgezeichnet wurden" },
     dateien: (meta.dateien || []).slice(), geraete: ger,
     uhr_brustgurt_h10_gang_ms_pro_h: J.abgleich && Number.isFinite(Number(J.abgleich.gurtuhr_gang_ms_pro_h)) && J.abgleich.gurtuhr_gang_ms_pro_h !== null ? Number(J.abgleich.gurtuhr_gang_ms_pro_h) : null,
     kalibrierung_atemgurt: kal, schlaege: st.length, schlaege_bestaetigt: so.reduce((s, v) => s + (v ? 1 : 0), 0), zuckungen: ZU.length, marker: marker.length,
     wachzeiten: wach.length, wach_minuten: wachMin,
-    regeln: { wachzeit: "Belege: Marker, Notiz, Störung, Gefühl, Gewicht, Atemhilfe, Kalibrierung, Schalter, Ansage zu Abgleich oder Kalibrierung; Musik in den ersten 30 Minuten ab Beginn. Belege mit höchstens 6 Minuten Abstand bilden eine Wachzeit, dazu je 1 Minute Rand. Stilles Wachliegen ohne Eintrag bleibt unerkannt.",
+    regeln: { wachzeit: "Belege: Marker, Notiz, Störung, Gefühl, Gewicht, Atemhilfe, Kalibrierung, Schalter, Wecker, Ansage zu Abgleich oder Kalibrierung (übernommene Einträge mit dem Zusatz gilt weiter zählen nicht); Musik in den ersten 30 Minuten ab Beginn. Belege mit höchstens 6 Minuten Abstand bilden eine Wachzeit, dazu je 1 Minute Rand. Stilles Wachliegen ohne Eintrag bleibt unerkannt.",
       minuten: "Eine Zeile je Minute. Puls, RMSSD und QNR nur aus im EKG bestätigten Schlägen; RMSSD aus aufeinanderfolgenden bestätigten Schlägen, beide Abstände zwischen dem 0,5- und dem 1,76-Fachen des Minutenmedians, mindestens 20 Paare; QNR = RMSSD mal 60000 durch das Quadrat des mittleren Abstands. Atem_Unruhe = mittlere Änderung der Atemdauer von Zug zu Zug durch die mittlere Atemdauer. Atemzuege_Brust_pro_min = stärkste Frequenz der Brustbewegung in 2 Minuten um die Minutenmitte, Atem_Brust_Deutlichkeit = Anteil dieser Frequenz an der Leistung von 0,07 bis 0,6 Hz. Brust_Bewegung_95_mg = 95-Prozent-Wert von md. Leere Felder = zu wenig Werte.",
-      taetigkeit: "Nachtruhe heißt: in der Nacht mindestens 60 Minuten ruhig gelegen. Gemessen ist Ruhe, kein Schlaf." } };
+      taetigkeit: "Nachtruhe heißt: in der Nacht mindestens 60 Minuten ruhig gelegen. Gemessen ist Ruhe, kein Schlaf." },
+    regeln_fassung: { hinweis: "Seit welcher Programmfassung die Rechnung einer Größe so gilt. Ältere Pakete sind mit der Fassung in programm_version gerechnet; Rohdaten bleiben erhalten, nachgerechnete Pakete bekommen eine eigene Fassung und überschreiben nichts.",
+      herzschlaege: "2.9.5 Kette Gurt gegen EKG; 2.7 unplausible R-Zacken; 2.9.9 zusätzlich: hohe R-Zacke (über dem 1,7-Fachen der Umgebung) mit kurzem Abstand (unter 85 Prozent) gilt nicht",
+      doppelabstand: "nicht eingebaut", pulsankunft: "2.9.7 Zeit der Pulswelle aus gezählten Werten, halbe Höhe des Anstiegs", uhr_brustgurt: "2.9.7 Gang bestimmt und abgezogen; 2.9.8 Gerade je Sitzung im EKG-Paket",
+      seitenlage: "2.9.9 linke und rechte Seite berichtigt; Pakete bis 2.9.8 tragen vertauschte Seiten, Rücken und Bauch stimmen", zuckung: "1.9.1 Serie ab 2 Zuckungen; 2.9.8 Brustbewegung, Abstände, Wachzeit je Zuckung",
+      wachzeit: "2.9.8; 2.9.9: übernommene Einträge (gilt weiter) zählen nicht als Beleg, der Wecker zählt als Beleg", kalibrierung_atemgurt: "2.9.8 beim Schalter immer neu, mit Auslöser",
+      trageort: "2.9.9 eine Einstellung für Tag und Nacht, feste Namen", gewicht: "2.9.9 die letzte Wägung gilt für alle Aufnahmen danach weiter, mit Zeitpunkt der Wägung", ablage: "2.9.9 Ordner und Bezeichnung aus derselben Regel" } };
   return { files: [{ name: "Paket.json", text: JSON.stringify(pk, null, 1) }, { name: "Wachzeiten.csv", text: WZ.join("\n") }, { name: "Minuten.csv", text: MI.join("\n") }], kern, info: `${MI.length - 1} Minuten, ${wach.length} Wachzeiten (${wachMin} min), ${marker.length} Marker` };
 }
 async function buildZip(opts) {
@@ -4110,6 +4149,9 @@ async function buildZip(opts) {
   const W = ALL.map((arr, i) => arr.filter(d => { const t = recTime(KINDS[i], d); return t >= A0 && t < B0; }));
   /* Trageorte gelten weiter: letzter Eintrag vor dem Fenster wird an den Anfang gelegt */
   if (Number.isFinite(A0)) ["Trageort", "Trageort Ruuvi", "Trageort Sense", "Proband"].forEach(typ => { const r = ALL[0].filter(x => x.typ === typ && x.start < A0).pop(); if (r && !W[0].some(x => x.typ === typ && x.start < A0 + 60000)) W[0].unshift(Object.assign({}, r, { start: A0 })); });
+  /* 2.9.9: Das Gewicht gilt weiter: die letzte Wägung vor dem Fenster (höchstens 7 Tage alt) steht am Anfang, wenn im Fenster selbst nicht gewogen wurde */
+  try { if (Number.isFinite(A0) && !W[0].some(x => x.typ === "Gewicht")) { const g = ALL[0].filter(x => x.typ === "Gewicht" && x.start < A0 && A0 - x.start < 7 * 86400000).pop();
+      if (g) W[0].unshift(Object.assign({}, g, { start: A0, name: `${String(g.name).replace(/ \[.*$/, "")} [gewogen am ${dstamp(new Date(g.start))} um ${stamp(new Date(g.start)).slice(0, 5)} Uhr, gilt weiter]` })); } } catch (e) {}
   /* 2.9.8: Kalibrierung des Atemgurts gehört zu beiden Seiten des Schalters: die letzte vor dem Fenster gilt weiter, die erste nach dem Ende ist der Abschlusswert */
   try { const KA = ALL[0].filter(x => x.typ === "Kalibrierung" && Number.isFinite(x.ref));
     if (Number.isFinite(A0)) { const r = KA.filter(x => x.start < A0 && A0 - x.start < 12 * 3600000).pop(); if (r) W[0].unshift(Object.assign({}, r, { start: A0, end: undefined, name: `${r.name} [vor Beginn dieser Aufnahme um ${stamp(new Date(r.tm || r.start)).slice(0, 8)} Uhr, gilt weiter]` })); }
@@ -4208,7 +4250,9 @@ async function buildZip(opts) {
   /* 2.9.8: Zusatzschicht (Paket.json, Wachzeiten.csv, Minuten.csv, Ergänzung der Kerndatei); ein Fehler hier lässt das Paket unberührt */
   try { if (sp && sp.json) { $("savestatus").textContent = "Schreibe die Zusatztabellen …"; await wait(20);
       if (!JoZ) JoZ = JSON.parse(sp.json);
-      const zz = vsZusatz(JoZ, kernObj, belt && belt.list ? belt.list : null, { P, version: VS_VERSION, kind: opts.kind || (nacht ? "Nacht" : "Messung"), nacht, pid, dateien: out.map(f => f.name).concat([P + "Paket.json", P + "Wachzeiten.csv", P + "Minuten.csv"]) });
+      const zz = vsZusatz(JoZ, kernObj, belt && belt.list ? belt.list : null, { P, version: VS_VERSION, kind: opts.kind || (nacht ? "Nacht" : "Messung"), nacht, pid,
+        phaseP: (typeof VS !== "undefined" && VS && VS.phaseStart) ? `${pid || "ohneID"}_${st12(VS.phaseStart)}_` : null,
+        phaseOrdner: (typeof VS !== "undefined" && VS && VS.phaseStart) ? vsDayParts(vsTagOf(VS.phase === "Nacht", VS.phaseStart)).join("/") + "/RohEKG" : null, dateien: out.map(f => f.name).concat([P + "Paket.json", P + "Wachzeiten.csv", P + "Minuten.csv"]) });
       zz.files.forEach(f => out.push({ name: P + f.name, data: enc.encode((/\.csv$/.test(f.name) ? "\ufeff" : "") + f.text) }));
       if (kern && zz.kern) kern.data = enc.encode(JSON.stringify(zz.kern));
       addEntry({ typ: "Daten", name: "Zusatztabellen: " + zz.info, start: Date.now() }); } }
@@ -4416,7 +4460,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.8";
+const VS_VERSION = "2.9.9";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4526,9 +4570,14 @@ function oxData(ev) {
 async function oxAttach() { const sv = await oxDev.gatt.connect(), s = await sv.getPrimaryService(OX_SVC), c = await s.getCharacteristic(OX_RX);
   c.removeEventListener("characteristicvaluechanged", oxData); c.addEventListener("characteristicvaluechanged", oxData); await c.startNotifications(); }
 async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; addEntry({ typ: "Oxymeter", name: "Verbindung verloren (Finger heraus oder Gerät aus?)", start: Date.now() });
-  for (let i = 0; i < 20 && oxWanted; i++) { try { await wait(2000); await withTO(oxAttach(), 20000, "Oxymeter"); addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); oxReconn = false; return; }
-    catch (e) { if (i === 0 || i === 19) addEntry({ typ: i ? "Fehler" : "Oxymeter", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}` + (i ? "" : " (ohne Finger schaltet es sich ab, versuche weiter)"), start: Date.now() }); } }
-  oxReconn = false; oxStatus("Neu verbinden fehlgeschlagen. Bitte „Pulsoxymeter verbinden“ tippen."); }
+  /* 2.9.9: Am 27.11.2026 fielen 2 s nach dem ersten Neuversuch Sense und H10 aus. Darum erster Versuch nach 30 s, danach alle 60 s, ab dem fünften Fehlschlag länger (bis 5 min),
+     und nie, während ein anderes Gerät gerade neu verbunden wird. Kein Ende nach 20 Versuchen mehr: ohne Finger schaltet sich das Gerät ab und meldet sich später wieder. */
+  for (let i = 0; oxWanted; i++) { const pz = i === 0 ? 30000 : Math.min(300000, 60000 * (1 + Math.floor(i / 5))), t9 = Date.now(); while (oxWanted && Date.now() - t9 < pz) await wait(1000); if (!oxWanted) break;
+    if (vsBtBusy("ox")) { i--; await wait(5000); continue; }
+    try { await withTO(oxAttach(), 20000, "Oxymeter"); addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); oxReconn = false; return; }
+    catch (e) { try { oxDev.gatt.disconnect(); } catch (x) {} if (i === 0 || i % 10 === 9) addEntry({ typ: i ? "Fehler" : "Oxymeter", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}, versuche weiter` + (i ? "" : " (ohne Finger schaltet es sich ab)"), start: Date.now() });
+      oxStatus(`Nicht verbunden seit ${i + 1} Versuchen, versuche weiter. „Pulsoxymeter verbinden“ verbindet sofort.`); } }
+  oxReconn = false; }
 async function oxConnect() {
   if (!navigator.bluetooth) { oxStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
   try { const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "PC-60" }, { namePrefix: "PC60" }, { namePrefix: "OxySmart" }] /* 2.9.6: nur nach Namen, sonst bot das Fenster auch die Bangle an */, optionalServices: [OX_SVC, "battery_service"] });
@@ -4710,9 +4759,9 @@ function lageOf(x, y, z) {
   if (z > 700) return "Rücken";
   if (z < -700) return "Bauch";
   const yy = SIDE.flip ? -y : y;
-  /* y zeigt zur linken Körperseite: y plus heißt linke Seite oben, man liegt rechts */
-  if (yy > 600) return "rechte Seite";
-  if (yy < -600) return "linke Seite";
+  /* 2.9.9: Namen getauscht. Lageprobe vom 27.11.2026 (04:16 bis 04:19): y unter -400 mg war die rechte Seite. Pakete bis 2.9.8 tragen vertauschte Seiten. */
+  if (yy > 600) return "linke Seite";
+  if (yy < -600) return "rechte Seite";
   return "dazwischen";
 }
 /* Richtung der Brustachsen: (a) Gurt verkehrt herum, wenn aufrecht x positiv ist; (b) beim Gehen ruckt die Brust beim Aufsetzen des rechten Fußes nach links */
@@ -5189,6 +5238,9 @@ function ymd(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 function st12(ms) { const d = new Date(ms); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`; }
 function hhmm(ms) { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function vsInit() { if (!VS) vsLoad(); if (VS) return; const now = Date.now(); VS = { day: ymd(new Date(now)), dayStart: now, phase: "Tag", phaseStart: now, lastKey: 0, ses: null, dayVals: null, offs: {} }; vsSave(); vsShow(); }
+/* 2.9.9: eine Regel für Ordner und Bezeichnung (Michael, 27.11.2026): Tag, Session, Probe gehören zum Kalendertag ihres Beginns;
+   eine Nacht gehört zu dem Tag, an dem ihr Fenster von 12:00 bis 11:59 Uhr des Folgetags beginnt (Beginn minus 12 Stunden). */
+function vsTagOf(night, ms) { return ymd(new Date(night ? ms - 43200000 : ms)); }
 function vsDayParts(day) { const d = day || VS.day, [y, m] = d.split("-"); return [y, m, d]; }
 function vsClean(s) { return String(s).replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/Ä/g, "Ae").replace(/Ö/g, "Oe").replace(/Ü/g, "Ue").replace(/ß/g, "ss").replace(/[^A-Za-z0-9]+/g, ""); }
 function pidVal() { return ($("pid").value || "").trim().replace(/[^A-Za-z0-9_-]/g, ""); }
@@ -5538,6 +5590,8 @@ async function vsFlush(why) {
     const h = await vsRoot(false);
     if (!h) { vsLastMsg = "Speicherordner nicht freigegeben, Daten bleiben im Gerätespeicher (Knopf „Ordner freigeben“ oben)"; vsDirOk = false; dirWarnShow(); dirSay(); return; }
     if (vsDirOk !== true) { vsDirOk = true; dirWarnShow(); }
+    /* 2.9.9: läuft ein Tag über Mitternacht, beginnt um 0 Uhr ein neuer Tagesordner für die laufenden Tabellen */
+    try { if (VS.phase === "Tag" && !vsSw && ymd(new Date()) !== VS.day) { const d0 = new Date(); d0.setHours(0, 0, 0, 0); const alt = VS.day; VS.day = ymd(d0); VS.dayStart = d0.getTime(); vsSave(); addEntry({ typ: "Daten", name: `Mitternacht am Tag: neuer Tagesordner ${VS.day} (vorher ${alt})`, start: Date.now() }); } } catch (e) {}
     const pid = pidVal() || "ohneID", pre = `${pid}_${st12(VS.dayStart)}_`, big = $("bigdata").checked;
     let total = 0;
     for (let round = 0; round < 50; round++) {
@@ -5618,6 +5672,7 @@ async function vsVersuche(h) {
 /* ---------- Bericht beim Umlegen des Schalters ---------- */
 async function vsReport(a, b, night, dayParts, dayStart) { const t = Date.now(); try { return await vsReport0(a, b, night, dayParts, dayStart); } finally { diagT((night ? "Nachtbericht " : "Tagesbericht ") + Math.round((b - a) / 60000) + " min", Date.now() - t); } }
 async function vsReport0(a, b, night, dayParts, dayStart) {
+  try { dayParts = vsDayParts(vsTagOf(night, a)); } catch (e) {} /* 2.9.9: Ordner aus derselben Regel wie die Bezeichnung im Paket */
   const pid = pidVal() || "ohneID", P = `${pid}_${st12(a)}_`, kind = night ? "Nacht" : "Tag";
   if (b - a < 60000) return false;
   const z = await buildZip({ a, b, nacht: night, kind, prefix: P, noRaw: true });
@@ -5895,9 +5950,10 @@ async function vsSwitch() {
       while (syncGate.open && Date.now() - t9 < 130000) { $("savestatus").textContent = `Zum Abschluss der Nacht fünfmal gleichmäßig klopfen … (${Math.round((Date.now() - t9) / 1000)} s)`; await wait(500); } }
     const now = Date.now();
     await vsFlush("Schalter");
-    if (wasNight) { VS.day = ymd(new Date(now)); VS.dayStart = now; VS.phase = "Tag"; } else VS.phase = "Nacht";
+    if (wasNight) { VS.day = ymd(new Date(now)); VS.dayStart = now; VS.phase = "Tag"; }
+    else { VS.phase = "Nacht"; const nd = vsTagOf(true, now); if (nd !== VS.day) { addEntry({ typ: "Daten", name: `Nacht gehört zum ${nd} (Beginn vor 12 Uhr): Ordner ${nd} statt ${VS.day}`, start: now }); VS.day = nd; VS.dayStart = now; } }
     VS.phaseStart = now; VS.pend = { a: from, b: now, night: wasNight, dayParts, dayStart }; vsSave(); vsApplyPhase(!wasNight);
-    addEntry({ typ: "Schalter", name: wasNight ? "Tag (aufgestanden)" : "Nacht (hingelegt)", start: now + 1 }); flush();
+    addEntry({ typ: "Schalter", name: wasNight ? "Tag (aufgestanden)" : "Nacht (hingelegt)", start: now + 1 }); try { addEntry({ typ: "Geräte", name: geraeteStand(), start: now + 2 }); } catch (e) {} flush();
     vsShow();
     await vsSenseRestart();
     if (hrWanted || vWanted) syncOpen(wasNight ? "Schalter auf Tag" : "Schalter auf Nacht", true);
@@ -5959,8 +6015,8 @@ function vsStart() {
   });
   $("vsord").addEventListener("click", async () => { let h = await vsRoot(true); if (!h) { h = await ordReady(true); if (h) { vsDir = h; vsDirName = h.name; } } vsShow(); vsDirCheck(); if (h) { vsFlush("Ordner"); vsMusikDone = false; vsMusikLaden(); if (vsCatchWait) setTimeout(vsCatchUp, 2000); } });
   /* Nacht */
-  try { const o = localStorage.getItem("nacht_ort"); if (o) $("nort").value = o; } catch (e) {}
-  $("nort").addEventListener("change", () => { try { localStorage.setItem("nacht_ort", $("nort").value); } catch (e) {} addEntry({ typ: "Trageort", name: $("nort").value, start: Date.now() }); flush(); });
+  try { $("nort").value = $("vplace").value; } catch (e) {}
+  $("nort").addEventListener("change", () => vOrtSet($("nort").value, true));
   document.querySelectorAll(".nnote").forEach(b => b.addEventListener("click", () => { addEntry({ typ: "Gefühl", name: b.dataset.n, start: Date.now() }); flush(); $("nnotestatus").textContent = `Eingetragen: ${b.dataset.n} (${stamp(new Date()).slice(0, 5)} Uhr)`; }));
   $("nmfiles").addEventListener("change", () => { for (const f of $("nmfiles").files) if (!nm.files.some(g => g.name === f.name && g.size === f.size)) nm.files.push(f); $("nmfiles").value = ""; nmList(); });
   $("nmclear").addEventListener("click", () => { nmStop(); nm.files = []; nmList(); });
@@ -5996,27 +6052,37 @@ function rbValue(f) {
 let rbBle = null, rbLostWanted = false;
 async function rbPrep(ble) { const sv = await withTO(ble.gatt.connect(), 15000, "Atemgurt"), svc = await sv.getPrimaryService("d91714ef-28b9-4f91-ba16-f0d9a604f112"),
   ch = await svc.getCharacteristic("b41e6675-a329-40e0-aa01-44d2f444babe"); await ch.startNotifications(); await wait(800); }
-async function rbConnect(bleGiven) {
+/* 2.9.9 (Punkt 56): Das Antippen steht jetzt mit Ergebnis im Protokoll, damit sich klären lässt, warum die Auswahl manchmal erst nach mehreren Versuchen kam.
+   Läuft schon ein Verbindungsaufbau, wird das gesagt statt still einen zweiten zu beginnen. Ein in dieser Sitzung schon gewählter Gurt wird ohne Auswahlfenster
+   wieder verbunden; scheitert das, zeigt das nächste Antippen wieder die Auswahl. */
+let rbBusy = false, rbBusyT = 0, rbReuseBad = false;
+async function rbConnect(bleGiven, tries) {
+  if (rbBusy && Date.now() - rbBusyT < 300000) { if (!bleGiven) { rbStatus("Verbindung zum Atemgurt läuft schon, bitte warten …"); addEntry({ typ: "Atemgurt", name: "Verbinden getippt, während ein Verbindungsaufbau läuft", start: Date.now() }); } return; }
+  rbBusy = true; rbBusyT = Date.now(); const nTry = tries || 10; let reuse = false;
   try {
     rbStatus("Gurt wählen …");
     /* 2.9.4: Auswahl sofort beim Antippen, erst danach die Bibliothek */
-    const ble = bleGiven || await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] });
+    let ble = bleGiven || null;
+    if (!ble && rbBle && !rbReuseBad && !rbDev) { ble = rbBle; reuse = true; addEntry({ typ: "Atemgurt", name: "Verbinden getippt: bekannter Gurt " + (rbBle.name || "") + " ohne Auswahl", start: Date.now() }); }
+    if (!ble) { addEntry({ typ: "Atemgurt", name: "Verbinden getippt: Auswahl angefordert", start: Date.now() });
+      try { ble = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "GDX" }], optionalServices: ["d91714ef-28b9-4f91-ba16-f0d9a604f112"] }); addEntry({ typ: "Atemgurt", name: "Auswahl: " + (ble.name || "Gerät ohne Namen"), start: Date.now() }); rbReuseBad = false; }
+      catch (e) { addEntry({ typ: e && e.name === "NotFoundError" ? "Atemgurt" : "Fehler", name: `Atemgurt: Auswahl nicht erschienen oder abgebrochen (${(e && e.name) || "?"}: ${(e && e.message) || e})`, start: Date.now() }); throw e; } }
     rbStatus("Lade Vernier-Bibliothek …");
     const gd = await rbLoadLib();
     rbBle = ble; rbLostWanted = true;
     if ((hrWanted || vWanted) && !bleGiven) addEntry({ typ: "Hinweis", name: "Atemgurt nach H10 oder Sense verbunden; klappt es nicht, den Atemgurt zuerst verbinden", start: Date.now() });
     let d = null, lastErr = null;
-    for (let i = 1; i <= 10 && !d; i++) { rbStatus(`Verbinde, Versuch ${i} von 10 …`);
+    for (let i = 1; i <= nTry && !d; i++) { rbStatus(`Verbinde, Versuch ${i} von ${nTry} …`);
       /* 2.9.4: Die Vernier-Bibliothek schaltet den Antwortkanal ein, wartet aber nicht darauf und schickt sofort den ersten Befehl (1a).
          Auf Android ist der Kanal dann oft noch nicht bereit und die Antwort geht verloren. Darum vorher selbst verbinden, Antwortkanal einschalten, kurz warten. */
       try { await rbPrep(ble); } catch (e) { addEntry({ typ: "Atemgurt", name: `Vorbereitung Versuch ${i}: ${(e && e.message) || e}`, start: Date.now() }); }
-      try { d = await gd.createDevice(ble, { open: true }); addEntry({ typ: "Atemgurt", name: `Verbunden im Versuch ${i} von 10`, start: Date.now() }); }
-      catch (e) { lastErr = e; const em = (e && e.message) || String(e); addEntry({ typ: "Fehler", name: `Atemgurt: Verbindungsversuch ${i} von 10 fehlgeschlagen: ${em}`, start: Date.now() });
+      try { d = await gd.createDevice(ble, { open: true }); addEntry({ typ: "Atemgurt", name: `Verbunden im Versuch ${i} von ${nTry}`, start: Date.now() }); }
+      catch (e) { lastErr = e; const em = (e && e.message) || String(e); addEntry({ typ: "Fehler", name: `Atemgurt: Verbindungsversuch ${i} von ${nTry} fehlgeschlagen: ${em}`, start: Date.now() });
         try { if (ble.gatt && ble.gatt.connected) ble.gatt.disconnect(); } catch (x) {}
         const pz = Math.max(3000, Math.min(8000, 2000 * 2 ** Math.min(2, i - 1))) + (/characteristics not found/i.test(em) ? 3000 : 0); /* 2.9.4: mindestens 3 s, damit Android die Verbindung abräumt */
         rbStatus(`Versuch ${i} gescheitert, warte ${Math.round(pz / 1000)} s` + ((hrWanted || vWanted) ? ". Tipp: Atemgurt zuerst verbinden, dann H10 und Sense." : ""));
         await new Promise(r => setTimeout(r, pz)); } }
-    if (!d) throw new Error("nach 10 Versuchen keine Verbindung. Bitte den Gurt aus- und wieder einschalten. (" + ((lastErr && lastErr.message) || lastErr) + ")");
+    if (!d) { if (reuse) rbReuseBad = true; throw new Error("nach " + nTry + " Versuchen keine Verbindung. Bitte den Gurt aus- und wieder einschalten" + (reuse ? "; das nächste Antippen zeigt wieder die Auswahl" : "") + ". (" + ((lastErr && lastErr.message) || lastErr) + ")"); }
     rbDev = d; rbWanted = true; rbOn = true; rbRec = idstamp(new Date()); rbN = 0; rbT0 = Date.now(); setTimeout(() => { try { rbBatt(); } catch (e) {} }, 5000);
     let sens = (d.sensors || []).filter(s => s.enabled);
     let force = (d.sensors || []).find(s => /kraft|force/i.test(s.name || "") || (s.unit || "").trim() === "N");
@@ -6025,10 +6091,25 @@ async function rbConnect(bleGiven) {
     if (!force) throw new Error("kein Kraftkanal gefunden");
     force.on("value-changed", s => rbValue(+s.value));
     d.on("device-closed", () => { rbFlushBuf(); addEntry({ typ: "Atemgurt", name: `Getrennt nach ${rbN} Werten`, start: Date.now(), session: rbRec }); flush();
-      if (rbWanted) { rbStatus("Atemgurt getrennt. Bitte neu verbinden."); say("Atemgurt getrennt"); rbLostWanted = true; addEntry({ typ: "Ansage", name: "Atemgurt getrennt (Ansage)", start: Date.now() }); } rbDev = null; rbShow(); });
+      /* 2.9.9 (Punkt 51): nach dem Trennen selbst neu verbinden; die Ansage kommt erst, wenn das zweimal nicht gelingt */
+      if (rbWanted) { rbStatus("Atemgurt getrennt, verbinde neu …"); rbLostWanted = true; } rbDev = null; rbShow(); if (rbWanted) setTimeout(() => rbAuto("getrennt"), 0); });
     addEntry({ typ: "Atemgurt", name: `Verbunden: ${d.name || "GDX-RB"}, Kanal ${force.name} (${force.unit || "N"})`, start: Date.now(), session: rbRec }); flush();
     rbShow(); rbVerbunden();
   } catch (e) { rbStatus("Atemgurt nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Atemgurt: " + (e.message || e), start: Date.now() }); }
+  finally { rbBusy = false; }
+}
+/* 2.9.9: selbst neu verbinden, Pause wächst von 5 s auf 5 min, nie gleichzeitig mit einem anderen Verbindungsaufbau */
+let rbAutoOn = false;
+async function rbAuto(why) {
+  if (rbAutoOn || !rbBle) return; rbAutoOn = true;
+  try { for (let i = 0; rbLostWanted && rbWanted && !rbDev; i++) {
+      const pz = i === 0 ? 5000 : Math.min(300000, 20000 * 2 ** Math.min(4, i - 1)), t9 = Date.now(); while (rbLostWanted && !rbDev && Date.now() - t9 < pz) await wait(1000);
+      if (!rbLostWanted || !rbWanted || rbDev) break;
+      if (vsBtBusy("rb")) { i--; await wait(5000); continue; }
+      if (i === 0 || i % 5 === 4) addEntry({ typ: "Atemgurt", name: `Neu verbinden (${why}), Durchgang ${i + 1}`, start: Date.now() });
+      await rbConnect(rbBle, 2);
+      if (!rbDev && i === 1) { say("Atemgurt getrennt"); addEntry({ typ: "Ansage", name: "Atemgurt getrennt (Ansage nach zwei erfolglosen Durchgängen)", start: Date.now() }); } } }
+  finally { rbAutoOn = false; }
 }
 function rbStop() {
   rbWanted = false; rbLostWanted = false; rbFlushBuf();
@@ -6213,7 +6294,7 @@ async function vsSesToggle() {
   if (!VS.ses) {
     sesEndHide();
     const name = vsActSel; if (!name) return; const t = Date.now(); VS.ses = { name, start: t }; vsSave();
-    addEntry({ typ: "Session", name: "Beginn: " + name, start: t }); addEntry({ typ: "Tätigkeit", name, start: t }); flush();
+    addEntry({ typ: "Session", name: "Beginn: " + name, start: t }); addEntry({ typ: "Tätigkeit", name, start: t }); try { addEntry({ typ: "Geräte", name: geraeteStand(), start: t + 1 }); } catch (e) {} flush();
     const wasOff = !anyActive(); if (wasOff) { addEntry({ typ: "Hinweis", name: "Session startet die Aufzeichnung mit", start: t }); try { await startAll(); } catch (e) {} } else { if (hrWanted && vWanted) syncOpen("Session-Beginn", true); calOrReuse("Session-Beginn"); }
     document.querySelectorAll(".act").forEach(x => x.classList.toggle("on", x.dataset.a === name)); vsShowSes(); recbarShow(); return;
   }
@@ -6717,6 +6798,108 @@ function v131Start() {
   try { if (localStorage.getItem("vs_lvspan")) lv.spanSet = true; } catch (e) {}
   lvLabReset(); rbHinweis();
 }
+
+/* ================= Vitalspur 2.9.9: Wächter, Geräte-Stand, Wecker ================= */
+/* Läuft gerade ein Verbindungsaufbau eines anderen Geräts? (Punkt 52: nie zwei zugleich) */
+function vsBtBusy(self) { try { return (self !== "hr" && reconnecting) || (self !== "v" && vReconn) || (self !== "rb" && rbBusy); } catch (e) { return false; } }
+/* Stillstand der Zeitgeber erkennen: war die Seite eingefroren, kommen nach dem Aufwachen erst die gestauten Daten. Dann 30 s nichts unternehmen. */
+const vsWd = { tick: Date.now(), holdUntil: 0 };
+setInterval(() => { const now = Date.now(); if (now - vsWd.tick > 12000) vsWd.holdUntil = now + 30000; vsWd.tick = now; }, 2000);
+function vsWdOk() { return Date.now() > vsWd.holdUntil; }
+
+/* Punkt 50: H10 liefert nichts mehr, ohne dass die Verbindung als verloren gemeldet wird (27.11.2026, 10:49:58): nach 20 s frisch verbinden. Pause zwischen zwei Eingriffen wächst von 1 auf 15 min. */
+const hrWd = { last: 0, n: 0, max: 40 };
+setInterval(() => { try {
+  if (!hrWanted || reconnecting || !hrDev || !vsWdOk()) return; const now = Date.now(), last = Math.max(lastArr || 0, pmdLast || 0);
+  if (last && now - last < 20000) { hrWd.n = 0; hrWd.max = 40; return; } if (!last) return;
+  if (now - hrWd.last < Math.min(900000, 60000 * 2 ** Math.min(4, hrWd.n))) return; hrWd.last = now; hrWd.n++; hrWd.max = hrWd.n > 1 ? 4 : 40;
+  addEntry({ typ: "Fehler", name: `H10: keine Daten seit ${Math.round((now - last) / 1000)} s, verbinde frisch (Eingriff ${hrWd.n})`, start: now, session: hrRec });
+  try { hrDev.gatt.disconnect(); } catch (e) {} setTimeout(() => { try { if (hrWanted && !reconnecting) onGattLost(); } catch (e) {} }, 1500);
+} catch (e) {} }, 5000);
+
+/* Punkt 44: Atemgurt liefert keine Werte mehr, ohne sich zu trennen (26.11.2026, 19:49): nach 20 s schließen und neu verbinden */
+const rbWd = { last: 0 };
+setInterval(() => { try {
+  if (!rbDev || !rbWanted || rbBusy || !vsWdOk()) return; const now = Date.now(); if (!rbLastT || now - rbLastT < 20000 || now - rbWd.last < 60000) return; rbWd.last = now;
+  addEntry({ typ: "Fehler", name: `Atemgurt: keine Werte seit ${Math.round((now - rbLastT) / 1000)} s, verbinde neu`, start: now, session: rbRec });
+  const d = rbDev; rbLostWanted = true; try { d.close(); } catch (e) {}
+  setTimeout(() => { try { if (rbDev === d) { rbDev = null; rbShow(); } if (rbWanted && !rbDev) rbAuto("keine Werte"); } catch (e) {} }, 3000);
+} catch (e) {} }, 5000);
+
+/* Punkt 57: Ruuvi verbunden, aber ohne Pakete: nach 60 s eine Zeile im Protokoll und neu verbinden (keine Ansage) */
+const ruWd = { since: 0, last: 0, n: 0 };
+setInterval(() => { try {
+  if (!ruWanted) { ruWd.since = 0; return; } const now = Date.now(); if (!ruWd.since) ruWd.since = now; if (ruReconn || !vsWdOk()) return;
+  const last = Math.max(ruLast || 0, ruWd.since); if (now - last < 60000) { if (ruLast && now - ruLast < 60000) ruWd.n = 0; return; }
+  if (now - ruWd.last < Math.min(900000, 120000 * 2 ** Math.min(3, ruWd.n))) return; ruWd.last = now; ruWd.n++;
+  addEntry({ typ: "Ruuvi", name: `Keine Pakete seit ${Math.round((now - last) / 1000)} s, verbinde neu (Eingriff ${ruWd.n})`, start: now }); ruStatus("Ruuvi: keine Pakete, verbinde neu …");
+  try { ruDev.gatt.disconnect(); } catch (e) {} setTimeout(() => { try { if (ruWanted && !ruReconn) onRuLost(); } catch (e) {} }, 1500);
+} catch (e) {} }, 10000);
+
+/* Punkte 46 und 57: Stand aller Geräte als Zeile im Protokoll (bei Session-Beginn und beim Schalter). So steht im Paket, was verbunden war und ob Daten kamen. */
+function geraeteStand() {
+  const now = Date.now(), f = (was, wanted, dev, last) => `${was}: ` + (!wanted ? "nicht verbunden" : `${(dev && dev.name) || "ohne Namen"}, ` + (last && now - last < 15000 ? "Daten kommen" : last ? `keine Daten seit ${Math.round((now - last) / 1000)} s` : "noch keine Daten"));
+  const L = [];
+  try { L.push(f("Brustgurt", hrWanted, hrDev, Math.max(lastArr || 0, pmdLast || 0))); } catch (e) {}
+  try { L.push(f("Sense", vWanted, vDev, vLast) + (vWanted ? ", Trageort " + vOrt : "")); } catch (e) {}
+  try { L.push(f("Atemgurt", rbWanted && !!rbDev, rbBle || rbDev, rbLastT)); } catch (e) {}
+  try { L.push(f("Oxymeter", oxWanted, oxDev, oxLastT)); } catch (e) {}
+  try { L.push(f("Markeruhr", bgWanted, bgDev, bgWanted && bgHi && !bgReconn ? now : 0)); } catch (e) {}
+  try { L.push(f("Ruuvi", ruWanted, ruDev, ruLast) + (ruWanted ? ", Trageort " + ($("ruort")?.value || "Raum") : "")); } catch (e) {}
+  return L.join("; ");
+}
+
+/* Punkt 54: Wecker, einfache Fassung (Michael, 27.11.2026). Einstellung: Weckzeit und an/aus. Schriller Ton in festem Takt, bis ein Marker kommt (Uhr oder Bildschirm);
+   dann 5 Minuten Ruhe und wieder Ton. Knopf „Wecker aus“ beendet ihn für heute. Jede Zeile steht mit ihrer Zeit im Protokoll (Sorte „Wecker“). */
+function wkWav() {
+  const rate = 16000, sec = 1.2, n = Math.round(rate * sec), buf = new ArrayBuffer(44 + 2 * n), v = new DataView(buf);
+  const w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + 2 * n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, 2 * n, true);
+  /* vier Töne von 0,12 s mit 0,08 s Pause, dann 0,4 s Stille; 3100 Hz mit Oberwelle, dort ist das Ohr am empfindlichsten */
+  for (let i = 0; i < n; i++) { const t = i / rate, k = Math.floor(t / 0.2), on = k < 4 && t - k * 0.2 < 0.12;
+    const x = on ? 0.62 * Math.sin(2 * Math.PI * 3100 * t) + 0.33 * Math.sign(Math.sin(2 * Math.PI * 3100 * t)) : 0; v.setInt16(44 + 2 * i, Math.round(32000 * Math.max(-1, Math.min(1, x))), true); }
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+const wk = { audio: null, active: false, ringing: false, since: 0, snoozeUntil: 0, fired: "", n: 0 };
+function wkArmed() { try { return !!($("wkon") && $("wkon").checked && $("wkzeit").value) || wk.active; } catch (e) { return false; } }
+function wkShow() { const el = $("wkstat"), b = $("wkaus"); if (b) b.style.display = wk.active ? "block" : "none"; if (b && wk.active) b.textContent = wk.ringing ? "Wecker aus" : "Wecker aus (ruht bis " + hhmm(wk.snoozeUntil) + ")";
+  if (el) el.textContent = wk.active ? (wk.ringing ? `klingelt seit ${hhmm(wk.since)} Uhr` : `ruht bis ${hhmm(wk.snoozeUntil)} Uhr`) : ($("wkon").checked && $("wkzeit").value ? `gestellt auf ${$("wkzeit").value} Uhr` : "aus"); }
+function wkRing(text) {
+  wk.ringing = true; wk.since = Date.now(); wk.n++;
+  if (!wk.audio) { wk.audio = new Audio(wkWav()); wk.audio.loop = true; }
+  const t0 = Date.now(); addEntry({ typ: "Wecker", name: text + " (Ton angefordert)", start: t0 });
+  try { wk.audio.currentTime = 0; wk.audio.volume = 1; const p = wk.audio.play();
+    if (p && p.then) p.then(() => addEntry({ typ: "Wecker", name: `Ton läuft, ${Date.now() - t0} ms nach der Anforderung`, start: Date.now() }), e => { addEntry({ typ: "Fehler", name: "Wecker: Ton nicht gestartet: " + ((e && e.message) || e), start: Date.now() }); try { say("Wecker"); } catch (x) {} }); }
+  catch (e) { addEntry({ typ: "Fehler", name: "Wecker: " + ((e && e.message) || e), start: Date.now() }); }
+  try { navigator.vibrate && navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) {}
+  wkShow(); flush();
+}
+function wkQuiet() { wk.ringing = false; try { if (wk.audio) wk.audio.pause(); } catch (e) {} }
+function wkMarker(r) { if (!wk.active || !wk.ringing) return; if (Number.isFinite(r.start) && r.start < wk.since - 1500) return; /* nachgelieferte alte Marker zählen nicht */
+  wkQuiet(); wk.snoozeUntil = Date.now() + 300000;
+  setTimeout(() => { addEntry({ typ: "Wecker", name: `Wecker still (Marker: ${String(r.name || "").slice(0, 60)}), wieder um ${hhmm(wk.snoozeUntil)} Uhr`, start: Date.now() }); wkShow(); flush(); }, 0); }
+function wkOff() { const was = wk.active; wkQuiet(); wk.active = false; if (was) addEntry({ typ: "Wecker", name: "Wecker aus (Knopf)", start: Date.now() }); wkShow(); flush(); }
+function wkTick() { try {
+  const now = Date.now();
+  if (wk.active) { if (!wk.ringing && now >= wk.snoozeUntil) wkRing("Wecker wieder an"); else if (wk.ringing && wk.audio && wk.audio.paused) { try { wk.audio.play().catch(() => {}); } catch (e) {} } return; }
+  if (!$("wkon").checked || !$("wkzeit").value) return; const m = /^(\d{1,2}):(\d{2})/.exec($("wkzeit").value); if (!m) return;
+  const d = new Date(now); d.setHours(+m[1], +m[2], 0, 0); const key = ymd(d) + " " + $("wkzeit").value, late = now - d.getTime();
+  if (late >= 0 && late < 1800000 && wk.fired !== key) { wk.fired = key; try { localStorage.setItem("vs_wecker_fired", key); } catch (e) {} wk.active = true; wkRing(late > 5000 ? `Wecker an (${Math.round(late / 1000)} s verspätet)` : "Wecker an"); }
+} catch (e) {} }
+(function wkBind() { try {
+  const z = $("wkzeit"), o = $("wkon"); if (!z || !o) return;
+  try { const j = JSON.parse(localStorage.getItem("vs_wecker") || "null"); if (j) { z.value = j.zeit || ""; o.checked = !!j.an; } wk.fired = localStorage.getItem("vs_wecker_fired") || ""; } catch (e) {}
+  const save = () => { try { localStorage.setItem("vs_wecker", JSON.stringify({ zeit: z.value, an: o.checked })); } catch (e) {}
+    /* eine Weckzeit, die heute schon vorbei ist, gilt erst morgen */
+    try { const m = /^(\d{1,2}):(\d{2})/.exec(z.value); if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); if (Date.now() > d.getTime() + 5000) { wk.fired = ymd(d) + " " + z.value; localStorage.setItem("vs_wecker_fired", wk.fired); } } } catch (e) {}
+    addEntry({ typ: "Wecker", name: o.checked && z.value ? "Gestellt auf " + z.value + " Uhr" : "Wecker abgestellt", start: Date.now() }); if (o.checked && z.value) { try { keepAwake(); } catch (e) {}
+      /* den Ton einmal stumm anspielen, solange ein Antippen vorliegt; danach darf er auch ohne Antippen starten */
+      try { if (!wk.audio) { wk.audio = new Audio(wkWav()); wk.audio.loop = true; } wk.audio.volume = 0; const p = wk.audio.play(); if (p && p.then) p.then(() => { wk.audio.pause(); wk.audio.volume = 1; }, () => {}); } catch (e) {} }
+    wkShow(); flush(); };
+  z.addEventListener("change", save); o.addEventListener("change", save); $("wkaus").addEventListener("click", wkOff);
+  setInterval(wkTick, 1000); setInterval(wkShow, 15000); wkShow();
+} catch (e) {} })();
 
 </script>
 <script>
