@@ -130,7 +130,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
 <body>
 <div id="recbar" class="off">● Aufzeichnung gestoppt</div>
 <div id="dirwarn">Speicherordner nicht freigegeben. Die Daten bleiben im Gerätespeicher, bis der Ordner wieder freigegeben ist.<br><button id="dirbtn">Ordner freigeben</button></div>
-<h1>Vitalspur 2.9.9</h1>
+<h1>Vitalspur 3.0.0</h1>
 <div id="verbanner"></div>
 <div class="hint">Herz, Atmung, Bewegung, Klang und Musik mit derselben Uhr, für Tag und Nacht. Die App schreibt alle 5 Minuten in den Speicherordner.</div>
 
@@ -196,8 +196,8 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
   <button class="main" id="vsphase">Schalter: Tag</button> <button id="vsord">Speicherordner</button> <button id="devbtn" title="Name dieses Geräts für die Ausschluss-Datei">Gerät</button>
   <div id="vsstatus" class="stat"></div>
   <div class="hint">Schalter abends auf Nacht: Nachtmodus, Sense am Fuß mit 208 Hz, Thermometer alle 10 Minuten, dazu der Tagesbericht. Morgens auf Tag: Nachtbericht, dann beginnt der neue Tagesordner. Zur Sicherheit zweimal tippen.</div>
-  <label>Wecker um <input type="time" id="wkzeit" style="width:auto"> <input type="checkbox" id="wkon"> an</label> <span id="wkstat" class="stat"></span>
-  <div class="hint">Schriller Ton, bis ein Marker von der Uhr kommt; dann 5 Minuten Ruhe und wieder Ton. „Wecker aus“ beendet ihn für heute. Die Seite muss offen bleiben; bis er sich bewährt hat, den Handywecker einige Minuten später stellen.</div>
+  <label>Wecker um <input type="text" inputmode="numeric" maxlength="4" size="4" placeholder="0630" autocomplete="off" id="wkzeit" style="width:5em"> Uhr <input type="checkbox" id="wkon"> an</label> <span id="wkstat" class="stat"></span>
+  <div class="hint">Weckzeit vierstellig eintippen, zum Beispiel 0630. Schriller Ton, bis ein Druck auf die Uhr kommt; dann 5 Minuten Ruhe und wieder Ton. Ganz aus geht der Wecker nur, wenn der Haken entfernt wird. Beim Stellen kommt 1 Sekunde Probeton: so laut ist er auch am Morgen, denn die Lautstärke bestimmt die Medienlautstärke des Handys, die Seite kann sie nicht verstellen. Liegt die Weckzeit heute schon zurück, gilt sie für morgen. Die Seite muss offen bleiben; bis er sich bewährt hat, den Handywecker einige Minuten später stellen.</div>
   <label><input type="checkbox" id="keepon" checked> Unhörbaren Wachhalte-Ton abspielen (hält die Seite bei gesperrtem Bildschirm wach)</label>
   <label><input type="checkbox" id="bigdata" checked> BigData: zusätzlich alle Rohdaten speichern (stündlich im Ordner Roh des Tages und in den Sessions)</label>
   <label><input type="checkbox" id="nacht"> Nachtmodus (über den Schalter): Ereignisse (Zuckungen, Umdrehen) und Fenster in voller Auflösung, dazu Vergleichsfenster alle 10 Minuten</label>
@@ -322,6 +322,7 @@ details.legbox > summary { font-size: 12px; color: #666; cursor: pointer; }
   <div class="hint">Zeichnet nur, solange sie an ist und der Bildschirm läuft. Neu gezeichnet wird mit jedem Herzschlag. Antippen hält das Bild an, die Aufnahme läuft weiter. Herz: gestrichelt das Mittel über 10 s (Wert fett an der Achse), gepunktet Minimum und Maximum der letzten 10 Schläge. Gurt: gepunktet Minimum und Maximum, gestrichelt der Median der letzten 4 Minuten.</div>
   <button class="main" id="lvon">Liveansicht: aus</button>
   <div id="lvbox" style="display:none">
+    <div id="wklive" class="stat" style="display:none;font-weight:bold"></div>
     <div id="lvctl"><span id="lvspan">Zeitspanne: <button data-s="10">10 s</button> <button data-s="20">20 s</button> <button data-s="30">30 s</button> <button data-s="60">60 s</button></span> <button id="lvclose" style="display:none">Vollbild beenden</button></div>
     <div id="lvnum"></div>
     <canvas id="lvcv"></canvas>
@@ -527,15 +528,152 @@ async function vsKeyAtTime(t) {
     if (Number.isFinite(r.t) && r.t < t) lo = r.key; else hi = mid; }
   return lo;
 }
+/* ===== 3.0.0: Blockspeicher (Zwischenspeicher während der Aufnahme) =====
+   Alle 5 Minuten werden die neu angekommenen Datensätze des Gerätespeichers (IndexedDB) als ein kompakter Block in den privaten Speicher der Seite (OPFS, Ordner bloecke) geschrieben.
+   Beim Bericht kommen die Daten aus diesen Blöcken, nur der Rest der letzten Minuten aus dem Gerätespeicher. Der Gerätespeicher bleibt die Quelle der Wahrheit:
+   fehlt ein Block, passt sein Prüfsatz nicht oder gibt es den privaten Speicher nicht, wird der betroffene Bereich wie bisher aus dem Gerätespeicher gelesen.
+   Aufbau eines Blocks (little endian): Uint32 'VSB1', Uint32 n, Uint32 Länge des JSON-Teils, Uint32 Merker (1 = Sonderwerte im JSON); Float64[n] Schlüssel; Float64[n] Zeit je Datensatz;
+   Uint8[n] Art (Index in kinds), auf 8 Byte aufgefüllt; JSON {v, kinds, secs, b} auf 8 Byte aufgefüllt; danach die Zahlenreihen. Lange Zahlenreihen (ab 8 Werten) stehen nicht im JSON,
+   sondern als Int16, Int32, Int16 oder Int32 in Hundertsteln oder Float64 dahinter; im JSON steht an ihrer Stelle ein Verweis. Die Werte kommen bitgenau zurück. */
+const BLK = { on: true, dir: null, idx: null, busy: false, N: 4000, keep: 30 * 3600000, fehler: 0, bypass: false, last: null, MAGIC: 0x31425356 };
+try { if (localStorage.getItem("vs_blk_aus")) BLK.on = false; } catch (e) {}
+function idbBatch(after, N, upTo) {
+  return new Promise((res, rej) => { try { const st = db.transaction("rec").objectStore("rec"); let rg = null;
+      const lo = Number.isFinite(after), hi = Number.isFinite(upTo);
+      if (lo && hi) { if (upTo <= after) return res({ K: [], V: [] }); rg = IDBKeyRange.bound(after, upTo, true, false); } else if (lo) rg = IDBKeyRange.lowerBound(after, true); else if (hi) rg = IDBKeyRange.upperBound(upTo);
+      let K = null, V = null; const a = st.getAllKeys(rg, N), b = st.getAll(rg, N);
+      a.onsuccess = () => { K = a.result; if (V) res({ K, V }); }; b.onsuccess = () => { V = b.result; if (K) res({ K, V }); }; a.onerror = b.onerror = () => rej(a.error || b.error || new Error("Gerätespeicher")); } catch (e) { rej(e); } });
+}
+/* Datensätze mit Schlüssel über after und bis upTo der Reihe nach an fn(key, k, d) geben; fn gibt false zurück, um aufzuhören */
+async function idbScan(after, upTo, fn) { let last = after, n = 0;
+  for (;;) { const { K, V } = await idbBatch(last, 4000, upTo); for (let i = 0; i < K.length; i++) { n++; if (fn(K[i], V[i].k, V[i].d) === false) return n; } if (K.length < 4000) return n; last = K[K.length - 1]; } }
+function blkPad8(n) { return (n + 7) & ~7; }
+function blkEnc(K, V) {
+  const n = K.length, kinds = [], kix = new Map(), ki = new Uint8Array(blkPad8(n)), ts = new Float64Array(n), keys = Float64Array.from(K), bodies = new Array(n), secs = [], parts = []; let off = 0, deep = false;
+  const sec = arr => { const m = arr.length; let ints = true, i16 = true, i32 = true;
+    for (let i = 0; i < m; i++) { const x = arr[i]; if (!Number.isInteger(x) || (x === 0 && 1 / x < 0)) { ints = false; break; } if (x < -32768 || x > 32767) { i16 = false; if (x < -2147483648 || x > 2147483647) i32 = false; } }
+    let typ, ta;
+    if (ints && i16) { typ = 1; ta = Int16Array.from(arr); } else if (ints && i32) { typ = 2; ta = Int32Array.from(arr); }
+    else { let c = true, c16 = true; for (let i = 0; i < m; i++) { const x = arr[i], r = Math.round(x * 100); if (!(r / 100 === x) || (x === 0 && 1 / x < 0) || r < -2147483648 || r > 2147483647) { c = false; break; } if (r < -32768 || r > 32767) c16 = false; }
+      if (c) { typ = c16 ? 5 : 3; ta = c16 ? new Int16Array(m) : new Int32Array(m); for (let i = 0; i < m; i++) ta[i] = Math.round(arr[i] * 100); } else { typ = 4; ta = Float64Array.from(arr); } }
+    secs.push([typ, off, m]); parts.push(ta); off += blkPad8(ta.byteLength); return "\u0000s" + (secs.length - 1); };
+  for (let i = 0; i < n; i++) { const v = V[i], k = v.k, d = v.d; let j = kix.get(k); if (j === undefined) { j = kinds.length; kinds.push(k); kix.set(k, j); } ki[i] = j;
+    const t = recTime(k, d); ts[i] = typeof t === "number" ? t : NaN; let body = d;
+    if (d && typeof d === "object" && !Array.isArray(d)) { let c = null;
+      for (const key in d) { const x = d[key];
+        if (Array.isArray(x) && x.length >= 8) { let num = true; for (let q = 0; q < x.length; q++) if (typeof x[q] !== "number") { num = false; break; } if (num) { if (!c) c = Object.assign({}, d); c[key] = sec(x); } }
+        else if (typeof x === "string" && x.charCodeAt(0) === 0) { if (!c) c = Object.assign({}, d); c[key] = "\u0000t" + x; deep = true; } }
+      if (c) body = c; }
+    bodies[i] = body; }
+  if (kinds.length > 255) throw new Error("zu viele Datenarten in einem Block");
+  const js = JSON.stringify({ v: 1, kinds, secs, b: bodies }, function (key, val) {
+    if (val === undefined) { deep = true; return "\u0000u"; }
+    if (typeof val === "number" && (!Number.isFinite(val) || (val === 0 && 1 / val < 0))) { deep = true; return "\u0000n" + (val === 0 ? "-0" : String(val)); }
+    return val; });
+  const jb = new TextEncoder().encode(js), jp = new Uint8Array(blkPad8(jb.length)); jp.set(jb); jp.fill(32, jb.length);
+  const head = new Uint32Array([BLK.MAGIC, n, jb.length, deep ? 1 : 0]), out = [head, keys, ts, ki, jp];
+  for (const ta of parts) { out.push(ta); const p = blkPad8(ta.byteLength) - ta.byteLength; if (p) out.push(new Uint8Array(p)); }
+  return new Blob(out);
+}
+function blkSecGet(buf, base, s) { const o = base + s[1], m = s[2], a = new Array(m), typ = s[0];
+  /* Schleife statt slice oder Array.from: rund zwanzigmal schneller, das Ergebnis ist eine gewöhnliche Reihe wie aus dem Gerätespeicher */
+  if (typ === 1) { const ta = new Int16Array(buf, o, m); for (let i = 0; i < m; i++) a[i] = ta[i]; }
+  else if (typ === 2) { const ta = new Int32Array(buf, o, m); for (let i = 0; i < m; i++) a[i] = ta[i]; }
+  else if (typ === 4) { const ta = new Float64Array(buf, o, m); for (let i = 0; i < m; i++) a[i] = ta[i]; }
+  else if (typ === 3) { const ta = new Int32Array(buf, o, m); for (let i = 0; i < m; i++) a[i] = ta[i] / 100; }
+  else if (typ === 5) { const ta = new Int16Array(buf, o, m); for (let i = 0; i < m; i++) a[i] = ta[i] / 100; }
+  else throw new Error("unbekannte Zahlenreihe im Block");
+  return a; }
+/* Block lesen. want(k, t) entscheidet, ob der Inhalt gebraucht wird; sonst kommt nur [Schlüssel, Art, null, Zeit] zurück */
+function blkDec(buf, want) {
+  const u = new Uint32Array(buf, 0, 4); if (u[0] !== BLK.MAGIC) throw new Error("kein Block");
+  const n = u[1], jl = u[2], deep = u[3] & 1; let o = 16; const keys = new Float64Array(buf, o, n); o += 8 * n; const ts = new Float64Array(buf, o, n); o += 8 * n; const ki = new Uint8Array(buf, o, n); o += blkPad8(n);
+  const txt = new TextDecoder().decode(new Uint8Array(buf, o, jl)); o += blkPad8(jl); const base = o;
+  const J = JSON.parse(txt, deep ? function (key, val) { if (typeof val === "string" && val.charCodeAt(0) === 0) { const c = val[1]; if (c === "u") return undefined; if (c === "n") return Number(val.slice(2)); if (c === "t") return val.slice(2); } return val; } : undefined);
+  if (!J || J.v !== 1 || !J.b || J.b.length !== n) throw new Error("Block beschädigt");
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) { const k = J.kinds[ki[i]], t = ts[i]; if (want && !want(k, t)) { out[i] = [keys[i], k, null, t]; continue; }
+    const d = J.b[i];
+    if (d && typeof d === "object" && !Array.isArray(d)) for (const key in d) { const x = d[key]; if (typeof x === "string" && x.charCodeAt(0) === 0 && x.charCodeAt(1) === 115) d[key] = blkSecGet(buf, base, J.secs[+x.slice(2)]); }
+    out[i] = [keys[i], k, d, t]; }
+  return out;
+}
+async function blkDir() { if (BLK.dir) return BLK.dir; if (!navigator.storage || !navigator.storage.getDirectory) throw new Error("privater Speicher der Seite fehlt"); const r = await navigator.storage.getDirectory(); BLK.dir = await r.getDirectoryHandle("bloecke", { create: true }); return BLK.dir; }
+async function blkLoad() { if (BLK.idx) return BLK.idx; const dir = await blkDir();
+  try { const f = await (await dir.getFileHandle("index.json")).getFile(), J = JSON.parse(await f.text()); BLK.idx = Array.isArray(J) ? J.filter(x => x && x.f && Number.isFinite(x.k1) && Number.isFinite(x.after)).sort((p, q) => p.k1 - q.k1) : []; } catch (e) { BLK.idx = []; }
+  /* Blockdateien, die das Verzeichnis nicht kennt (etwa nach einem Abbruch beim Schreiben), wegräumen */
+  try { const known = new Set(BLK.idx.map(x => x.f)), weg = []; for await (const [n] of dir.entries()) if (/^b\d+\.bin$/.test(n) && !known.has(n)) weg.push(n); for (const n of weg) { try { await dir.removeEntry(n); } catch (e) {} } } catch (e) {}
+  return BLK.idx; }
+async function blkSave() { const dir = await blkDir(), fh = await dir.getFileHandle("index.json", { create: true }), w = await fh.createWritable(); await w.write(JSON.stringify(BLK.idx)); await w.close(); }
+async function blkDrop(why) { try { const dir = await blkDir(); for (const x of (BLK.idx || [])) { try { await dir.removeEntry(x.f); } catch (e) {} } BLK.idx = []; await blkSave(); } catch (e) { BLK.idx = []; }
+  if (why) addEntry({ typ: "Daten", name: "Zwischenspeicher neu begonnen: " + why, start: Date.now() }); }
+/* Schreiben der Blöcke: liest ab dem Schlüssel after höchstens maxB Blöcke aus dem Gerätespeicher und legt sie ab. Läuft im Hintergrundprozess (Worker), damit die Messung nicht stockt;
+   derselbe Text läuft im Vordergrund, wenn es den Hintergrundprozess nicht gibt. */
+async function blkWrite(after, maxB) {
+  const root = await navigator.storage.getDirectory(), dir = await root.getDirectoryHandle("bloecke", { create: true }), made = []; let last = after;
+  for (let i = 0; i < maxB; i++) { const { K, V } = await idbBatch(last, BLK.N); if (!K.length) break;
+    const blob = blkEnc(K, V), f = "b" + String(K[0]).padStart(14, "0") + ".bin", fh = await dir.getFileHandle(f, { create: true }), w = await fh.createWritable(); await w.write(blob); await w.close();
+    let t0 = Infinity, t1 = -Infinity, nn = 0; for (const v of V) { const t = recTime(v.k, v.d); if (Number.isFinite(t)) { if (t < t0) t0 = t; if (t > t1) t1 = t; } else nn++; }
+    const lv = V[V.length - 1], lt = recTime(lv.k, lv.d);
+    made.push({ f, after: last, k1: K[K.length - 1], n: K.length, t0, t1, nn, sk: lv.k, st: typeof lt === "number" && Number.isFinite(lt) ? lt : null, bytes: blob.size, um: Date.now() }); last = K[K.length - 1];
+    if (K.length < BLK.N) break; await new Promise(r => setTimeout(r, 30)); }
+  return made;
+}
+function blkWorker() { if (BLK.w !== undefined) return BLK.w;
+  try { const src = "let db = null; const BLK = { MAGIC: " + BLK.MAGIC + ", N: " + BLK.N + " };\n" + [recTime, blkPad8, idbBatch, blkEnc, blkWrite].map(f => f.toString()).join("\n") +
+      "\nfunction openDb() { return new Promise((res, rej) => { const r = indexedDB.open('vitalspur', 1); r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (e) {} }; r.onsuccess = () => { const d = r.result; d.onversionchange = () => { try { d.close(); } catch (e) {} db = null; }; res(d); }; r.onerror = () => rej(r.error || new Error('Gerätespeicher nicht geöffnet')); }); }" +
+      "\nonmessage = async ev => { const m = ev.data; try { if (!db) db = await openDb(); const made = await blkWrite(m.after, m.maxB); postMessage({ id: m.id, made }); } catch (e) { postMessage({ id: m.id, err: String((e && e.message) || e) }); } };";
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" }))); BLK.wq = new Map(); BLK.wn = 0;
+    w.onmessage = ev => { const q = BLK.wq.get(ev.data.id); if (!q) return; BLK.wq.delete(ev.data.id); if (ev.data.err) q.rej(new Error(ev.data.err)); else q.res(ev.data.made); };
+    w.onerror = ev => { for (const q of BLK.wq.values()) q.rej(new Error("Hintergrundprozess: " + (ev.message || "Fehler"))); BLK.wq.clear(); BLK.w = null; };
+    BLK.w = w; } catch (e) { BLK.w = null; }
+  return BLK.w; }
+function blkWriteBg(after, maxB) { const w = blkWorker(); if (!w) return blkWrite(after, maxB);
+  return new Promise((res, rej) => { const id = ++BLK.wn; BLK.wq.set(id, { res, rej }); const to = setTimeout(() => { if (BLK.wq.delete(id)) rej(new Error("Hintergrundprozess antwortet nicht")); }, 120000);
+    const done = f => v => { clearTimeout(to); f(v); }; BLK.wq.set(id, { res: done(res), rej: done(rej) }); w.postMessage({ id, after, maxB }); })
+    .catch(e => { /* einmal im Vordergrund versuchen, den Hintergrundprozess danach nicht mehr nutzen */ try { if (BLK.w) BLK.w.terminate(); } catch (x) {} BLK.w = null; BLK.wFehler = String((e && e.message) || e); return blkWrite(after, maxB); }); }
+/* neue Datensätze als Blöcke ablegen; höchstens maxB Blöcke je Aufruf */
+async function blkTick(maxB) {
+  if (!BLK.on || BLK.busy || !db) return 0; BLK.busy = true; let made = 0;
+  try { const dir = await blkDir(), idx = await blkLoad(); let last;
+    if (idx.length) last = idx[idx.length - 1].k1; else { const k = await vsKeyAtTime(Date.now() - 34 * 3600000); if (k == null) return 0; last = k - 1; }
+    const neu = await blkWriteBg(last, maxB || 3); for (const x of neu) { if (x.after !== (idx.length ? idx[idx.length - 1].k1 : last)) throw new Error("Blockfolge unterbrochen"); idx.push(x); made++; }
+    if (made) { const now = Date.now(); while (idx.length && idx[0].um < now - BLK.keep) { const x = idx.shift(); try { await dir.removeEntry(x.f); } catch (e) {} } await blkSave(); }
+    BLK.fehler = 0;
+  } catch (e) { BLK.fehler++; if (BLK.fehler === 1) addEntry({ typ: "Fehler", name: "Zwischenspeicher: " + ((e && e.message) || e) + " (die Daten bleiben im Gerätespeicher, der Bericht liest dann von dort)", start: Date.now() }); if (BLK.fehler >= 3) BLK.on = false; }
+  finally { BLK.busy = false; }
+  return made;
+}
+setInterval(() => { blkTick(3).then(m => { if (m >= 3) blkCatch(); }); }, 300000);
+/* Aufholen nach dem Start oder nach einer langen Pause: in kleinen Portionen mit Pausen dazwischen */
+async function blkCatch() { for (let i = 0; i < 60 && BLK.on; i++) { const m = await blkTick(8); if (m < 8) return; await wait(1500); } }
+setTimeout(() => { blkCatch(); }, 25000);
+/* Blöcke prüfen: der letzte Datensatz jedes Blocks muss noch mit derselben Zeit im Gerätespeicher stehen */
+function blkCheck(list) { return new Promise(res => { if (!list.length) return res([]); try { const st = db.transaction("rec").objectStore("rec"), out = new Array(list.length); let left = list.length;
+      list.forEach((x, i) => { const r = st.get(x.k1); r.onsuccess = () => { const v = r.result; if (!v) out[i] = 0; else { const t = recTime(v.k, v.d); out[i] = v.k === x.sk && (t === x.st || (x.st === null && !Number.isFinite(t))) ? 1 : -1; } if (!--left) res(out); }; r.onerror = () => { out[i] = 0; if (!--left) res(out); }; }); } catch (e) { res(list.map(() => 0)); } }); }
 async function readKinds(kinds, a, b) {
-  const out = {}; kinds.forEach(k => out[k] = []); const set = new Set(kinds), M = 600000;
-  const k0 = await vsKeyAtTime(a - M);
-  return new Promise(res => { try { let over = 0;
-    const r = db.transaction("rec").objectStore("rec").openCursor(k0 == null ? null : IDBKeyRange.lowerBound(k0));
-    r.onsuccess = () => { const c = r.result; if (!c) return res(out); const v = c.value, t = recTime(v.k, v.d);
-      if (t > b + M) { if (++over > 3000) return res(out); } else over = 0;
-      if (set.has(v.k) && t >= a && t < b) out[v.k].push(v.d); c.continue(); };
-    r.onerror = () => res(out); } catch (e) { res(out); } });
+  const T = performance.now(), out = {}; kinds.forEach(k => out[k] = []); const set = new Set(kinds), M = 600000, S = { bloecke: 0, ausBlock: 0, ausSpeicher: 0, ms: 0 };
+  let over = 0, stop = false;
+  const take = (k, d, t) => { if (t > b + M) { if (++over > 3000) { stop = true; return false; } } else over = 0; if (set.has(k) && t >= a && t < b) out[k].push(d); return true; };
+  const fromDb = (key, k, d) => take(k, d, recTime(k, d));
+  const k0 = await vsKeyAtTime(a - M); let pos = k0 == null ? -Infinity : k0 - 0.5;
+  let list = [];
+  if (BLK.on && !BLK.bypass) { try { const idx = await blkLoad(); /* Blöcke mit Daten, die älter als 35 Stunden sind, können im Gerätespeicher schon teilweise gelöscht sein: dort gilt der Gerätespeicher */
+      const alt = Date.now() - 35 * 3600000; list = idx.filter(x => x.k1 > pos && Number.isFinite(x.t0) && x.t0 >= alt); const ok = await blkCheck(list);
+      if (ok.some(v => v < 0)) { await blkDrop("der Gerätespeicher passt nicht mehr zu den Blöcken"); list = []; } else list = list.filter((x, i) => ok[i] > 0); } catch (e) { list = []; } }
+  const dir = list.length ? await blkDir() : null, want = (k, t) => set.has(k) && t >= a && t < b;
+  for (const x of list) { if (stop) break;
+    if (x.k1 <= pos) continue;
+    if (x.after > pos) { S.ausSpeicher += await idbScan(pos, x.after, fromDb); pos = x.after; if (stop) break; }
+    if (!x.nn && x.after >= pos && x.t0 > b + M) { /* ganzer Block liegt hinter dem Fenster */ over += x.n; pos = x.k1; if (over > 3000) { stop = true; break; } continue; }
+    if (!x.nn && x.after >= pos && x.t1 < a) { /* ganzer Block liegt vor dem Fenster */ over = 0; pos = x.k1; continue; }
+    let R = null; try { R = blkDec(await (await (await dir.getFileHandle(x.f)).getFile()).arrayBuffer(), want); if (R.length !== x.n) R = null; } catch (e) { R = null; }
+    if (!R) { S.ausSpeicher += await idbScan(pos, x.k1, fromDb); pos = x.k1; continue; }
+    for (let i = 0; i < R.length; i++) { const r = R[i]; if (r[0] <= pos) continue; if (take(r[1], r[2], r[3]) === false) break; S.ausBlock++; }
+    S.bloecke++; pos = x.k1; }
+  if (!stop) S.ausSpeicher += await idbScan(pos, Infinity, fromDb);
+  S.ms = Math.round(performance.now() - T); BLK.last = S; try { VSD.lesen.push(S); } catch (e) {}
+  return out;
 }
 /* ===== 2.7: unerwartete Fehler ins Protokoll (höchstens einmal je 10 s je Meldung) ===== */
 (function () { const seen = new Map();
@@ -1975,10 +2113,12 @@ function bgMsg(o) {
     bgSend(`MK.set(${JSON.stringify({ felder: bgFelder(), licht: bgLicht() })})`); bgState = ""; bgSync(true);
   }
   if (o.mk === "dbg") { addEntry({ typ: "Uhr", name: "Knopf: " + String(o.s || "").slice(0, 120), start: Date.now() }); return; }
+  /* 3.0.0 (Punkt 62, vorbereitet): meldet die Uhr einen Tastendruck sofort ({"mk":"key","t":...}), wird der klingelnde Wecker ohne Wartezeit still */
+  if (o.mk === "key") { try { wkTaste("Taste", Math.abs(bgOff) < 600000 ? o.t + bgOff : now); } catch (e) {} return; }
   if (o.mk === "ev") {
     if (!bgSeen.has(o.id)) {
       bgSeen.add(o.id); const t = Math.abs(bgOff) < 600000 ? o.t + bgOff : o.t;
-      if (/^St(ö|oe)rung/.test(String(o.n || ""))) stoeMsg(o, t); else addEntry({ typ: "Marker", name: String(o.n || "Marker") + " (Uhr)", start: Math.round(t) }); flush();
+      if (/^St(ö|oe)rung/.test(String(o.n || ""))) stoeMsg(o, t); else if (typeof wkTaste === "function" && wkTaste(String(o.n || "Marker"), t)) { /* 3.0.0: gehört zum Wecker, kein Marker */ } else addEntry({ typ: "Marker", name: String(o.n || "Marker") + " (Uhr)", start: Math.round(t) }); flush();
       bgStatus(`Letzter Marker ${stamp(new Date(t)).slice(0, 8)}: ${o.n}`);
     }
     bgSend(`MK.ack(${o.id | 0})`);
@@ -2003,7 +2143,7 @@ async function onBgLost() {
   /* 2.9.9: nicht nach 60 Versuchen aufgeben. Pause wächst von 5 s auf 5 min, Zeile im Protokoll beim ersten und dann bei jedem zehnten Fehlschlag, keine Ansage.
      „Uhr neu verbinden“ verbindet sofort. Die Marker bleiben so lange auf der Uhr gespeichert. */
   for (let i = 0; bgWanted; i++) { try { try { bgDev.gatt.disconnect(); } catch (e) {} await wait(300);
-      await withTO(bgAttach(), 10000, "Uhr"); addEntry({ typ: "Uhr", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); bgReconn = false; return; }
+      await withTO(bgAttach(), 10000, "Uhr"); addEntry({ typ: "Uhr", name: `Wieder verbunden (Versuch ${i + 1}, von selbst)`, start: Date.now() }); bgReconn = false; return; }
     catch (e) { bgRx = null; if (i === 0 || i % 10 === 9) addEntry({ typ: "Uhr", name: `Neuverbinden Versuch ${i + 1} fehlgeschlagen: ${errTxt(e)}, versuche weiter`, start: Date.now() });
       bgStatus(`Uhr nicht verbunden seit ${i + 1} Versuchen, versuche weiter. „Uhr neu verbinden“ verbindet sofort. Die Marker bleiben auf der Uhr gespeichert.`);
       const pz = Math.min(300000, 5000 * 2 ** Math.min(6, Math.floor(i / 6))), t9 = Date.now(); while (bgWanted && bgReconn && Date.now() - t9 < pz) await wait(1000); if (!bgReconn) return; } }
@@ -2020,7 +2160,7 @@ function bgBind() {
       bgDev = dev; if (bgListened !== dev) { bgListened = dev; dev.addEventListener("gattserverdisconnected", onBgLost); }
       bgReconn = false; /* 2.9.9: laufendes Neuverbinden beenden */
       bgStatus("Verbinde …"); bgWanted = true; await bgAttach();
-      addEntry({ typ: "Uhr", name: "Verbunden: " + (dev.name || "Bangle"), start: Date.now() });
+      addEntry({ typ: "Uhr", name: "Verbunden: " + (dev.name || "Bangle"), start: Date.now() }); addEntry({ typ: "Uhr", name: "Verbindung von Hand hergestellt", start: Date.now() + 1 });
       b.textContent = "Uhr neu verbinden"; $("bgstop").disabled = false;
     } catch (e) { bgStatus("Verbindung nicht möglich: " + (e && e.message ? e.message : e)); }
   });
@@ -3029,8 +3169,10 @@ function colName(i) { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = S
 async function makeZip8(files) {
   const enc = new TextEncoder(), parts = [], central = []; let off = 0;
   const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
-  for (const f of files) {
-    const name = enc.encode(f.name), data = f.data, crc = crc32(data), comp = await deflateRaw(data);
+  /* 3.0.0: gleichzeitig verdichten; eine vorab begonnene Verdichtung (f.comp) wird übernommen; das Ergebnis ist dasselbe wie vorher */
+  const comps = await Promise.all(files.map(f => f.comp || deflateRaw(f.data)));
+  for (let fi = 0; fi < files.length; fi++) { const f = files[fi];
+    const name = enc.encode(f.name), data = f.data, crc = crc32(data), comp = comps[fi];
     const meth = comp && comp.length < data.length ? 8 : 0, body = meth ? comp : data;
     const h = new DataView(new ArrayBuffer(30));
     h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, meth, true);
@@ -4024,7 +4166,7 @@ function vsZusatz(J, kern, belt, meta) {
   PR.forEach(p => {
     const e = Number.isFinite(p.ende) ? p.ende : p.t;
     if (/gilt weiter\]\s*$/.test(p.name || "")) return; /* 2.9.9: übernommene Einträge sind kein Beleg */
-    if (p.typ === "Wecker") { bel.push({ a: p.t, b: p.t, art: "Wecker" }); return; }
+    if (p.typ === "Wecker") { if (/^(Wecker still|Wecker aus|Gestellt auf|Wecker abgestellt)/.test(p.name || "")) bel.push({ a: p.t, b: p.t, art: "Wecker" }); return; } /* 3.0.0: nur was von Hand ausgelöst ist; der Ton allein belegt kein Wachsein */
     if (p.typ === "Marker" || p.typ === "Notiz" || p.typ === "Störung" || p.typ === "Gefühl" || p.typ === "Gewicht") bel.push({ a: p.t, b: e, art: p.typ === "Störung" ? "Störung" : p.typ });
     else if (p.typ === "Atemphase" || p.typ === "Atemhilfe") bel.push({ a: p.t, b: e, art: "Atemhilfe" });
     else if (p.typ === "Kalibrierung") bel.push({ a: p.t, b: e, art: "Kalibrierung" });
@@ -4128,21 +4270,50 @@ function vsZusatz(J, kern, belt, meta) {
     uhr_brustgurt_h10_gang_ms_pro_h: J.abgleich && Number.isFinite(Number(J.abgleich.gurtuhr_gang_ms_pro_h)) && J.abgleich.gurtuhr_gang_ms_pro_h !== null ? Number(J.abgleich.gurtuhr_gang_ms_pro_h) : null,
     kalibrierung_atemgurt: kal, schlaege: st.length, schlaege_bestaetigt: so.reduce((s, v) => s + (v ? 1 : 0), 0), zuckungen: ZU.length, marker: marker.length,
     wachzeiten: wach.length, wach_minuten: wachMin,
-    regeln: { wachzeit: "Belege: Marker, Notiz, Störung, Gefühl, Gewicht, Atemhilfe, Kalibrierung, Schalter, Wecker, Ansage zu Abgleich oder Kalibrierung (übernommene Einträge mit dem Zusatz gilt weiter zählen nicht); Musik in den ersten 30 Minuten ab Beginn. Belege mit höchstens 6 Minuten Abstand bilden eine Wachzeit, dazu je 1 Minute Rand. Stilles Wachliegen ohne Eintrag bleibt unerkannt.",
+    regeln: { wachzeit: "Belege: Marker, Notiz, Störung, Gefühl, Gewicht, Atemhilfe, Kalibrierung, Schalter, Wecker (nur stellen, still und aus; der Ton allein nicht), Ansage zu Abgleich oder Kalibrierung (übernommene Einträge mit dem Zusatz gilt weiter zählen nicht); Musik in den ersten 30 Minuten ab Beginn. Belege mit höchstens 6 Minuten Abstand bilden eine Wachzeit, dazu je 1 Minute Rand. Stilles Wachliegen ohne Eintrag bleibt unerkannt.",
       minuten: "Eine Zeile je Minute. Puls, RMSSD und QNR nur aus im EKG bestätigten Schlägen; RMSSD aus aufeinanderfolgenden bestätigten Schlägen, beide Abstände zwischen dem 0,5- und dem 1,76-Fachen des Minutenmedians, mindestens 20 Paare; QNR = RMSSD mal 60000 durch das Quadrat des mittleren Abstands. Atem_Unruhe = mittlere Änderung der Atemdauer von Zug zu Zug durch die mittlere Atemdauer. Atemzuege_Brust_pro_min = stärkste Frequenz der Brustbewegung in 2 Minuten um die Minutenmitte, Atem_Brust_Deutlichkeit = Anteil dieser Frequenz an der Leistung von 0,07 bis 0,6 Hz. Brust_Bewegung_95_mg = 95-Prozent-Wert von md. Leere Felder = zu wenig Werte.",
       taetigkeit: "Nachtruhe heißt: in der Nacht mindestens 60 Minuten ruhig gelegen. Gemessen ist Ruhe, kein Schlaf." },
     regeln_fassung: { hinweis: "Seit welcher Programmfassung die Rechnung einer Größe so gilt. Ältere Pakete sind mit der Fassung in programm_version gerechnet; Rohdaten bleiben erhalten, nachgerechnete Pakete bekommen eine eigene Fassung und überschreiben nichts.",
       herzschlaege: "2.9.5 Kette Gurt gegen EKG; 2.7 unplausible R-Zacken; 2.9.9 zusätzlich: hohe R-Zacke (über dem 1,7-Fachen der Umgebung) mit kurzem Abstand (unter 85 Prozent) gilt nicht",
       doppelabstand: "nicht eingebaut", pulsankunft: "2.9.7 Zeit der Pulswelle aus gezählten Werten, halbe Höhe des Anstiegs", uhr_brustgurt: "2.9.7 Gang bestimmt und abgezogen; 2.9.8 Gerade je Sitzung im EKG-Paket",
       seitenlage: "2.9.9 linke und rechte Seite berichtigt; Pakete bis 2.9.8 tragen vertauschte Seiten, Rücken und Bauch stimmen", zuckung: "1.9.1 Serie ab 2 Zuckungen; 2.9.8 Brustbewegung, Abstände, Wachzeit je Zuckung",
-      wachzeit: "2.9.8; 2.9.9: übernommene Einträge (gilt weiter) zählen nicht als Beleg, der Wecker zählt als Beleg", kalibrierung_atemgurt: "2.9.8 beim Schalter immer neu, mit Auslöser",
+      wachzeit: "2.9.8; 2.9.9: übernommene Einträge (gilt weiter) zählen nicht als Beleg, der Wecker zählt als Beleg; 3.0.0: vom Wecker zählen nur Einträge von Hand (stellen, still, aus), ein Druck auf die Uhr beim Klingeln steht als Wecker still statt als Marker", lesen: "3.0.0 Rohdaten aus dem Zwischenspeicher (Blöcke alle 5 Minuten), Rest aus dem Gerätespeicher; Rechenregeln unverändert", kalibrierung_atemgurt: "2.9.8 beim Schalter immer neu, mit Auslöser",
       trageort: "2.9.9 eine Einstellung für Tag und Nacht, feste Namen", gewicht: "2.9.9 die letzte Wägung gilt für alle Aufnahmen danach weiter, mit Zeitpunkt der Wägung", ablage: "2.9.9 Ordner und Bezeichnung aus derselben Regel" } };
   return { files: [{ name: "Paket.json", text: JSON.stringify(pk, null, 1) }, { name: "Wachzeiten.csv", text: WZ.join("\n") }, { name: "Minuten.csv", text: MI.join("\n") }], kern, info: `${MI.length - 1} Minuten, ${wach.length} Wachzeiten (${wachMin} min), ${marker.length} Marker` };
+}
+/* 3.0.0: Dauer der Schritte beim Abschluss, als eine Zeile im Protokoll */
+const VSD = { lesen: [], schritte: [], cur: null };
+function vsStepReset() { VSD.lesen = []; VSD.schritte = []; VSD.cur = null; }
+function vsStep(name) { const now = performance.now(); if (VSD.cur) { const e = VSD.schritte.find(x => x.n === VSD.cur.n); if (e) e.ms += now - VSD.cur.t; else VSD.schritte.push({ n: VSD.cur.n, ms: now - VSD.cur.t }); } VSD.cur = name ? { n: name, t: now } : null; }
+function vsStepLine(was) { const sek = ms => (ms < 9500 ? (Math.round(ms / 100) / 10).toFixed(1).replace(".", ",") : String(Math.round(ms / 1000))) + " s", ges = VSD.schritte.reduce((s, x) => s + x.ms, 0);
+  let bl = 0, ab = 0, as = 0; VSD.lesen.forEach(x => { bl += x.bloecke; ab += x.ausBlock; as += x.ausSpeicher; });
+  return `Dauer des Abschlusses (${was}): zusammen ${sek(ges)}; ` + VSD.schritte.map(x => `${x.n} ${sek(x.ms)}`).join(", ") + `; gelesen aus dem Zwischenspeicher ${ab} Datensätze in ${bl} Blöcken, aus dem Gerätespeicher ${as}` + (BLK.on ? "" : " (Zwischenspeicher aus)"); }
+/* 3.0.0: Die ersten fünf Berichte werden nach dem Abschluss im Hintergrund nachgeprüft: dieselben Stunden einmal aus dem Zwischenspeicher und einmal aus dem Gerätespeicher gelesen und verglichen.
+   Bei einer Abweichung schaltet sich der Zwischenspeicher dauerhaft ab; die Berichte lesen dann wieder allein aus dem Gerätespeicher. */
+function blkHash(x) { let h = 0; const f = v => { if (v === undefined) return;
+    if (typeof v === "number") { h = (Math.imul(h, 31) + (v | 0) + Math.round((v % 1) * 1e6)) | 0; }
+    else if (typeof v === "string") { for (let i = 0; i < v.length; i++) h = (Math.imul(h, 31) + v.charCodeAt(i)) | 0; }
+    else if (v === null) h = (Math.imul(h, 31) + 7) | 0; else if (typeof v === "boolean") h = (Math.imul(h, 31) + (v ? 3 : 5)) | 0;
+    else if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) f(v[i]); h = (Math.imul(h, 31) + v.length) | 0; }
+    else if (typeof v === "object") { for (const k in v) { if (v[k] === undefined) continue; f(k); f(v[k]); } } }; f(x); return h; }
+function blkVerifyPlan(a, b) { if (!BLK.on) return; let n = 0; try { n = +(localStorage.getItem("vs_blk_pruef") || 0); } catch (e) {} if (n >= 5) return;
+  setTimeout(() => { blkVerify(a, b, n + 1).catch(e => addEntry({ typ: "Fehler", name: "Prüfung des Zwischenspeichers: " + ((e && e.message) || e), start: Date.now() })); }, 20000); }
+async function blkVerify(a, b, nr) {
+  const H = 3600000, KN = ["beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb", "ox", "oxw"]; let nAll = 0, st = 0, nBlk = 0; const bad = [];
+  for (let h = Math.floor(a / H) * H; h < b; h += H) { const lo = Math.max(a, h), hi = Math.min(b, h + H);
+    const x = await readKinds(KN, lo, hi); nBlk += BLK.last ? BLK.last.ausBlock : 0; await wait(200); let y; BLK.bypass = true; try { y = await readKinds(KN, lo, hi); } finally { BLK.bypass = false; }
+    for (const k of KN) { nAll += y[k].length; if (x[k].length !== y[k].length) bad.push(`${k} um ${pad(new Date(h).getHours())} Uhr: ${x[k].length} gegen ${y[k].length} Datensätze`); else if (blkHash(x[k]) !== blkHash(y[k])) bad.push(`${k} um ${pad(new Date(h).getHours())} Uhr: Inhalt verschieden`); await wait(0); }
+    st++; await wait(400); }
+  if (bad.length) { BLK.on = false; try { localStorage.setItem("vs_blk_aus", new Date().toISOString() + " " + bad[0]); } catch (e) {}
+    addEntry({ typ: "Fehler", name: `Zwischenspeicher weicht vom Gerätespeicher ab (${bad.slice(0, 4).join("; ")}${bad.length > 4 ? "; und " + (bad.length - 4) + " weitere" : ""}). Der Zwischenspeicher ist abgeschaltet, die Berichte lesen wieder allein aus dem Gerätespeicher. Der letzte Bericht kann betroffen sein.`, start: Date.now() }); }
+  else { try { localStorage.setItem("vs_blk_pruef", String(nr)); } catch (e) {}
+    addEntry({ typ: "Daten", name: `Zwischenspeicher geprüft (Bericht ${nr} von 5): ${st} Stunden, ${nAll} Datensätze, alles gleich dem Gerätespeicher`, start: Date.now() }); }
+  flush();
 }
 async function buildZip(opts) {
   opts = opts || {};
   const A0 = Number.isFinite(opts.a) ? opts.a : -Infinity, B0 = Number.isFinite(opts.b) ? opts.b : Infinity;
-  $("savestatus").textContent = "Stelle Daten zusammen …";
+  $("savestatus").textContent = "Stelle Daten zusammen …"; vsStep("Lesen");
   await flush();
   const KINDS = ["log", "beat", "snd", "evt", "acc", "ecg", "sync", "atem", "temp", "foot", "ppg", "vhr", "gyro", "ruuvi", "bat", "rb", "ox", "oxw"];
   const RM = await readKinds(KINDS.filter(k => k !== "log"), A0, B0); const ALL = await Promise.all(KINDS.map(k => k === "log" ? readKind(k) : RM[k])); /* 2.7: ein Durchlauf über den Zeitbereich */
@@ -4209,6 +4380,7 @@ async function buildZip(opts) {
   const beltCsv = () => { if (belt && belt.list.length && !opts.noRaw) { const s = ["Datum;Zeit;Epoch_ms;Einatmen_s;Ausatmen_s;Dauer_s;Atemzuege_pro_min;Tiefe_N;Tiefe_Prozent"]; belt.list.forEach(c => s.push([...tcols(c.t), num(c.ein, 2), num(c.aus, 2), num(c.dauer, 2), num(60 / c.dauer), num(c.tiefe, 2), Number.isFinite(c.prozent) ? num(c.prozent) : ""].join(";"))); out.push({ name: P + "Atemzuege_Gurt.csv", data: enc.encode("\ufeff" + s.join("\n")) }); } };
   const nacht = opts.nacht !== undefined ? !!opts.nacht : $("nacht").checked;
   try {
+    vsStep("Rechnen");
     sp = await buildSpar({ L, BT, AC, EC, SY, AT, TP, FT: FT0.filter(c => (c.w || "Fuß") === "Fuß"), FA: FT0, GY, RU, BA, offs, nacht, belt, rbF: RB.length ? rbFlat(RB) : null, OX: OX || [], OXW: OXW || [] }, id);
     if (sp && sp.raw && belt) sp.raw.belt = belt;
     try { beltCsv(); } catch (e) {}
@@ -4221,12 +4393,13 @@ async function buildZip(opts) {
     window.lastAnom = null;
     try { const Jo = JSON.parse(sp.json), rbr = sp.raw && sp.raw.rbRaw ? { t: sp.raw.rbRaw.t.map(x => x - Jo.t0_epoch_ms), f: sp.raw.rbRaw.f } : null, an = vsAnom(Jo, rbr);
       Jo.pruef_fenster = pruefFenster(an.concat(unbList(Jo), lageList(Jo)), sp.raw); Jo.pruef_regeln = ANOM_REGELN; sp.json = JSON.stringify(Jo); JoZ = Jo; window.lastAnom = { an, T0: Jo.t0_epoch_ms }; } catch (e) { addEntry({ typ: "Fehler", name: "Prüfliste: " + (e.message || e), start: Date.now() }); }
-    out.unshift({ name: P + "Messung.xlsx", data: sp.xlsx }, { name: P + "Fenster.json", data: enc.encode(sp.json) });
+    { const fj = { name: P + "Fenster.json", data: enc.encode(sp.json) }; try { fj.comp = deflateRaw(fj.data); fj.comp.catch(() => {}); } catch (e) { fj.comp = null; } /* 3.0.0: die größte Datei schon jetzt im Hintergrund verdichten */
+      out.unshift({ name: P + "Messung.xlsx", data: sp.xlsx }, fj); }
     if (sp.pdf) out.unshift({ name: P + pdfName, data: sp.pdf });
     addEntry({ typ: "Daten", name: "Auswertung " + (opts.kind || "Speicher") + ": " + sp.info, start: Date.now() });
     if (nacht && sp.raw && sp.raw.NE) {
       try {
-        $("savestatus").textContent = "Rechne die Nachtauswertung …"; await wait(20);
+        $("savestatus").textContent = "Rechne die Nachtauswertung …"; vsStep("Nachtauswertung"); await wait(20);
         const raw = sp.raw, nachtTxt = dstamp(new Date(raw.T0));
         const rep = nightReport(raw, pid, nachtTxt);
         { const Lg = L; const last = typ => { const r = Lg.filter(x => x.typ === typ); return r.length ? r[r.length - 1].name : null; };
@@ -4248,7 +4421,7 @@ async function buildZip(opts) {
     addEntry({ typ: "Fehler", name: "Auswertung fehlgeschlagen: " + (e.message || e), start: Date.now() });
   }
   /* 2.9.8: Zusatzschicht (Paket.json, Wachzeiten.csv, Minuten.csv, Ergänzung der Kerndatei); ein Fehler hier lässt das Paket unberührt */
-  try { if (sp && sp.json) { $("savestatus").textContent = "Schreibe die Zusatztabellen …"; await wait(20);
+  try { if (sp && sp.json) { $("savestatus").textContent = "Schreibe die Zusatztabellen …"; vsStep("Zusatztabellen"); await wait(20);
       if (!JoZ) JoZ = JSON.parse(sp.json);
       const zz = vsZusatz(JoZ, kernObj, belt && belt.list ? belt.list : null, { P, version: VS_VERSION, kind: opts.kind || (nacht ? "Nacht" : "Messung"), nacht, pid,
         phaseP: (typeof VS !== "undefined" && VS && VS.phaseStart) ? `${pid || "ohneID"}_${st12(VS.phaseStart)}_` : null,
@@ -4258,9 +4431,11 @@ async function buildZip(opts) {
       addEntry({ typ: "Daten", name: "Zusatztabellen: " + zz.info, start: Date.now() }); } }
   catch (e) { out.push({ name: P + "Fehler_Zusatz.txt", data: enc.encode(String(e && e.stack || e)) }); addEntry({ typ: "Fehler", name: "Zusatztabellen: " + (e.message || e), start: Date.now() }); }
   JoZ = null; kernObj = null;
-  $("savestatus").textContent = "Packe ZIP …";
-  const blob = await makeZip8(out);
-  return { blob, name: P + (opts.kind || "Messung") + ".zip", list: out.map(f => f.name).join(", "), kern, out, sp };
+  $("savestatus").textContent = "Packe ZIP …"; vsStep("Packen");
+  if (opts.zipLater) { const zipP = makeZip8(out); zipP.catch(() => {}); vsStep(null); /* 3.0.0: das ZIP entsteht im Hintergrund, während die Dateien geschrieben werden */
+    return { blob: null, zipP, name: P + (opts.kind || "Messung") + ".zip", list: out.map(f => f.name).join(", "), kern, out, sp, raw: { EC, OXW } }; }
+  const blob = await makeZip8(out); vsStep(null);
+  return { blob, name: P + (opts.kind || "Messung") + ".zip", list: out.map(f => f.name).join(", "), kern, out, sp, raw: { EC, OXW } };
 }
 /* Ordner merken: Handle in eigener IndexedDB, je Player ein Ordner (Tagesdaten oder Nachtdaten) */
 const ORD = { key: () => "vitalspur", name: () => "Vitalspur" };
@@ -4335,12 +4510,12 @@ async function rohEkgExport(say, opt) {
     const first = await vsRecAt(fl.f); a0 = first && Number.isFinite(first.t) ? first.t : now - 40 * 3600000; if (a0 < now - 48 * 3600000) a0 = now - 48 * 3600000; b0 = now; }
   const H = 3600000, files = [], liste = [], sess = [], offs = {}; let tA = null, tB = null, nAll = 0, ausC = 0;
   const uhrMin = new Map(); /* 2.9.8: je Sitzung und Minute das Paket mit der kleinsten Verspätung (Gerätezeit, Ankunft minus Gerätezeit) */
-  const cdir = await ekgCacheDir();
+  const cdir = opt.ecg ? null : await ekgCacheDir(); /* 3.0.0: liegen die Pakete des Berichts schon vor, wird nichts noch einmal gelesen */
   for (let a = Math.floor(a0 / H) * H; a < b0; a += H) {
     say(`Lese EKG ${pad(new Date(a).getHours())}:00 …`);
     const whole = a >= a0 && a + H <= b0 && a + H < now - 120000; let E = null;
     if (whole && cdir) { E = await ekgCacheGet(cdir, a); if (E) ausC++; }
-    if (!E) { const pk = ((await readKinds(["ecg"], Math.max(a, a0), Math.min(a + H, b0))).ecg || []).filter(p => p && p.v && p.v.length && p.t >= Math.max(a, a0) && p.t < Math.min(a + H, b0)).sort((p, q) => p.t - q.t);
+    if (!E) { const pk = (opt.ecg ? opt.ecg : ((await readKinds(["ecg"], Math.max(a, a0), Math.min(a + H, b0))).ecg || [])).filter(p => p && p.v && p.v.length && p.t >= Math.max(a, a0) && p.t < Math.min(a + H, b0)).sort((p, q) => p.t - q.t);
       if (!pk.length) continue; E = ekgHourEnc(pk); if (whole && cdir) { try { await ekgCachePut(cdir, a, E); } catch (e) {} } }
     for (const k in E.offs) if (offs[k] === undefined || E.offs[k] < offs[k]) offs[k] = E.offs[k];
     try { for (let i = 0; i < E.n; i++) { const sn = String(E.sess[E.meta[4 * i + 2]]), x = E.meta[4 * i + 1] / 1000, o = E.meta[4 * i] - x; let m = uhrMin.get(sn); if (!m) uhrMin.set(sn, m = new Map()); const b = Math.floor(x / 60000), e = m.get(b); if (!e || o < e[1]) m.set(b, [x, o]); } } catch (e) {}
@@ -4460,7 +4635,7 @@ async function vsDiagnose() {
 $("diagbtn").addEventListener("click", vsDiagnose);
 
 /* ===== 2.9: Leiste unten festhalten (Ecosia blendet die Adressleiste unten ein) ===== */
-const VS_VERSION = "2.9.9";
+const VS_VERSION = "3.0.0";
 function barPin() { try { const b = $("vsbar"), vv = window.visualViewport; if (!b || !vv) return;
   const off = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); const tr = off > 0 ? `translateY(${-off}px)` : "";
   if (b.style.transform !== tr) b.style.transform = tr; } catch (e) {} }
@@ -4541,7 +4716,8 @@ function beltLag(rb, A) {
         const r = sxy / Math.sqrt(sxx * syy || 1); if (!best || Math.abs(r) > Math.abs(best.r)) best = { r, l, ax }; } }
     if (best && Math.abs(best.r) >= 0.4) out.push({ t: w + 150000, versatz_ms: best.l * step, r: Math.round(best.r * 100) / 100, achse: "xyz"[best.ax] }); }
   for (let k = 1; k < out.length; k++) if (Math.abs(out[k].versatz_ms - out[k - 1].versatz_ms) > 500 && Math.abs(out[k].r) > 0.5 && Math.abs(out[k - 1].r) > 0.5)
-    addEntry({ typ: "Hinweis", name: `Versatz Atemgurt gegen Brust springt um ${stamp(new Date(out[k].t)).slice(0, 5)} Uhr von ${out[k - 1].versatz_ms} auf ${out[k].versatz_ms} ms`, start: out[k].t });
+    { const nm = `Versatz Atemgurt gegen Brust springt um ${stamp(new Date(out[k].t)).slice(0, 5)} Uhr von ${out[k - 1].versatz_ms} auf ${out[k].versatz_ms} ms`; /* 3.0.0: beim erneuten Bericht nicht noch einmal eintragen */
+      if (!log.some(x => x.typ === "Hinweis" && x.start === out[k].t && x.name === nm)) addEntry({ typ: "Hinweis", name: nm, start: out[k].t }); }
   return out; }
 
 /* ===== 2.9: Pulsoxymeter Viatom PC-60FW (Nordic-UART), ohne Gerät nicht getestet ===== */
@@ -4569,20 +4745,24 @@ function oxData(ev) {
 }
 async function oxAttach() { const sv = await oxDev.gatt.connect(), s = await sv.getPrimaryService(OX_SVC), c = await s.getCharacteristic(OX_RX);
   c.removeEventListener("characteristicvaluechanged", oxData); c.addEventListener("characteristicvaluechanged", oxData); await c.startNotifications(); }
-async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; addEntry({ typ: "Oxymeter", name: "Verbindung verloren (Finger heraus oder Gerät aus?)", start: Date.now() });
+var oxGen = 0; /* 3.0.0: zählt die Verbindungen von Hand; ein laufendes Neuverbinden hört auf, sobald von Hand verbunden wurde */
+async function oxLost() { if (!oxWanted || oxReconn) return; oxReconn = true; const gen = oxGen; addEntry({ typ: "Oxymeter", name: "Verbindung verloren (Finger heraus oder Gerät aus?)", start: Date.now() });
   /* 2.9.9: Am 27.11.2026 fielen 2 s nach dem ersten Neuversuch Sense und H10 aus. Darum erster Versuch nach 30 s, danach alle 60 s, ab dem fünften Fehlschlag länger (bis 5 min),
      und nie, während ein anderes Gerät gerade neu verbunden wird. Kein Ende nach 20 Versuchen mehr: ohne Finger schaltet sich das Gerät ab und meldet sich später wieder. */
-  for (let i = 0; oxWanted; i++) { const pz = i === 0 ? 30000 : Math.min(300000, 60000 * (1 + Math.floor(i / 5))), t9 = Date.now(); while (oxWanted && Date.now() - t9 < pz) await wait(1000); if (!oxWanted) break;
+  for (let i = 0; oxWanted; i++) { const pz = i === 0 ? 30000 : Math.min(300000, 60000 * (1 + Math.floor(i / 5))), t9 = Date.now(); while (oxWanted && oxGen === gen && Date.now() - t9 < pz) await wait(1000); if (!oxWanted) break;
+    if (oxGen !== gen) return; /* von Hand verbunden: dieses Neuverbinden endet, damit nicht zwei Verbindungen nebeneinander laufen */
     if (vsBtBusy("ox")) { i--; await wait(5000); continue; }
-    try { await withTO(oxAttach(), 20000, "Oxymeter"); addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1})`, start: Date.now() }); oxReconn = false; return; }
+    try { try { oxDev.gatt.disconnect(); } catch (x) {} await wait(300); if (oxGen !== gen) return;
+      await withTO(oxAttach(), 20000, "Oxymeter"); if (oxGen !== gen) return; addEntry({ typ: "Oxymeter", name: `Wieder verbunden (Versuch ${i + 1}, von selbst)`, start: Date.now() }); oxReconn = false; return; }
     catch (e) { try { oxDev.gatt.disconnect(); } catch (x) {} if (i === 0 || i % 10 === 9) addEntry({ typ: i ? "Fehler" : "Oxymeter", name: `Oxymeter: Neuverbinden ${i + 1} fehlgeschlagen: ${errTxt(e)}, versuche weiter` + (i ? "" : " (ohne Finger schaltet es sich ab)"), start: Date.now() });
       oxStatus(`Nicht verbunden seit ${i + 1} Versuchen, versuche weiter. „Pulsoxymeter verbinden“ verbindet sofort.`); } }
   oxReconn = false; }
 async function oxConnect() {
   if (!navigator.bluetooth) { oxStatus("Bluetooth ist in diesem Browser nicht verfügbar."); return; }
   try { const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "PC-60" }, { namePrefix: "PC60" }, { namePrefix: "OxySmart" }] /* 2.9.6: nur nach Namen, sonst bot das Fenster auch die Bangle an */, optionalServices: [OX_SVC, "battery_service"] });
+    oxGen++; oxReconn = false; /* 3.0.0: ein laufendes Neuverbinden beenden */
     if (oxDev !== d) d.addEventListener("gattserverdisconnected", oxLost); oxDev = d; oxStatus("Verbinde …"); await oxAttach(); oxWanted = true; keepAwake();
-    addEntry({ typ: "Oxymeter", name: "Verbunden: " + (d.name || "PC-60FW"), start: Date.now() }); oxStatus("Verbunden mit " + (d.name || "PC-60FW") + ". Warte auf Werte …"); $("oxstop").disabled = false;
+    addEntry({ typ: "Oxymeter", name: "Verbunden: " + (d.name || "PC-60FW"), start: Date.now() }); addEntry({ typ: "Oxymeter", name: "Verbindung von Hand hergestellt", start: Date.now() + 1 }); oxStatus("Verbunden mit " + (d.name || "PC-60FW") + ". Warte auf Werte …"); $("oxstop").disabled = false;
   } catch (e) { oxStatus("Nicht verbunden: " + (e.message || e)); addEntry({ typ: "Fehler", name: "Oxymeter: " + (e.message || e), start: Date.now() }); } }
 function oxStop() { oxWanted = false; try { oxDev?.gatt.disconnect(); } catch (e) {} addEntry({ typ: "Oxymeter", name: `Beendet, ${oxN} Werte`, start: Date.now() }); oxStatus("Beendet."); $("oxstop").disabled = true; flush(); }
 /* ===== 2.9.3: Pulswelle des Oxymeters (Rahmen Typ 02, 5 Werte je Rahmen, höchstes Bit = Pulsmarkierung) ===== */
@@ -4642,7 +4822,13 @@ function oxBeats(B, OX, OXW) {
       for (let k = a0; k < a1; k++) { const v = W.v[k]; if (v < lo) lo = v; if (v > hi) hi = v; if (k >= a0 + 1 && k + 1 < a1) { const s = W.v[k + 1] - W.v[k - 1]; if (s > best) { best = s; bi = k; } } }
       if (bi < 0 || hi - lo < 2) continue; b.pamp = hi - lo; amps.push([b.tt, hi - lo]);
       const pa = oxPat(W, b.tt, rr); if (pa !== null) { b.pat = pa; n2++; } }
-    for (const b of okB) { if (!Number.isFinite(b.pamp)) continue; const w = amps.filter(([t]) => t < b.tt && t >= b.tt - 120000).map(x => x[1]).sort((p, q) => p - q); if (w.length >= 20) b.ph = Math.round(100 * b.pamp / w[w.length >> 1]) / 100; } }
+    /* 3.0.0: gleiche Regel, aber das Fenster der 2 Minuten wird gesucht statt über alle Schläge gefiltert (vorher bei 33.000 Schlägen eine Milliarde Vergleiche) */
+    let srt = true; for (let i = 1; i < amps.length; i++) if (amps[i][0] < amps[i - 1][0]) { srt = false; break; }
+    const at = srt ? Float64Array.from(amps, x => x[0]) : null;
+    for (const b of okB) { if (!Number.isFinite(b.pamp)) continue; let w;
+      if (at) { const i0 = lowerBound(at, b.tt - 120000), i1 = lowerBound(at, b.tt); w = []; for (let i = i0; i < i1; i++) w.push(amps[i][1]); w.sort((p, q) => p - q); }
+      else w = amps.filter(([t]) => t < b.tt && t >= b.tt - 120000).map(x => x[1]).sort((p, q) => p - q);
+      if (w.length >= 20) b.ph = Math.round(100 * b.pamp / w[w.length >> 1]) / 100; } }
   if (n1 || n2) addEntry({ typ: "Daten", name: `Oxymeter je Herzschlag: SpO2 bei ${n1}, Pulsankunft bei ${n2} Schlägen`, start: Date.now() });
 }
 /* Pulswelle als Datei: je Stunde PW_JJJJMMTT-HH.bin, Uint32 'VSP1', n Rahmen, m Werte, 0; Float64[n] Ankunft; Uint8[n] Werte je Rahmen; Uint8[m] Werte (Bit 7 = Pulsmarkierung) */
@@ -4650,10 +4836,10 @@ function oxBeats(B, OX, OXW) {
 function oxwBin(RECS) { const ft = [], n = [], v = []; [...RECS].sort((p, q) => p.t - q.t).forEach(r => { r.ft.forEach((x, i) => { ft.push(x); n.push(r.n[i]); }); r.v.forEach(x => v.push(x)); }); if (!ft.length) return null;
   const buf = new ArrayBuffer(16 + 8 * ft.length + n.length + v.length), dv = new DataView(buf); dv.setUint32(0, 0x31505356, true); dv.setUint32(4, ft.length, true); dv.setUint32(8, v.length, true); dv.setUint32(12, 0, true);
   ft.forEach((x, i) => dv.setFloat64(16 + 8 * i, x, true)); const u = new Uint8Array(buf); u.set(n, 16 + 8 * ft.length); u.set(v, 16 + 8 * ft.length + n.length); return u; }
-async function oxwExport(a, b, parts, name) {
+async function oxwExport(a, b, parts, name, recs) {
   const H = 3600000, files = [], liste = []; let m0 = 0;
   for (let h = Math.floor(a / H) * H; h < b; h += H) {
-    const R = ((await readKinds(["oxw"], Math.max(a, h), Math.min(b, h + H))).oxw || []).filter(r => r.t >= Math.max(a, h) && r.t < Math.min(b, h + H)).sort((p, q) => p.t - q.t); if (!R.length) continue;
+    const R = (recs ? recs : ((await readKinds(["oxw"], Math.max(a, h), Math.min(b, h + H))).oxw || [])).filter(r => r.t >= Math.max(a, h) && r.t < Math.min(b, h + H)).sort((p, q) => p.t - q.t); if (!R.length) continue;
     const ft = [], n = [], v = []; R.forEach(r => { r.ft.forEach((x, i) => { ft.push(x); n.push(r.n[i]); }); r.v.forEach(x => v.push(x)); });
     const nm = `PW_${idstamp(new Date(h)).slice(0, 11)}.bin`;
     files.push({ name: nm, data: new Uint8Array(await new Blob([new Uint32Array([0x31505356, ft.length, v.length, 0]), Float64Array.from(ft), Uint8Array.from(n), Uint8Array.from(v)]).arrayBuffer()) });
@@ -5675,15 +5861,17 @@ async function vsReport0(a, b, night, dayParts, dayStart) {
   try { dayParts = vsDayParts(vsTagOf(night, a)); } catch (e) {} /* 2.9.9: Ordner aus derselben Regel wie die Bezeichnung im Paket */
   const pid = pidVal() || "ohneID", P = `${pid}_${st12(a)}_`, kind = night ? "Nacht" : "Tag";
   if (b - a < 60000) return false;
-  const z = await buildZip({ a, b, nacht: night, kind, prefix: P, noRaw: true });
+  vsStepReset();
+  const z = await buildZip({ a, b, nacht: night, kind, prefix: P, noRaw: true, zipLater: true });
+  vsStep("Schreiben");
   const h = await vsRoot(false);
-  if (!h) { vsDownload(z.blob, z.name); addEntry({ typ: "Fehler", name: `${kind}esbericht nicht in den Ordner geschrieben (nicht freigegeben), ZIP in den Downloads`, start: Date.now() }); return false; }
+  if (!h) { vsDownload(await z.zipP, z.name); addEntry({ typ: "Fehler", name: `${kind}esbericht nicht in den Ordner geschrieben (nicht freigegeben), ZIP in den Downloads`, start: Date.now() }); return false; }
   /* 1.9: Berichtsdateien gelten für die ganze Phase und werden neu geschrieben; Tabellen nur ab dem letzten Bericht derselben Phase */
   const from = VS && VS.rep && VS.rep.a === a && Number.isFinite(VS.rep.to) ? VS.rep.to : -Infinity;
   const dd = await vsSub(h, dayParts), ber = await vsSub(dd, ["Berichte"]);
   for (const f of z.out) if (!/\.csv$/.test(f.name)) await vsPut(ber, f.name, f.data);
   if (z.kern) await vsPut(await vsSub(h, ["Kern"]), z.kern.name, z.kern.data);
-  try { await vsPut(ber, z.name, z.blob); } catch (e) {} /* 2.7: auch der Tag als ZIP */ /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
+  /* 2.7: auch der Tag als ZIP; ab 3.0.0 wird es zuletzt geschrieben (siehe unten) */ /* 1.9.4: Nacht auch als ZIP, damit sie nach dem Schalter auf Tag noch zu teilen ist */
   if (window.lastAnom) { try { const LA = window.lastAnom, k = await ausAuto(LA.an, LA.T0, false), ap = LA.an.filter(x => x.code === "APNO").length;
       addEntry({ typ: "Daten", name: `Prüfliste: ${LA.an.length} Auffälligkeiten, ${k} neu vorläufig ausgeschlossen` + (ap ? `, ${ap}-mal möglicher Atemstillstand (bei Wiederholung ärztlich abklären)` : ""), start: Date.now() }); } catch (e) {} }
   if (z.sp) await vsWriteDerived(h, dd, z.sp, pid, `${pid}_${st12(dayStart)}_`, from);
@@ -5694,12 +5882,18 @@ async function vsReport0(a, b, night, dayParts, dayStart) {
   /* 2.8: volles EKG der Nacht kompakt in RohEKG/ des Tagesordners (wächst mit, solange die Nacht weiterläuft) */
   /* 2.9: volles EKG auch am Tag; fertige Stunden kommen aus dem Stundenzwischenspeicher */
   { const t1 = Date.now(), wo = night ? "der Nacht" : "des Tages", wer = night ? "Nachtbericht" : "Tagesbericht";
-    try { const r = await rohEkgExport(m => { $("savestatus").textContent = `${wer} gespeichert. Volles EKG ${wo}: ` + m; }, { a, b, parts: [...dayParts, "RohEKG"], name: `${P}EKG.zip` });
+    vsStep("EKG-Paket");
+    try { const r = await rohEkgExport(m => { $("savestatus").textContent = `${wer} gespeichert. Volles EKG ${wo}: ` + m; }, { a, b, parts: [...dayParts, "RohEKG"], name: `${P}EKG.zip`, ecg: z.raw && z.raw.EC });
       $("savestatus").textContent = `${wer} gespeichert in ${dayParts.join("/")}/Berichte, volles EKG: ${r}.`; diagT("Volles EKG " + wo, Date.now() - t1); }
     catch (e) { if (!/kein EKG/.test(e.message || "")) addEntry({ typ: "Fehler", name: `Volles EKG ${wo} nicht gespeichert: ` + (e.message || e), start: Date.now() }); } }
   /* 2.9.3: Pulswelle des Oxymeters daneben */
-  try { const r = await oxwExport(a, b, [...dayParts, "RohEKG"], `${P}Pulswelle.zip`); if (r) addEntry({ typ: "Daten", name: `Pulswelle gespeichert: ${P}Pulswelle.zip, ${r}`, start: Date.now() }); }
+  vsStep("Pulswelle-Paket");
+  try { const r = await oxwExport(a, b, [...dayParts, "RohEKG"], `${P}Pulswelle.zip`, z.raw && z.raw.OXW); if (r) addEntry({ typ: "Daten", name: `Pulswelle gespeichert: ${P}Pulswelle.zip, ${r}`, start: Date.now() }); }
   catch (e) { addEntry({ typ: "Fehler", name: "Pulswelle nicht gespeichert: " + (e.message || e), start: Date.now() }); }
+  vsStep("ZIP"); { const txt0 = $("savestatus").textContent; $("savestatus").textContent = txt0 + " Schreibe noch das ZIP …";
+    try { await vsPut(ber, z.name, await z.zipP); $("savestatus").textContent = txt0 + " ZIP, EKG und Pulswelle sind fertig."; } catch (e) { addEntry({ typ: "Fehler", name: "ZIP des Berichts nicht geschrieben: " + ((e && e.message) || e), start: Date.now() }); $("savestatus").textContent = txt0; } }
+  vsStep(null); try { addEntry({ typ: "Daten", name: vsStepLine(night ? "Nacht" : "Tag"), start: Date.now() }); flush(); } catch (e) {}
+  try { blkVerifyPlan(a, b); } catch (e) {}
   return true;
 }
 /* 1.9.4: Rückfrage des Browsers vor dem Schließen oder Neuladen, solange aufgezeichnet oder ein Bericht geschrieben wird */
@@ -6862,9 +7056,13 @@ function wkWav() {
   return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
 }
 const wk = { audio: null, active: false, ringing: false, since: 0, snoozeUntil: 0, fired: "", n: 0 };
-function wkArmed() { try { return !!($("wkon") && $("wkon").checked && $("wkzeit").value) || wk.active; } catch (e) { return false; } }
-function wkShow() { const el = $("wkstat"), b = $("wkaus"); if (b) b.style.display = wk.active ? "block" : "none"; if (b && wk.active) b.textContent = wk.ringing ? "Wecker aus" : "Wecker aus (ruht bis " + hhmm(wk.snoozeUntil) + ")";
-  if (el) el.textContent = wk.active ? (wk.ringing ? `klingelt seit ${hhmm(wk.since)} Uhr` : `ruht bis ${hhmm(wk.snoozeUntil)} Uhr`) : ($("wkon").checked && $("wkzeit").value ? `gestellt auf ${$("wkzeit").value} Uhr` : "aus"); }
+/* 3.0.0: Weckzeit als vier Ziffern (0630); gibt HH:MM zurück oder leer, wenn die Eingabe keine Uhrzeit ist */
+function wkZeit() { try { const v = String($("wkzeit").value || "").trim(), m = /^(\d{2})(\d{2})$/.exec(v) || /^(\d{1,2}):(\d{2})$/.exec(v); if (!m) return ""; const h = +m[1], mi = +m[2]; if (h > 23 || mi > 59) return ""; return pad(h) + ":" + pad(mi); } catch (e) { return ""; } }
+function wkArmed() { try { return !!($("wkon") && $("wkon").checked && wkZeit()) || wk.active; } catch (e) { return false; } }
+function wkShow() { const el = $("wkstat"), b = $("wkaus"), lv = $("wklive"), zt = wkZeit(); if (b) b.style.display = "none"; /* 3.0.0: kein roter Knopf mehr über der Liveansicht */
+  const txt = wk.active ? (wk.ringing ? `klingelt seit ${hhmm(wk.since)} Uhr` : `ruht bis ${hhmm(wk.snoozeUntil)} Uhr`) : ($("wkon").checked ? (zt ? `gestellt auf ${zt} Uhr` : "keine gültige Weckzeit") : "aus");
+  if (el) el.textContent = txt;
+  if (lv) { lv.style.display = wk.active ? "block" : "none"; lv.textContent = wk.active ? `Wecker ${txt}. Druck auf die Uhr: 5 Minuten Ruhe. Ganz aus: Haken beim Wecker entfernen.` : ""; } }
 function wkRing(text) {
   wk.ringing = true; wk.since = Date.now(); wk.n++;
   if (!wk.audio) { wk.audio = new Audio(wkWav()); wk.audio.loop = true; }
@@ -6873,31 +7071,52 @@ function wkRing(text) {
     if (p && p.then) p.then(() => addEntry({ typ: "Wecker", name: `Ton läuft, ${Date.now() - t0} ms nach der Anforderung`, start: Date.now() }), e => { addEntry({ typ: "Fehler", name: "Wecker: Ton nicht gestartet: " + ((e && e.message) || e), start: Date.now() }); try { say("Wecker"); } catch (x) {} }); }
   catch (e) { addEntry({ typ: "Fehler", name: "Wecker: " + ((e && e.message) || e), start: Date.now() }); }
   try { navigator.vibrate && navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) {}
+  /* 3.0.0: läuft das Mikrofon mit, steht 4 s nach dem Beginn im Protokoll, wie laut der Ton im Raum ankommt (keine Ansage, keine Warnung) */
+  try { const mic = () => (typeof trackers !== "undefined" ? trackers : []).find(t => t.src === "Mikro" && t.last && Date.now() - t.last.t < 3000), m0 = mic(), vor = m0 ? m0.last.lev : null, nr = wk.n;
+    if (m0) setTimeout(() => { try { const m1 = mic(); if (m1 && wk.ringing && wk.n === nr) addEntry({ typ: "Wecker", name: `Ton im Mikrofon: Pegel ${num(m1.last.lev)} dBFS, Spitze ${num(m1.last.max)} dBFS, vor dem Ton ${num(vor)} dBFS`, start: Date.now() }); } catch (e) {} }, 4000); } catch (e) {}
   wkShow(); flush();
 }
 function wkQuiet() { wk.ringing = false; try { if (wk.audio) wk.audio.pause(); } catch (e) {} }
 function wkMarker(r) { if (!wk.active || !wk.ringing) return; if (Number.isFinite(r.start) && r.start < wk.since - 1500) return; /* nachgelieferte alte Marker zählen nicht */
   wkQuiet(); wk.snoozeUntil = Date.now() + 300000;
   setTimeout(() => { addEntry({ typ: "Wecker", name: `Wecker still (Marker: ${String(r.name || "").slice(0, 60)}), wieder um ${hhmm(wk.snoozeUntil)} Uhr`, start: Date.now() }); wkShow(); flush(); }, 0); }
-function wkOff() { const was = wk.active; wkQuiet(); wk.active = false; if (was) addEntry({ typ: "Wecker", name: "Wecker aus (Knopf)", start: Date.now() }); wkShow(); flush(); }
+function wkOff(wie) { const was = wk.active; wkQuiet(); wk.active = false; wk.stillAt = 0; if (was) addEntry({ typ: "Wecker", name: `Wecker aus (${wie === "Haken" ? "Haken" : "Knopf"})`, start: Date.now() }); wkShow(); flush(); }
+/* 3.0.0 (Punkt 62): Ein Druck auf die Uhr, während der Wecker klingelt, stellt ihn still und wird nicht als Marker oder Ereignis mit Grund geführt.
+   Das gilt auch für weitere Drücke aus demselben Klingeln (die Uhr schickt sie zusammen, wenn ihr Fenster abgelaufen ist). name ist „Taste“, wenn die Uhr den Druck künftig sofort meldet. */
+function wkTaste(name, t) {
+  try { if (!wk.active) return false; const now = Date.now();
+    if (wk.ringing) { if (Number.isFinite(t) && t < wk.since - 1500) return false; /* nachgelieferter alter Marker: gewöhnlich führen */
+      wkQuiet(); wk.snoozeUntil = now + 300000; wk.stillAt = now;
+      addEntry({ typ: "Wecker", name: `Wecker still (Uhr, gedrückt um ${stamp(new Date(Number.isFinite(t) ? t : now)).slice(0, 8)} Uhr), wieder um ${hhmm(wk.snoozeUntil)} Uhr`, start: now }); wkShow(); flush(); return true; }
+    if (wk.stillAt && Number.isFinite(t) && t >= wk.since - 1500 && t <= wk.stillAt + 2000) return true;
+  } catch (e) {} return false; }
 function wkTick() { try {
   const now = Date.now();
-  if (wk.active) { if (!wk.ringing && now >= wk.snoozeUntil) wkRing("Wecker wieder an"); else if (wk.ringing && wk.audio && wk.audio.paused) { try { wk.audio.play().catch(() => {}); } catch (e) {} } return; }
-  if (!$("wkon").checked || !$("wkzeit").value) return; const m = /^(\d{1,2}):(\d{2})/.exec($("wkzeit").value); if (!m) return;
-  const d = new Date(now); d.setHours(+m[1], +m[2], 0, 0); const key = ymd(d) + " " + $("wkzeit").value, late = now - d.getTime();
+  if (wk.active) { if (!wk.ringing && now >= wk.snoozeUntil) wkRing("Wecker wieder an"); else if (wk.ringing && wk.audio && wk.audio.paused) { try { wk.audio.play().catch(() => {}); } catch (e) {} }
+    if (wk.ringing && Math.floor(now / 1000) % 3 === 0) { try { navigator.vibrate && navigator.vibrate([400, 200, 400]); } catch (e) {} } return; }
+  const zt = wkZeit(); if (!$("wkon").checked || !zt) return; const m = /^(\d{1,2}):(\d{2})/.exec(zt); if (!m) return;
+  const d = new Date(now); d.setHours(+m[1], +m[2], 0, 0); const key = ymd(d) + " " + zt, late = now - d.getTime();
   if (late >= 0 && late < 1800000 && wk.fired !== key) { wk.fired = key; try { localStorage.setItem("vs_wecker_fired", key); } catch (e) {} wk.active = true; wkRing(late > 5000 ? `Wecker an (${Math.round(late / 1000)} s verspätet)` : "Wecker an"); }
 } catch (e) {} }
 (function wkBind() { try {
   const z = $("wkzeit"), o = $("wkon"); if (!z || !o) return;
-  try { const j = JSON.parse(localStorage.getItem("vs_wecker") || "null"); if (j) { z.value = j.zeit || ""; o.checked = !!j.an; } wk.fired = localStorage.getItem("vs_wecker_fired") || ""; } catch (e) {}
-  const save = () => { try { localStorage.setItem("vs_wecker", JSON.stringify({ zeit: z.value, an: o.checked })); } catch (e) {}
+  try { const j = JSON.parse(localStorage.getItem("vs_wecker") || "null"); if (j) { z.value = String(j.zeit || "").replace(":", ""); o.checked = !!j.an; } wk.fired = localStorage.getItem("vs_wecker_fired") || ""; } catch (e) {}
+  let zuletzt = z.value + "|" + o.checked, warAn = o.checked;
+  const save = () => { const zt = wkZeit(), an = o.checked, st = z.value + "|" + an; if (st === zuletzt) return; zuletzt = st; const vorher = warAn; warAn = an;
+    try { localStorage.setItem("vs_wecker", JSON.stringify({ zeit: z.value, an })); } catch (e) {}
+    /* 3.0.0 (Punkt 64): Der Wecker geht nur aus, wenn der Haken entfernt wird */
+    if (!an && wk.active) { wkOff("Haken"); return; }
     /* eine Weckzeit, die heute schon vorbei ist, gilt erst morgen */
-    try { const m = /^(\d{1,2}):(\d{2})/.exec(z.value); if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); if (Date.now() > d.getTime() + 5000) { wk.fired = ymd(d) + " " + z.value; localStorage.setItem("vs_wecker_fired", wk.fired); } } } catch (e) {}
-    addEntry({ typ: "Wecker", name: o.checked && z.value ? "Gestellt auf " + z.value + " Uhr" : "Wecker abgestellt", start: Date.now() }); if (o.checked && z.value) { try { keepAwake(); } catch (e) {}
-      /* den Ton einmal stumm anspielen, solange ein Antippen vorliegt; danach darf er auch ohne Antippen starten */
-      try { if (!wk.audio) { wk.audio = new Audio(wkWav()); wk.audio.loop = true; } wk.audio.volume = 0; const p = wk.audio.play(); if (p && p.then) p.then(() => { wk.audio.pause(); wk.audio.volume = 1; }, () => {}); } catch (e) {} }
+    try { const m = /^(\d{1,2}):(\d{2})/.exec(zt); if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); if (Date.now() > d.getTime() + 5000) { wk.fired = ymd(d) + " " + zt; localStorage.setItem("vs_wecker_fired", wk.fired); } } } catch (e) {}
+    if (!an && !vorher) { wkShow(); return; } /* Zeit geändert, während der Wecker aus ist: kein Eintrag */
+    addEntry({ typ: "Wecker", name: an && zt ? "Gestellt auf " + zt + " Uhr" : an ? "Keine gültige Weckzeit (vierstellig eintippen, zum Beispiel 0630)" : "Wecker abgestellt", start: Date.now() });
+    if (an && zt) { try { keepAwake(); } catch (e) {}
+      /* 3.0.0 (Punkt 66): 1 s Probeton in voller Lautstärke der Seite, solange ein Antippen vorliegt; so ist zu hören, wie laut er weckt, und der Ton darf danach auch ohne Antippen starten */
+      try { if (!wk.audio) { wk.audio = new Audio(wkWav()); wk.audio.loop = true; } wk.audio.volume = 1; wk.audio.currentTime = 0; const p = wk.audio.play(); const aus = () => setTimeout(() => { try { if (!wk.ringing) wk.audio.pause(); } catch (e) {} }, 1000);
+        if (p && p.then) p.then(aus, () => {}); else aus(); } catch (e) {} }
     wkShow(); flush(); };
-  z.addEventListener("change", save); o.addEventListener("change", save); $("wkaus").addEventListener("click", wkOff);
+  z.addEventListener("change", save); o.addEventListener("change", save); $("wkaus").addEventListener("click", () => wkOff());
+  z.addEventListener("input", () => { if (/^\d{4}$/.test(z.value)) save(); else wkShow(); });
   setInterval(wkTick, 1000); setInterval(wkShow, 15000); wkShow();
 } catch (e) {} })();
 
